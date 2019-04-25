@@ -30,12 +30,11 @@ extern "C" fn scene_deinit(data: *mut c_void) {
 
 #[no_mangle]
 extern "C" fn scene_render(time: f64, data: *mut c_void) {
-    let scene = unsafe {Box::from_raw(data as *mut Scene)};
+    let scene = Box::leak(unsafe {Box::from_raw(data as *mut Scene)});
     println!("-----------------------");
     println!("Time is {}", time);
     println!("Value of test is {}", scene.sync_get("test"));
     println!("Value of width is {}", scene.resolution.0);
     println!("Value of height is {}", scene.resolution.1);
-    std::mem::forget(scene);
 }
 
