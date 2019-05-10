@@ -30,11 +30,10 @@ extern "C" fn scene_deinit(data: *mut c_void) {
 
 #[no_mangle]
 extern "C" fn scene_render(time: f64, data: *mut c_void) {
+    use opengles::glesv2;
+
     let scene = Box::leak(unsafe {Box::from_raw(data as *mut Scene)});
-    println!("-----------------------");
-    println!("Time is {}", time);
-    println!("Value of test is {}", scene.sync_get("test"));
-    println!("Value of width is {}", scene.resolution.0);
-    println!("Value of height is {}", scene.resolution.1);
+    glesv2::clear_color(1., 0., 0., 1.);
+    glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
 }
 

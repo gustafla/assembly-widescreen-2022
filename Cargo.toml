@@ -5,6 +5,7 @@ authors = ["Lauri Gustafsson <luutifa@jkry.org>"]
 edition = "2018"
 
 [dependencies]
+opengles = "0.1.2"
 
 [lib]
 crate-type = ["cdylib"]
