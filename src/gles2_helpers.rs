@@ -70,10 +70,33 @@ pub fn link_program<P: AsRef<Path>>(paths: &[P]) -> Result<GLuint, ShaderError> 
     Ok(program)
 }
 
-pub fn check() -> Result<(), GLenum> {
+#[derive(Debug)]
+pub enum GLStateError {
+    Unknown,
+    InvalidEnum,
+    InvalidValue,
+    InvalidOperation,
+    InvalidFramebufferOperation,
+    OutOfMemory,
+}
+
+impl From<GLenum> for GLStateError {
+    fn from(value: GLenum) -> Self {
+        match value {
+            glesv2::GL_INVALID_ENUM => GLStateError::InvalidEnum,
+            glesv2::GL_INVALID_VALUE => GLStateError::InvalidValue,
+            glesv2::GL_INVALID_OPERATION => GLStateError::InvalidOperation,
+            glesv2::GL_INVALID_FRAMEBUFFER_OPERATION => GLStateError::InvalidFramebufferOperation,
+            glesv2::GL_OUT_OF_MEMORY => GLStateError::OutOfMemory,
+            _ => GLStateError::Unknown,
+        }
+    }
+}
+
+pub fn check() -> Result<(), GLStateError> {
     let status = glesv2::get_error();
     if status != glesv2::GL_NO_ERROR {
-        Err(status)
+        Err(GLStateError::from(status))
     } else {
         Ok(())
     }

@@ -9,6 +9,7 @@ use opengles::glesv2;
 struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
     resolution: (i32, i32),
+    program: glesv2::GLuint,
 }
 
 impl Scene {
@@ -25,6 +26,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
+        program: gles2_helpers::link_program(&["shader.vert", "shader.frag"]).unwrap(),
     });
 
     Box::into_raw(scene) as *mut c_void
@@ -32,33 +34,33 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
 
 #[no_mangle]
 extern "C" fn scene_deinit(data: *mut c_void) {
-    let _scene = unsafe {Box::from_raw(data as *mut Scene)};
+    let scene = unsafe {Box::from_raw(data as *mut Scene)};
+    glesv2::delete_program(scene.program);
 }
 
 #[no_mangle]
-extern "C" fn scene_render(_time: f64, data: *mut c_void) {
-    let _scene = Box::leak(unsafe {Box::from_raw(data as *mut Scene)});
+extern "C" fn scene_render(time: f64, data: *mut c_void) {
+    let scene = Box::leak(unsafe {Box::from_raw(data as *mut Scene)});
+
+    glesv2::clear_color(f64::sin(time) as f32, 1., 0., 1.);
+    glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
 
     let vertices = [
-        -0.5, -0.5, 0.0,
+        -0.5f32, -0.5, 0.0,
         0.5, -0.5, 0.0,
         0.0, 0.5, 0.0
     ];
 
-    let buffer = glesv2::gen_buffers(1)[0];
+    /*let buffer = glesv2::gen_buffers(1)[0];
     glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, buffer);
-    glesv2::buffer_data(glesv2::GL_ARRAY_BUFFER, &vertices, glesv2::GL_STATIC_DRAW);
+    glesv2::buffer_data(glesv2::GL_ARRAY_BUFFER, &vertices, glesv2::GL_STATIC_DRAW);*/
 
-    let program = gles2_helpers::link_program(&["shader.vert", "shader.frag"]).unwrap();
-    glesv2::use_program(program);
+    glesv2::use_program(scene.program);
 
-    glesv2::vertex_attrib_pointer_offset(0, 3, glesv2::GL_FLOAT, false, 3 * (32/8), 0);
+    glesv2::vertex_attrib_pointer(0, 3, glesv2::GL_FLOAT, false, 0, &vertices);
     glesv2::enable_vertex_attrib_array(0);
 
     glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 3);
-
-    glesv2::clear_color(1., 1., 0., 1.);
-    glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
 
     gles2_helpers::check().unwrap();
 }
