@@ -59,5 +59,7 @@ extern "C" fn scene_render(_time: f64, data: *mut c_void) {
 
     glesv2::clear_color(1., 1., 0., 1.);
     glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
+
+    gles2_helpers::check().unwrap();
 }
 

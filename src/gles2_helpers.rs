@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::fs::File;
 use std::io::{self, prelude::*};
-use opengles::glesv2::{self, GLuint, GLboolean};
+use opengles::glesv2::{self, GLenum, GLuint, GLboolean};
 
 #[derive(Debug)]
 pub enum ShaderError {
@@ -68,4 +68,14 @@ pub fn link_program<P: AsRef<Path>>(paths: &[P]) -> Result<GLuint, ShaderError> 
     }
 
     Ok(program)
+}
+
+pub fn check() -> Result<(), GLenum> {
+    let status = glesv2::get_error();
+    if status != glesv2::GL_NO_ERROR {
+        Err(status)
+    } else {
+        Ok(())
+    }
+
 }
