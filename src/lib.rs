@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-mod gles2_helpers;
+mod gles2_error;
+mod gles2_shader;
 
 use std::os::raw::c_char;
 use std::ffi::{CString, c_void};
@@ -26,7 +27,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
-        program: gles2_helpers::link_program(&["shader.vert", "shader.frag"]).unwrap(),
+        program: gles2_shader::link_program(&["shader.vert", "shader.frag"]).unwrap(),
     });
 
     Box::into_raw(scene) as *mut c_void
@@ -62,6 +63,6 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 3);
 
-    gles2_helpers::check().unwrap();
+    gles2_error::check().unwrap();
 }
 
