@@ -1,6 +1,6 @@
+use std::env;
 use std::fs;
 use std::path::Path;
-use std::env;
 
 fn main() {
     // Copy resource files from resources to target directory
@@ -8,7 +8,8 @@ fn main() {
         .join("..")
         .join("..")
         .join("..")
-        .canonicalize().unwrap();
+        .canonicalize()
+        .unwrap();
 
     let resource_file_paths = fs::read_dir("resources").unwrap();
 

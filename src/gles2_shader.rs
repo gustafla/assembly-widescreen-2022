@@ -1,7 +1,7 @@
-use std::path::Path;
+use opengles::glesv2::{self, GLboolean, GLuint};
 use std::fs::File;
 use std::io::{self, prelude::*};
-use opengles::glesv2::{self, GLuint, GLboolean};
+use std::path::Path;
 
 #[derive(Debug)]
 pub enum Error {
@@ -24,13 +24,11 @@ fn compile_shader<P: AsRef<Path>>(path: P) -> Result<GLuint, Error> {
 
     let shader = glesv2::create_shader(match path.as_ref().extension() {
         None => return Err(Error::DetermineShaderStage),
-        Some(os_str) => {
-            match os_str.to_str() {
-                Some("frag") => glesv2::GL_FRAGMENT_SHADER,
-                Some("vert") => glesv2::GL_VERTEX_SHADER,
-                _ => return Err(Error::DetermineShaderStage),
-            }
-        }
+        Some(os_str) => match os_str.to_str() {
+            Some("frag") => glesv2::GL_FRAGMENT_SHADER,
+            Some("vert") => glesv2::GL_VERTEX_SHADER,
+            _ => return Err(Error::DetermineShaderStage),
+        },
     });
 
     glesv2::shader_source(shader, string.as_str().as_bytes());
@@ -39,8 +37,10 @@ fn compile_shader<P: AsRef<Path>>(path: P) -> Result<GLuint, Error> {
     let status = glesv2::get_shaderiv(shader, glesv2::GL_COMPILE_STATUS);
     if status as GLboolean == glesv2::GL_FALSE {
         let log_len = glesv2::get_shaderiv(shader, glesv2::GL_INFO_LOG_LENGTH);
-        return Err(Error::Compile(format!("{}", path.as_ref().display()),
-        glesv2::get_shader_info_log(shader, log_len)));
+        return Err(Error::Compile(
+            format!("{}", path.as_ref().display()),
+            glesv2::get_shader_info_log(shader, log_len),
+        ));
     }
 
     Ok(shader)

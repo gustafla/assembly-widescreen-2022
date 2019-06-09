@@ -30,5 +30,4 @@ pub fn check() -> Result<(), Error> {
     } else {
         Ok(())
     }
-
 }
