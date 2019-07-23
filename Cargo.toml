@@ -5,7 +5,7 @@ authors = ["Lauri Gustafsson <luutifa@jkry.org>"]
 edition = "2018"
 
 [dependencies]
-opengles = "0.1.2"
+opengles = { git = "https://github.com/seankerr/rust-opengles" }
 
 [lib]
 crate-type = ["cdylib"]
