@@ -2,7 +2,7 @@
 
 mod gles2_error;
 mod gles2_shader;
-mod fbo_builder;
+mod gles2_fbo;
 
 use opengles::glesv2;
 use std::ffi::{c_void, CString};
