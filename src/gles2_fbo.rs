@@ -1,4 +1,4 @@
-use opengles::glesv2::{self, GLenum, GLint, GLsizei, GLuint};
+use opengles::glesv2::{self, GLenum, GLint, GLsizei, GLuint, GLubyte};
 
 enum Attachment {
     Texture2D(GLuint),
@@ -104,7 +104,7 @@ impl FboBuilder {
         } else {
             let tex = glesv2::gen_textures(1)[0];
             glesv2::bind_texture(glesv2::GL_TEXTURE_2D, tex);
-            glesv2::tex_image_2d(
+            glesv2::tex_image_2d::<GLubyte>(
                 glesv2::GL_TEXTURE_2D,
                 0,
                 format as GLint,
@@ -113,7 +113,7 @@ impl FboBuilder {
                 0,
                 format,
                 glesv2::GL_UNSIGNED_BYTE,
-                &[0], // TODO probably crashes
+                &[],
             );
             *target_att = Some(Attachment::Texture2D(tex));
             Ok(self)
