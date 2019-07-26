@@ -27,7 +27,7 @@ impl Fbo {
     }
 }
 
-const DEFAULT: Fbo = Fbo {
+pub const DEFAULT: Fbo = Fbo {
     frame_buffer: 0,
     depth_attachment: None,
     stencil_attachment: None,
