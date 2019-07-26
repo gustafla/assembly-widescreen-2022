@@ -92,7 +92,7 @@ impl FboBuilder {
         }
     }
 
-    pub fn add_texture(
+    pub fn add_texture_2d(
         mut self,
         format: GLenum,
         size: (GLsizei, GLsizei),
@@ -129,7 +129,7 @@ impl FboBuilder {
                 (Some(Attachment::Texture2D(texture)), gl_enum) => glesv2::framebuffer_texture_2d(
                     glesv2::GL_FRAMEBUFFER,
                     *gl_enum,
-                    glesv2::GL_TEXTURE_2D, // TODO might want to pass this
+                    glesv2::GL_TEXTURE_2D,
                     *texture,
                     0, // Mipmap level must be 0
                 ),
