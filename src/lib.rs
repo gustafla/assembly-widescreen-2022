@@ -1,9 +1,10 @@
 #![allow(dead_code)]
 
 mod gles2_error;
-mod gles2_shader;
 mod gles2_fbo;
+mod gles2_shader;
 
+use gles2_fbo::{Fbo, FboBuilder};
 use opengles::glesv2;
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
@@ -12,6 +13,7 @@ struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
     resolution: (i32, i32),
     program: glesv2::GLuint,
+    post_fbo: Fbo,
 }
 
 impl Scene {
@@ -29,6 +31,11 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         sync_get_raw: get,
         resolution: (w, h),
         program: gles2_shader::link_program(&["shader.vert", "shader.frag"]).unwrap(),
+        post_fbo: FboBuilder::new()
+            .add_texture_2d(glesv2::GL_RGB, (w, h), glesv2::GL_COLOR_ATTACHMENT0)
+            .unwrap()
+            .build()
+            .unwrap(),
     });
 
     Box::into_raw(scene) as *mut c_void
