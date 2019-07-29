@@ -1,4 +1,12 @@
-use opengles::glesv2::{self, GLenum, GLint, GLsizei, GLuint, GLubyte};
+use opengles::glesv2::{self, GLenum, GLint, GLsizei, GLubyte, GLuint};
+
+#[derive(Debug)]
+pub enum Error {
+    UnknownAttachment,
+    UnavailableAttachment,
+    UnbindableAttachment,
+    IncompleteFramebuffer,
+}
 
 enum Attachment {
     Texture2D(GLuint),
@@ -14,6 +22,26 @@ pub struct Fbo {
 }
 
 impl Fbo {
+    fn ref_for_gl_enum(&mut self, attachment: GLenum) -> Result<&mut Option<Attachment>, Error> {
+        match attachment {
+            glesv2::GL_COLOR_ATTACHMENT0 => Ok(&mut self.color_attachment),
+            glesv2::GL_DEPTH_ATTACHMENT => Ok(&mut self.depth_attachment),
+            glesv2::GL_STENCIL_ATTACHMENT => Ok(&mut self.stencil_attachment),
+            _ => Err(Error::UnknownAttachment),
+        }
+    }
+
+    pub fn bind_attachment(&mut self, attachment: GLenum) -> Result<(), Error> {
+        match self.ref_for_gl_enum(attachment)? {
+            Some(Attachment::Texture2D(handle)) => {
+                glesv2::bind_texture(glesv2::GL_TEXTURE_2D, *handle);
+                Ok(())
+            }
+            Some(_) => Err(Error::UnbindableAttachment),
+            None => Err(Error::UnavailableAttachment),
+        }
+    }
+
     pub fn bind(&self) {
         glesv2::bind_framebuffer(glesv2::GL_FRAMEBUFFER, self.frame_buffer);
     }
@@ -36,8 +64,7 @@ pub const DEFAULT: Fbo = Fbo {
 
 impl Drop for Fbo {
     fn drop(&mut self) {
-        for attachment in self.attachments().iter()
-        {
+        for attachment in self.attachments() {
             match attachment {
                 (Some(Attachment::Texture2D(texture)), _) => glesv2::delete_textures(&[*texture]),
                 (Some(Attachment::Renderbuffer(rb)), _) => glesv2::delete_renderbuffers(&[*rb]),
@@ -46,13 +73,6 @@ impl Drop for Fbo {
         }
         glesv2::delete_framebuffers(&[self.frame_buffer]);
     }
-}
-
-#[derive(Debug)]
-pub enum Error {
-    UnknownAttachment,
-    ReservedAttachment,
-    IncompleteFramebuffer,
 }
 
 #[derive(Default)]
@@ -65,24 +85,15 @@ impl FboBuilder {
         FboBuilder::default()
     }
 
-    fn ref_for_gl_enum(&mut self, attachment: GLenum) -> Result<&mut Option<Attachment>, Error> {
-        match attachment {
-            glesv2::GL_COLOR_ATTACHMENT0 => Ok(&mut self.fbo.color_attachment),
-            glesv2::GL_DEPTH_ATTACHMENT => Ok(&mut self.fbo.depth_attachment),
-            glesv2::GL_STENCIL_ATTACHMENT => Ok(&mut self.fbo.stencil_attachment),
-            _ => Err(Error::UnknownAttachment),
-        }
-    }
-
     pub fn add_render_buffer(
         mut self,
         format: GLenum,
         size: (GLsizei, GLsizei),
         attachment: GLenum,
     ) -> Result<Self, Error> {
-        let target_att = self.ref_for_gl_enum(attachment)?;
+        let target_att = self.fbo.ref_for_gl_enum(attachment)?;
         if let Some(_) = target_att {
-            Err(Error::ReservedAttachment)
+            Err(Error::UnavailableAttachment)
         } else {
             let rbo = glesv2::gen_renderbuffers(1)[0];
             glesv2::bind_renderbuffer(glesv2::GL_RENDERBUFFER, rbo);
@@ -92,15 +103,15 @@ impl FboBuilder {
         }
     }
 
-    pub fn add_texture_2d(
+    pub fn add_texture2d(
         mut self,
         format: GLenum,
         size: (GLsizei, GLsizei),
         attachment: GLenum,
     ) -> Result<Self, Error> {
-        let target_att = self.ref_for_gl_enum(attachment)?;
+        let target_att = self.fbo.ref_for_gl_enum(attachment)?;
         if let Some(_) = target_att {
-            Err(Error::ReservedAttachment)
+            Err(Error::UnavailableAttachment)
         } else {
             let tex = glesv2::gen_textures(1)[0];
             glesv2::bind_texture(glesv2::GL_TEXTURE_2D, tex);
