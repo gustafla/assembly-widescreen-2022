@@ -5,7 +5,7 @@ mod gles2_fbo;
 mod gles2_shader;
 
 use gles2_fbo::{Fbo, FboBuilder};
-use opengles::glesv2::{self, GLuint, GLint};
+use opengles::glesv2::{self, GLint, GLuint};
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
 
@@ -30,8 +30,8 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     glesv2::viewport(0, 0, w, h);
 
     let vertices = [
-        -1., -1., 0., 0., 0.,   1., -1., 0., 1., 0.,    1., 1., 0., 1., 1.,
-        -1., -1., 0., 0., 0.,   1., 1., 0., 1., 1.,     -1., 1., 0., 0., 1.,
+        -1f32, -1., 0., 0., 0., 1., -1., 0., 1., 0., 1., 1., 0., 1., 1., -1., -1., 0., 0., 0., 1.,
+        1., 0., 1., 1., -1., 1., 0., 0., 1.,
     ];
 
     let post_buffer = glesv2::gen_buffers(1)[0];
@@ -89,8 +89,14 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     glesv2::use_program(scene.post_program);
 
     gles2_fbo::DEFAULT.bind();
-    scene.post_fbo.bind_attachment(glesv2::GL_COLOR_ATTACHMENT0).unwrap();
-    glesv2::uniform1i(glesv2::get_uniform_location(scene.post_program, "u_InputSampler"), 0);
+    scene
+        .post_fbo
+        .bind_attachment(glesv2::GL_COLOR_ATTACHMENT0)
+        .unwrap();
+    glesv2::uniform1i(
+        glesv2::get_uniform_location(scene.post_program, "u_InputSampler"),
+        0,
+    );
 
     let index_pos = glesv2::get_attrib_location(scene.post_program, "a_Pos") as GLuint;
     let index_tex_coord = glesv2::get_attrib_location(scene.post_program, "a_TexCoord") as GLuint;
@@ -98,7 +104,14 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     glesv2::enable_vertex_attrib_array(index_pos);
     glesv2::vertex_attrib_pointer_offset(index_pos, 3, glesv2::GL_FLOAT, false, stride, 0);
     glesv2::enable_vertex_attrib_array(index_tex_coord);
-    glesv2::vertex_attrib_pointer_offset(index_tex_coord, 2, glesv2::GL_FLOAT, false, stride, std::mem::size_of::<f32>() as GLuint * 3);
+    glesv2::vertex_attrib_pointer_offset(
+        index_tex_coord,
+        2,
+        glesv2::GL_FLOAT,
+        false,
+        stride,
+        std::mem::size_of::<f32>() as GLuint * 3,
+    );
 
     glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 6);
 
