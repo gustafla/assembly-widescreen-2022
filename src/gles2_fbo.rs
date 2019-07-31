@@ -46,6 +46,10 @@ impl Fbo {
         glesv2::bind_framebuffer(glesv2::GL_FRAMEBUFFER, self.frame_buffer);
     }
 
+    pub fn bind_default() {
+        glesv2::bind_framebuffer(glesv2::GL_FRAMEBUFFER, 0);
+    }
+
     fn attachments(&self) -> Vec<(&Option<Attachment>, GLuint)> {
         vec![
             (&self.depth_attachment, glesv2::GL_DEPTH_ATTACHMENT),
@@ -54,13 +58,6 @@ impl Fbo {
         ]
     }
 }
-
-pub const DEFAULT: Fbo = Fbo {
-    frame_buffer: 0,
-    depth_attachment: None,
-    stencil_attachment: None,
-    color_attachment: None,
-};
 
 impl Drop for Fbo {
     fn drop(&mut self) {
@@ -72,6 +69,7 @@ impl Drop for Fbo {
             }
         }
         glesv2::delete_framebuffers(&[self.frame_buffer]);
+        eprintln!("Fbo dropped");
     }
 }
 
