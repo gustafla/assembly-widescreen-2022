@@ -77,7 +77,7 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     scene.post_fbo.bind();
     eprintln!("post fbo bound");
-    glesv2::clear_color(f64::sin(time) as f32, 1., 0., 1.);
+    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
 
     let vertices = [-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0];
