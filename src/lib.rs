@@ -13,6 +13,7 @@ struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
     resolution: (i32, i32),
     program: glesv2::GLuint,
+    buffer: glesv2::GLuint,
     post_fbo: Fbo,
     post_program: glesv2::GLuint,
     post_buffer: glesv2::GLuint,
@@ -38,10 +39,17 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, post_buffer);
     glesv2::buffer_data(glesv2::GL_ARRAY_BUFFER, &vertices, glesv2::GL_STATIC_DRAW);
 
+    let vertices = [-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0];
+
+    let buffer = glesv2::gen_buffers(1)[0];
+    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, buffer);
+    glesv2::buffer_data(glesv2::GL_ARRAY_BUFFER, &vertices, glesv2::GL_STATIC_DRAW);
+
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
         program: gles2_shader::link_program(&["shader.vert", "shader.frag"]).unwrap(),
+        buffer,
         post_fbo: FboBuilder::new()
             .add_texture2d(glesv2::GL_RGB, (w, h), glesv2::GL_COLOR_ATTACHMENT0)
             .unwrap()
@@ -61,7 +69,7 @@ extern "C" fn scene_deinit(data: *mut c_void) {
     let scene = unsafe { Box::from_raw(data as *mut Scene) };
     glesv2::delete_program(scene.program);
     glesv2::delete_program(scene.post_program);
-    glesv2::delete_buffers(&[scene.post_buffer]);
+    glesv2::delete_buffers(&[scene.post_buffer, scene.buffer]);
     eprintln!("scene deinit finished");
 }
 
@@ -72,7 +80,7 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     // Test picture -------------------------------------------------------------------------------
 
-    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, 0);
+    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, scene.buffer);
     glesv2::use_program(scene.program);
 
     scene.post_fbo.bind();
@@ -80,11 +88,9 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
 
-    let vertices = [-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0];
-
     let index_pos = glesv2::get_attrib_location(scene.program, "a_Pos") as GLuint;
     glesv2::enable_vertex_attrib_array(index_pos);
-    glesv2::vertex_attrib_pointer(index_pos, 3, glesv2::GL_FLOAT, false, 0, &vertices);
+    glesv2::vertex_attrib_pointer_offset(index_pos, 3, glesv2::GL_FLOAT, false, 0, 0);
 
     glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 3);
 
@@ -122,6 +128,7 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     );
 
     glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 6);
+    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, 0);
 
     gles2_error::check().unwrap();
 
