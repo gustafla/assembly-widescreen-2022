@@ -1,4 +1,4 @@
-use opengles::glesv2::{self, GLuint, GLenum, GLintptr};
+use opengles::glesv2::{self, GLenum, GLintptr, GLuint};
 
 pub trait Buffer: Sized {
     const TARGET: GLenum;
@@ -63,7 +63,9 @@ impl Buffer for ArrayBuffer {
     const TARGET: GLenum = glesv2::GL_ARRAY_BUFFER;
 
     fn new() -> Self {
-        ArrayBuffer{handle: BufferHandle::new()}
+        ArrayBuffer {
+            handle: BufferHandle::new(),
+        }
     }
 
     fn buf(&self) -> &GLuint {
@@ -79,7 +81,9 @@ impl Buffer for ElementArrayBuffer {
     const TARGET: GLenum = glesv2::GL_ELEMENT_ARRAY_BUFFER;
 
     fn new() -> Self {
-        ElementArrayBuffer{handle: BufferHandle::new()}
+        ElementArrayBuffer {
+            handle: BufferHandle::new(),
+        }
     }
 
     fn buf(&self) -> &GLuint {

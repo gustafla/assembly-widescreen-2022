@@ -1,4 +1,4 @@
-use opengles::glesv2::{self, GLboolean, GLuint, GLint};
+use opengles::glesv2::{self, GLboolean, GLint, GLuint};
 use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::Path;
@@ -42,8 +42,8 @@ impl Shader {
         if status as GLboolean == glesv2::GL_FALSE {
             let log_len = glesv2::get_shaderiv(shader, glesv2::GL_INFO_LOG_LENGTH);
             return Err(Error::Compile(
-                    format!("{}", path.as_ref().display()),
-                    glesv2::get_shader_info_log(shader, log_len),
+                format!("{}", path.as_ref().display()),
+                glesv2::get_shader_info_log(shader, log_len),
             ));
         }
 

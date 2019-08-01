@@ -5,9 +5,9 @@ mod gles2_error;
 mod gles2_fbo;
 mod gles2_shader;
 
-use gles2_shader::Program;
 use gles2_buffer::{ArrayBuffer, Buffer};
 use gles2_fbo::{Fbo, FboBuilder};
+use gles2_shader::Program;
 use opengles::glesv2::{self, GLint, GLuint};
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
@@ -90,7 +90,10 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     scene.post_program.bind();
 
     Fbo::bind_default();
-    scene.post_fbo.bind_attachment(glesv2::GL_COLOR_ATTACHMENT0).unwrap();
+    scene
+        .post_fbo
+        .bind_attachment(glesv2::GL_COLOR_ATTACHMENT0)
+        .unwrap();
     glesv2::uniform1i(scene.post_program.uniform("u_InputSampler"), 0);
 
     let index_pos = scene.post_program.attrib("a_Pos");
