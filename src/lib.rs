@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
+mod gles2_buffer;
 mod gles2_error;
 mod gles2_fbo;
 mod gles2_shader;
 
+use gles2_buffer::{ArrayBuffer, Buffer};
 use gles2_fbo::{Fbo, FboBuilder};
 use opengles::glesv2::{self, GLint, GLuint};
 use std::ffi::{c_void, CString};
@@ -13,10 +15,10 @@ struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
     resolution: (i32, i32),
     program: glesv2::GLuint,
-    buffer: glesv2::GLuint,
+    buffer: ArrayBuffer,
     post_fbo: Fbo,
     post_program: glesv2::GLuint,
-    post_buffer: glesv2::GLuint,
+    post_buffer: ArrayBuffer,
 }
 
 impl Scene {
@@ -30,20 +32,13 @@ impl Scene {
 extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f64) -> *mut c_void {
     glesv2::viewport(0, 0, w, h);
 
-    let vertices = [
+    let post_buffer = ArrayBuffer::new().static_data(&[
         -1f32, -1., 0., 0., 0., 1., -1., 0., 1., 0., 1., 1., 0., 1., 1., -1., -1., 0., 0., 0., 1.,
         1., 0., 1., 1., -1., 1., 0., 0., 1.,
-    ];
+    ]);
 
-    let post_buffer = glesv2::gen_buffers(1)[0];
-    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, post_buffer);
-    glesv2::buffer_data(glesv2::GL_ARRAY_BUFFER, &vertices, glesv2::GL_STATIC_DRAW);
-
-    let vertices = [-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0];
-
-    let buffer = glesv2::gen_buffers(1)[0];
-    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, buffer);
-    glesv2::buffer_data(glesv2::GL_ARRAY_BUFFER, &vertices, glesv2::GL_STATIC_DRAW);
+    let buffer =
+        ArrayBuffer::new().static_data(&[-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0]);
 
     let scene = Box::new(Scene {
         sync_get_raw: get,
@@ -69,7 +64,6 @@ extern "C" fn scene_deinit(data: *mut c_void) {
     let scene = unsafe { Box::from_raw(data as *mut Scene) };
     glesv2::delete_program(scene.program);
     glesv2::delete_program(scene.post_program);
-    glesv2::delete_buffers(&[scene.post_buffer, scene.buffer]);
     eprintln!("scene deinit finished");
 }
 
@@ -79,7 +73,7 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     // Test picture -------------------------------------------------------------------------------
 
-    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, scene.buffer);
+    scene.buffer.bind();
     glesv2::use_program(scene.program);
 
     scene.post_fbo.bind();
@@ -94,7 +88,7 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     // Post pass ----------------------------------------------------------------------------------
 
-    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, scene.post_buffer);
+    scene.post_buffer.bind();
     glesv2::use_program(scene.post_program);
 
     Fbo::bind_default();
