@@ -71,31 +71,28 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     // Test picture -------------------------------------------------------------------------------
 
-    scene.buffer.bind();
-    scene.program.bind();
-
     scene.post_fbo.bind();
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
 
+    scene.buffer.bind();
     let index_pos = scene.program.attrib("a_Pos");
     glesv2::enable_vertex_attrib_array(index_pos);
     glesv2::vertex_attrib_pointer_offset(index_pos, 3, glesv2::GL_FLOAT, false, 0, 0);
 
+    scene.program.bind();
+
     glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 3);
 
     // Post pass ----------------------------------------------------------------------------------
-
-    scene.post_buffer.bind();
-    scene.post_program.bind();
 
     Fbo::bind_default();
     scene
         .post_fbo
         .bind_attachment(glesv2::GL_COLOR_ATTACHMENT0)
         .unwrap();
-    glesv2::uniform1i(scene.post_program.uniform("u_InputSampler"), 0);
 
+    scene.post_buffer.bind();
     let index_pos = scene.post_program.attrib("a_Pos");
     let index_tex_coord = scene.post_program.attrib("a_TexCoord");
     let stride = (std::mem::size_of::<f32>() * 5) as GLint;
@@ -111,8 +108,10 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
         std::mem::size_of::<f32>() as GLuint * 3,
     );
 
+    scene.post_program.bind();
+    glesv2::uniform1i(scene.post_program.uniform("u_InputSampler"), 0);
+
     glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 6);
-    glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, 0);
 
     gles2_error::check().unwrap();
 }
