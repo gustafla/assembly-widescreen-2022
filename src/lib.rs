@@ -76,7 +76,6 @@ extern "C" fn scene_deinit(data: *mut c_void) {
 #[no_mangle]
 extern "C" fn scene_render(time: f64, data: *mut c_void) {
     let scene = Box::leak(unsafe { Box::from_raw(data as *mut Scene) });
-    eprintln!("scene from raw");
 
     // Test picture -------------------------------------------------------------------------------
 
@@ -84,7 +83,6 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     glesv2::use_program(scene.program);
 
     scene.post_fbo.bind();
-    eprintln!("post fbo bound");
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
 
@@ -93,8 +91,6 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     glesv2::vertex_attrib_pointer_offset(index_pos, 3, glesv2::GL_FLOAT, false, 0, 0);
 
     glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 3);
-
-    eprintln!("First pass done");
 
     // Post pass ----------------------------------------------------------------------------------
 
@@ -106,7 +102,6 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
         .post_fbo
         .bind_attachment(glesv2::GL_COLOR_ATTACHMENT0)
         .unwrap();
-    eprintln!("post fbo attachment texture bound");
     glesv2::uniform1i(
         glesv2::get_uniform_location(scene.post_program, "u_InputSampler"),
         0,
@@ -131,6 +126,4 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     glesv2::bind_buffer(glesv2::GL_ARRAY_BUFFER, 0);
 
     gles2_error::check().unwrap();
-
-    eprintln!("end of render");
 }
