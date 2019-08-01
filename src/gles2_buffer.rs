@@ -50,8 +50,8 @@ impl BufferHandle {
 
 impl Drop for BufferHandle {
     fn drop(&mut self) {
-        glesv2::delete_buffers(&[self.0]);
         eprintln!("Buffer handle {} dropped", self.0);
+        glesv2::delete_buffers(&[self.0]);
     }
 }
 

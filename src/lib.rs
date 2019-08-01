@@ -5,6 +5,7 @@ mod gles2_error;
 mod gles2_fbo;
 mod gles2_shader;
 
+use gles2_shader::Program;
 use gles2_buffer::{ArrayBuffer, Buffer};
 use gles2_fbo::{Fbo, FboBuilder};
 use opengles::glesv2::{self, GLint, GLuint};
@@ -14,10 +15,10 @@ use std::os::raw::c_char;
 struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
     resolution: (i32, i32),
-    program: glesv2::GLuint,
+    program: Program,
     buffer: ArrayBuffer,
     post_fbo: Fbo,
-    post_program: glesv2::GLuint,
+    post_program: Program,
     post_buffer: ArrayBuffer,
 }
 
@@ -43,14 +44,14 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
-        program: gles2_shader::link_program(&["shader.vert", "shader.frag"]).unwrap(),
+        program: Program::from_sources(&["shader.vert", "shader.frag"]).unwrap(),
         buffer,
         post_fbo: FboBuilder::new()
             .add_texture2d(glesv2::GL_RGB, (w, h), glesv2::GL_COLOR_ATTACHMENT0)
             .unwrap()
             .build()
             .unwrap(),
-        post_program: gles2_shader::link_program(&["shader.vert", "post.frag"]).unwrap(),
+        post_program: Program::from_sources(&["shader.vert", "post.frag"]).unwrap(),
         post_buffer,
     });
 
@@ -61,10 +62,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
 
 #[no_mangle]
 extern "C" fn scene_deinit(data: *mut c_void) {
-    let scene = unsafe { Box::from_raw(data as *mut Scene) };
-    glesv2::delete_program(scene.program);
-    glesv2::delete_program(scene.post_program);
-    eprintln!("scene deinit finished");
+    let _scene = unsafe { Box::from_raw(data as *mut Scene) };
 }
 
 #[no_mangle]
@@ -74,13 +72,13 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     // Test picture -------------------------------------------------------------------------------
 
     scene.buffer.bind();
-    glesv2::use_program(scene.program);
+    scene.program.bind();
 
     scene.post_fbo.bind();
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
 
-    let index_pos = glesv2::get_attrib_location(scene.program, "a_Pos") as GLuint;
+    let index_pos = scene.program.attrib("a_Pos");
     glesv2::enable_vertex_attrib_array(index_pos);
     glesv2::vertex_attrib_pointer_offset(index_pos, 3, glesv2::GL_FLOAT, false, 0, 0);
 
@@ -89,20 +87,14 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     // Post pass ----------------------------------------------------------------------------------
 
     scene.post_buffer.bind();
-    glesv2::use_program(scene.post_program);
+    scene.post_program.bind();
 
     Fbo::bind_default();
-    scene
-        .post_fbo
-        .bind_attachment(glesv2::GL_COLOR_ATTACHMENT0)
-        .unwrap();
-    glesv2::uniform1i(
-        glesv2::get_uniform_location(scene.post_program, "u_InputSampler"),
-        0,
-    );
+    scene.post_fbo.bind_attachment(glesv2::GL_COLOR_ATTACHMENT0).unwrap();
+    glesv2::uniform1i(scene.post_program.uniform("u_InputSampler"), 0);
 
-    let index_pos = glesv2::get_attrib_location(scene.post_program, "a_Pos") as GLuint;
-    let index_tex_coord = glesv2::get_attrib_location(scene.post_program, "a_TexCoord") as GLuint;
+    let index_pos = scene.post_program.attrib("a_Pos");
+    let index_tex_coord = scene.post_program.attrib("a_TexCoord");
     let stride = (std::mem::size_of::<f32>() * 5) as GLint;
     glesv2::enable_vertex_attrib_array(index_pos);
     glesv2::vertex_attrib_pointer_offset(index_pos, 3, glesv2::GL_FLOAT, false, stride, 0);
