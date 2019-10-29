@@ -5,7 +5,10 @@ pub enum Error {
     UnknownAttachment,
     UnavailableAttachment,
     UnbindableAttachment,
-    IncompleteFramebuffer,
+    IncompleteFramebufferAttachment,
+    IncompleteFramebufferDimensions,
+    FramebufferMissingAttachment,
+    FramebufferUnsupported,
 }
 
 enum Attachment {
@@ -152,12 +155,17 @@ impl FboBuilder {
             };
         }
 
-        if glesv2::check_framebuffer_status(glesv2::GL_FRAMEBUFFER)
-            == glesv2::GL_FRAMEBUFFER_COMPLETE
-        {
+        let status = glesv2::check_framebuffer_status(glesv2::GL_FRAMEBUFFER);
+        if status == glesv2::GL_FRAMEBUFFER_COMPLETE {
             Ok(self.fbo)
+        } else if status == glesv2::GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT {
+            Err(Error::IncompleteFramebufferAttachment)
+        } else if status == glesv2::GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS {
+            Err(Error::IncompleteFramebufferDimensions)
+        } else if status == glesv2::GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT {
+            Err(Error::FramebufferMissingAttachment)
         } else {
-            Err(Error::IncompleteFramebuffer)
+            Err(Error::FramebufferUnsupported)
         }
     }
 }
