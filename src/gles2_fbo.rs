@@ -127,6 +127,8 @@ impl FboBuilder {
                 glesv2::GL_UNSIGNED_BYTE,
                 &[],
             );
+            glesv2::tex_parameteri(glesv2::GL_TEXTURE_2D, glesv2::GL_TEXTURE_MIN_FILTER, glesv2::GL_NEAREST as GLint);
+            glesv2::tex_parameteri(glesv2::GL_TEXTURE_2D, glesv2::GL_TEXTURE_MAG_FILTER, glesv2::GL_NEAREST as GLint);
             *target_att = Some(Attachment::Texture2D(tex));
             Ok(self)
         }
