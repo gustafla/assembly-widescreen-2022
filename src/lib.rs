@@ -1,14 +1,11 @@
 #![allow(dead_code)]
 
-mod gles2_buffer;
-mod gles2_error;
-mod gles2_fbo;
-mod gles2_shader;
+mod glesv2_raii;
 
-use gles2_buffer::{ArrayBuffer, Buffer};
-use gles2_fbo::{Fbo, FboBuilder};
-use gles2_shader::Program;
-use opengles::glesv2::{self, GLint, GLuint};
+use glesv2_raii::{
+    Attachment, AttachmentKind, Buffer, Framebuffer, Program, Texture, TextureAttachment,
+};
+use opengles::glesv2::*;
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
 
@@ -16,10 +13,10 @@ struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
     resolution: (i32, i32),
     program: Program,
-    buffer: ArrayBuffer,
-    post_fbo: Fbo,
+    buffer: Buffer,
+    post_fbo: Framebuffer,
     post_program: Program,
-    post_buffer: ArrayBuffer,
+    post_buffer: Buffer,
 }
 
 impl Scene {
@@ -31,26 +28,50 @@ impl Scene {
 
 #[no_mangle]
 extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f64) -> *mut c_void {
-    glesv2::viewport(0, 0, w, h);
+    viewport(0, 0, w, h);
 
-    let post_buffer = ArrayBuffer::new().static_data(&[
-        -1f32, -1., 0., 0., 0., 1., -1., 0., 1., 0., 1., 1., 0., 1., 1., -1., -1., 0., 0., 0., 1.,
-        1., 0., 1., 1., -1., 1., 0., 0., 1.,
-    ]);
+    // Create a buffer for post processing pass quad
+    let post_buffer = Buffer::new();
+    bind_buffer(GL_ARRAY_BUFFER, post_buffer.handle());
+    buffer_data(
+        GL_ARRAY_BUFFER,
+        &[
+            -1f32, -1., 0., 0., 0., 1., -1., 0., 1., 0., 1., 1., 0., 1., 1., -1., -1., 0., 0., 0.,
+            1., 1., 0., 1., 1., -1., 1., 0., 0., 1.,
+        ],
+        GL_STATIC_DRAW,
+    );
 
-    let buffer =
-        ArrayBuffer::new().static_data(&[-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0]);
+    // Create a buffer for test triangle
+    let buffer = Buffer::new();
+    bind_buffer(GL_ARRAY_BUFFER, buffer.handle());
+    buffer_data(
+        GL_ARRAY_BUFFER,
+        &[-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0],
+        GL_STATIC_DRAW,
+    );
+
+    // Create an FBO for post processing
+    let fbo_texture = Texture::new();
+    bind_texture(GL_TEXTURE_2D, fbo_texture.handle());
+    Texture::image::<u8>(GL_TEXTURE_2D, 0, GL_RGB, w, h, GL_UNSIGNED_BYTE, &[]);
+    Texture::set_filters(GL_TEXTURE_2D, GL_NEAREST);
+    let post_fbo = Framebuffer::new(vec![Attachment {
+        name: GL_COLOR_ATTACHMENT0,
+        kind: AttachmentKind::Texture(TextureAttachment {
+            target: GL_TEXTURE_2D,
+            texture: fbo_texture,
+            mipmap_level: 0,
+        }),
+    }])
+    .unwrap();
 
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
         program: Program::from_sources(&["shader.vert", "shader.frag"]).unwrap(),
         buffer,
-        post_fbo: FboBuilder::new()
-            .add_texture2d(glesv2::GL_RGB, (w, h), glesv2::GL_COLOR_ATTACHMENT0)
-            .unwrap()
-            .build()
-            .unwrap(),
+        post_fbo,
         post_program: Program::from_sources(&["shader.vert", "post.frag"]).unwrap(),
         post_buffer,
     });
@@ -71,47 +92,51 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     // Test picture -------------------------------------------------------------------------------
 
-    scene.post_fbo.bind();
-    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
-    glesv2::clear(glesv2::GL_COLOR_BUFFER_BIT);
+    bind_framebuffer(GL_FRAMEBUFFER, scene.post_fbo.handle());
+    clear_color(f32::sin(time as f32), 1., 0., 1.);
+    clear(GL_COLOR_BUFFER_BIT);
 
-    scene.buffer.bind();
-    let index_pos = scene.program.attrib("a_Pos");
-    glesv2::enable_vertex_attrib_array(index_pos);
-    glesv2::vertex_attrib_pointer_offset(index_pos, 3, glesv2::GL_FLOAT, false, 0, 0);
+    bind_buffer(GL_ARRAY_BUFFER, scene.buffer.handle());
+    let index_pos = scene.program.attrib_location("a_Pos");
+    enable_vertex_attrib_array(index_pos);
+    vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, 0, 0);
 
-    scene.program.bind();
+    use_program(scene.program.handle());
 
-    glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 3);
+    draw_arrays(GL_TRIANGLES, 0, 3);
 
     // Post pass ----------------------------------------------------------------------------------
 
-    Fbo::bind_default();
-    scene
-        .post_fbo
-        .bind_attachment(glesv2::GL_COLOR_ATTACHMENT0)
-        .unwrap();
+    bind_framebuffer(GL_FRAMEBUFFER, 0);
+    active_texture(GL_TEXTURE0);
+    bind_texture(
+        GL_TEXTURE_2D,
+        scene
+            .post_fbo
+            .attachment_handle(GL_COLOR_ATTACHMENT0)
+            .unwrap(),
+    );
 
-    scene.post_buffer.bind();
-    let index_pos = scene.post_program.attrib("a_Pos");
-    let index_tex_coord = scene.post_program.attrib("a_TexCoord");
+    bind_buffer(GL_ARRAY_BUFFER, scene.post_buffer.handle());
+    let index_pos = scene.post_program.attrib_location("a_Pos");
+    let index_tex_coord = scene.post_program.attrib_location("a_TexCoord");
     let stride = (std::mem::size_of::<f32>() * 5) as GLint;
-    glesv2::enable_vertex_attrib_array(index_pos);
-    glesv2::vertex_attrib_pointer_offset(index_pos, 3, glesv2::GL_FLOAT, false, stride, 0);
-    glesv2::enable_vertex_attrib_array(index_tex_coord);
-    glesv2::vertex_attrib_pointer_offset(
+    enable_vertex_attrib_array(index_pos);
+    vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, stride, 0);
+    enable_vertex_attrib_array(index_tex_coord);
+    vertex_attrib_pointer_offset(
         index_tex_coord,
         2,
-        glesv2::GL_FLOAT,
+        GL_FLOAT,
         false,
         stride,
         std::mem::size_of::<f32>() as GLuint * 3,
     );
 
-    scene.post_program.bind();
-    glesv2::uniform1i(scene.post_program.uniform("u_InputSampler"), 0);
+    use_program(scene.post_program.handle());
+    uniform1i(scene.post_program.uniform_location("u_InputSampler"), 0);
 
-    glesv2::draw_arrays(glesv2::GL_TRIANGLES, 0, 6);
+    draw_arrays(GL_TRIANGLES, 0, 6);
 
-    gles2_error::check().unwrap();
+    glesv2_raii::check().unwrap();
 }
