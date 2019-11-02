@@ -6,6 +6,7 @@ use glesv2_raii::{Buffer, Framebuffer, Program, Texture, TextureAttachment};
 use opengles::glesv2::{self, constants::*, types::*};
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
+use log::info;
 
 struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
@@ -26,6 +27,7 @@ impl Scene {
 
 #[no_mangle]
 extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f64) -> *mut c_void {
+    env_logger::init();
     glesv2::viewport(0, 0, w, h);
 
     // Create a buffer for post processing pass quad
@@ -77,13 +79,14 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         post_buffer,
     });
 
-    eprintln!("scene created");
+    info!("scene created");
 
     Box::into_raw(scene) as *mut c_void
 }
 
 #[no_mangle]
 extern "C" fn scene_deinit(data: *mut c_void) {
+    info!("scene dropped");
     let _scene = unsafe { Box::from_raw(data as *mut Scene) };
 }
 

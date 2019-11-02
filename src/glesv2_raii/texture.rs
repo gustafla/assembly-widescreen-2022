@@ -1,10 +1,13 @@
 use opengles::glesv2::{self, constants::*, types::*};
+use log::trace;
 
 pub struct Texture(GLuint);
 
 impl Texture {
     pub fn new() -> Texture {
-        Texture(glesv2::gen_textures(1)[0])
+        let handle = glesv2::gen_textures(1)[0];
+        trace!("Texture {} created", handle);
+        Texture(handle)
     }
 
     pub fn handle(&self) -> GLuint {
@@ -41,6 +44,7 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
+        trace!("Texture {} dropped", self.handle());
         glesv2::delete_textures(&[self.handle()]);
     }
 }

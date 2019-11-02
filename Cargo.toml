@@ -6,6 +6,8 @@ edition = "2018"
 
 [dependencies]
 opengles = { git = "https://github.com/gustafla/rust-opengles" }
+log = { version = "0.4", features = ["release_max_level_warn"] }
+env_logger = "0.7"
 
 [lib]
 crate-type = ["cdylib"]

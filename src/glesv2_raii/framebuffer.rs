@@ -2,6 +2,7 @@ use super::Renderbuffer;
 use super::Texture;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::collections::HashMap;
+use log::trace;
 
 #[derive(Debug)]
 pub enum Error {
@@ -33,6 +34,7 @@ impl Framebuffer {
         renderbuffer_attachments: Option<Vec<(GLenum, RenderbufferAttachment)>>,
     ) -> Result<Framebuffer, Error> {
         let handle = glesv2::gen_framebuffers(1)[0];
+        trace!("Framebuffer {} created", handle);
         glesv2::bind_framebuffer(GL_FRAMEBUFFER, handle);
 
         let mut textures: HashMap<GLuint, TextureAttachment> = HashMap::new();
@@ -90,6 +92,7 @@ impl Framebuffer {
 
 impl Drop for Framebuffer {
     fn drop(&mut self) {
+        trace!("Framebuffer {} dropped", self.handle());
         glesv2::delete_framebuffers(&[self.handle()]);
     }
 }

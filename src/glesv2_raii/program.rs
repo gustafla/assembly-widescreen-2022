@@ -1,6 +1,7 @@
 use super::Shader;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::path::Path;
+use log::trace;
 
 pub struct Program(GLuint);
 
@@ -18,25 +19,27 @@ impl From<super::shader::Error> for Error {
 
 impl Program {
     pub fn from_sources<P: AsRef<Path>>(paths: &[P]) -> Result<Program, Error> {
-        let program = glesv2::create_program();
+        let handle = glesv2::create_program();
 
         let mut shaders = Vec::new();
         for path in paths {
             let shader = Shader::from_source(path)?;
-            glesv2::attach_shader(program, shader.handle());
+            glesv2::attach_shader(handle, shader.handle());
             shaders.push(shader);
         }
 
-        glesv2::link_program(program);
+        glesv2::link_program(handle);
 
-        let status = glesv2::get_programiv(program, GL_LINK_STATUS);
+        let status = glesv2::get_programiv(handle, GL_LINK_STATUS);
         if status as GLboolean == GL_FALSE {
-            let log_len = glesv2::get_programiv(program, GL_INFO_LOG_LENGTH);
-            return Err(Error::Link(glesv2::get_program_info_log(program, log_len)));
+            let log_len = glesv2::get_programiv(handle, GL_INFO_LOG_LENGTH);
+            let log = glesv2::get_program_info_log(handle, log_len);
+            glesv2::delete_program(handle);
+            return Err(Error::Link(log));
         }
 
-        eprintln!("Program {} linked", program);
-        Ok(Program(program))
+        trace!("Program {} linked", handle);
+        Ok(Program(handle))
     }
 
     pub fn handle(&self) -> GLuint {
@@ -54,7 +57,7 @@ impl Program {
 
 impl Drop for Program {
     fn drop(&mut self) {
-        eprintln!("Program {} dropped", self.handle());
+        trace!("Program {} dropped", self.handle());
         glesv2::delete_program(self.handle());
     }
 }
