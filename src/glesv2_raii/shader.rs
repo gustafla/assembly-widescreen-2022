@@ -1,4 +1,4 @@
-use opengles::glesv2::*;
+use opengles::glesv2::{self, constants::*, types::*};
 use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::Path;
@@ -24,7 +24,7 @@ impl Shader {
         let mut string = String::new();
         file.read_to_string(&mut string)?;
 
-        let shader = create_shader(match path.as_ref().extension() {
+        let shader = glesv2::create_shader(match path.as_ref().extension() {
             None => return Err(Error::DetermineShaderStage),
             Some(os_str) => match os_str.to_str() {
                 Some("frag") => GL_FRAGMENT_SHADER,
@@ -33,15 +33,15 @@ impl Shader {
             },
         });
 
-        shader_source(shader, string.as_str().as_bytes());
-        compile_shader(shader);
+        glesv2::shader_source(shader, string.as_str().as_bytes());
+        glesv2::compile_shader(shader);
 
-        let status = get_shaderiv(shader, GL_COMPILE_STATUS);
+        let status = glesv2::get_shaderiv(shader, GL_COMPILE_STATUS);
         if status as GLboolean == GL_FALSE {
-            let log_len = get_shaderiv(shader, GL_INFO_LOG_LENGTH);
+            let log_len = glesv2::get_shaderiv(shader, GL_INFO_LOG_LENGTH);
             return Err(Error::Compile(
                 format!("{}", path.as_ref().display()),
-                get_shader_info_log(shader, log_len),
+                glesv2::get_shader_info_log(shader, log_len),
             ));
         }
 
@@ -57,6 +57,6 @@ impl Shader {
 impl Drop for Shader {
     fn drop(&mut self) {
         eprintln!("Shader {} dropped", self.handle());
-        delete_shader(self.handle());
+        glesv2::delete_shader(self.handle());
     }
 }

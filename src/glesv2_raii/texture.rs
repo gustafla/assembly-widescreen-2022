@@ -1,10 +1,10 @@
-use opengles::glesv2::*;
+use opengles::glesv2::{self, constants::*, types::*};
 
 pub struct Texture(GLuint);
 
 impl Texture {
     pub fn new() -> Texture {
-        Texture(gen_textures(1)[0])
+        Texture(glesv2::gen_textures(1)[0])
     }
 
     pub fn handle(&self) -> GLuint {
@@ -12,8 +12,8 @@ impl Texture {
     }
 
     pub fn set_filters(target: GLenum, param: GLenum) {
-        tex_parameteri(target, GL_TEXTURE_MIN_FILTER, param as GLint);
-        tex_parameteri(target, GL_TEXTURE_MAG_FILTER, param as GLint);
+        glesv2::tex_parameteri(target, GL_TEXTURE_MIN_FILTER, param as GLint);
+        glesv2::tex_parameteri(target, GL_TEXTURE_MAG_FILTER, param as GLint);
     }
 
     pub fn image<T>(
@@ -25,7 +25,7 @@ impl Texture {
         type_: GLenum,
         buffer: &[T],
     ) {
-        tex_image_2d(
+        glesv2::tex_image_2d(
             target,
             level,
             format as GLint,
@@ -41,6 +41,6 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        delete_textures(&[self.handle()]);
+        glesv2::delete_textures(&[self.handle()]);
     }
 }

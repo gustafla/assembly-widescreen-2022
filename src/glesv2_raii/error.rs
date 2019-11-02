@@ -1,4 +1,4 @@
-use opengles::glesv2::*;
+use opengles::glesv2::{self, constants::*, types::*};
 
 #[derive(Debug)]
 pub enum Error {
@@ -25,7 +25,7 @@ impl From<GLenum> for Error {
 }
 
 pub fn check() -> Result<(), Error> {
-    let status = get_error();
+    let status = glesv2::get_error();
     if status != GL_NO_ERROR {
         Err(Error::from(status))
     } else {

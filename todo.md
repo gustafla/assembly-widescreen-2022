@@ -1,3 +1,3 @@
 [ ] Add proper logging
-[ ] Switch back to idiomatic namespace style
+[x] Switch back to idiomatic namespace style
 [x] Use Error::\*;

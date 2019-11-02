@@ -1,6 +1,6 @@
 use super::Renderbuffer;
 use super::Texture;
-use opengles::glesv2::*;
+use opengles::glesv2::{self, constants::*, types::*};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -32,13 +32,13 @@ impl Framebuffer {
         texture_attachments: Option<Vec<(GLenum, TextureAttachment)>>,
         renderbuffer_attachments: Option<Vec<(GLenum, RenderbufferAttachment)>>,
     ) -> Result<Framebuffer, Error> {
-        let handle = gen_framebuffers(1)[0];
-        bind_framebuffer(GL_FRAMEBUFFER, handle);
+        let handle = glesv2::gen_framebuffers(1)[0];
+        glesv2::bind_framebuffer(GL_FRAMEBUFFER, handle);
 
         let mut textures: HashMap<GLuint, TextureAttachment> = HashMap::new();
         if let Some(texture_attachments) = texture_attachments {
             for (name, attachment) in texture_attachments {
-                framebuffer_texture_2d(
+                glesv2::framebuffer_texture_2d(
                     GL_FRAMEBUFFER,
                     name,
                     attachment.target,
@@ -52,7 +52,7 @@ impl Framebuffer {
         let mut renderbuffers: Vec<RenderbufferAttachment> = Vec::new();
         if let Some(renderbuffer_attachments) = renderbuffer_attachments {
             for (name, attachment) in renderbuffer_attachments {
-                framebuffer_renderbuffer(
+                glesv2::framebuffer_renderbuffer(
                     GL_FRAMEBUFFER,
                     name,
                     GL_RENDERBUFFER,
@@ -63,7 +63,7 @@ impl Framebuffer {
         }
 
         use Error::*;
-        match check_framebuffer_status(GL_FRAMEBUFFER) {
+        match glesv2::check_framebuffer_status(GL_FRAMEBUFFER) {
             GL_FRAMEBUFFER_COMPLETE => Ok(Framebuffer {
                 handle,
                 textures,
@@ -90,6 +90,6 @@ impl Framebuffer {
 
 impl Drop for Framebuffer {
     fn drop(&mut self) {
-        delete_framebuffers(&[self.handle()]);
+        glesv2::delete_framebuffers(&[self.handle()]);
     }
 }
