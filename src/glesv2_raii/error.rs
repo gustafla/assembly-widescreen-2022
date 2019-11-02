@@ -12,13 +12,14 @@ pub enum Error {
 
 impl From<GLenum> for Error {
     fn from(value: GLenum) -> Self {
+        use Error::*;
         match value {
-            GL_INVALID_ENUM => Error::InvalidEnum,
-            GL_INVALID_VALUE => Error::InvalidValue,
-            GL_INVALID_OPERATION => Error::InvalidOperation,
-            GL_INVALID_FRAMEBUFFER_OPERATION => Error::InvalidFramebufferOperation,
-            GL_OUT_OF_MEMORY => Error::OutOfMemory,
-            _ => Error::Unknown,
+            GL_INVALID_ENUM => InvalidEnum,
+            GL_INVALID_VALUE => InvalidValue,
+            GL_INVALID_OPERATION => InvalidOperation,
+            GL_INVALID_FRAMEBUFFER_OPERATION => InvalidFramebufferOperation,
+            GL_OUT_OF_MEMORY => OutOfMemory,
+            _ => Unknown,
         }
     }
 }
