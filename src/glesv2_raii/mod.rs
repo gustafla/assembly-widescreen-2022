@@ -8,7 +8,7 @@ mod texture;
 
 pub use self::buffer::Buffer;
 pub use self::error::*;
-pub use self::framebuffer::{Attachment, AttachmentKind, Framebuffer, TextureAttachment};
+pub use self::framebuffer::{Framebuffer, RenderbufferAttachment, TextureAttachment};
 pub use self::program::Program;
 pub use self::renderbuffer::Renderbuffer;
 pub use self::shader::Shader;

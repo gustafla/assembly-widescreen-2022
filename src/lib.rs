@@ -2,9 +2,7 @@
 
 mod glesv2_raii;
 
-use glesv2_raii::{
-    Attachment, AttachmentKind, Buffer, Framebuffer, Program, Texture, TextureAttachment,
-};
+use glesv2_raii::{Buffer, Framebuffer, Program, Texture, TextureAttachment};
 use opengles::glesv2::*;
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
@@ -56,14 +54,17 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     bind_texture(GL_TEXTURE_2D, fbo_texture.handle());
     Texture::image::<u8>(GL_TEXTURE_2D, 0, GL_RGB, w, h, GL_UNSIGNED_BYTE, &[]);
     Texture::set_filters(GL_TEXTURE_2D, GL_NEAREST);
-    let post_fbo = Framebuffer::new(vec![Attachment {
-        name: GL_COLOR_ATTACHMENT0,
-        kind: AttachmentKind::Texture(TextureAttachment {
-            target: GL_TEXTURE_2D,
-            texture: fbo_texture,
-            mipmap_level: 0,
-        }),
-    }])
+    let post_fbo = Framebuffer::new(
+        Some(vec![(
+            GL_COLOR_ATTACHMENT0,
+            TextureAttachment {
+                target: GL_TEXTURE_2D,
+                texture: fbo_texture,
+                mipmap_level: 0,
+            },
+        )]),
+        None,
+    )
     .unwrap();
 
     let scene = Box::new(Scene {
@@ -111,10 +112,7 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     active_texture(GL_TEXTURE0);
     bind_texture(
         GL_TEXTURE_2D,
-        scene
-            .post_fbo
-            .attachment_handle(GL_COLOR_ATTACHMENT0)
-            .unwrap(),
+        scene.post_fbo.texture_handle(GL_COLOR_ATTACHMENT0).unwrap(),
     );
 
     bind_buffer(GL_ARRAY_BUFFER, scene.post_buffer.handle());

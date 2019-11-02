@@ -21,55 +21,53 @@ pub struct RenderbufferAttachment {
     pub renderbuffer: Renderbuffer,
 }
 
-pub enum AttachmentKind {
-    Texture(TextureAttachment),
-    Renderbuffer(RenderbufferAttachment),
-}
-
-pub struct Attachment {
-    pub name: GLenum,
-    pub kind: AttachmentKind,
-}
-
 pub struct Framebuffer {
     handle: GLuint,
-    attachments: HashMap<GLenum, AttachmentKind>,
+    textures: HashMap<GLenum, TextureAttachment>,
+    renderbuffers: Vec<RenderbufferAttachment>,
 }
 
 impl Framebuffer {
-    pub fn new(attachments: Vec<Attachment>) -> Result<Framebuffer, Error> {
+    pub fn new(
+        texture_attachments: Option<Vec<(GLenum, TextureAttachment)>>,
+        renderbuffer_attachments: Option<Vec<(GLenum, RenderbufferAttachment)>>,
+    ) -> Result<Framebuffer, Error> {
         let handle = gen_framebuffers(1)[0];
         bind_framebuffer(GL_FRAMEBUFFER, handle);
 
-        let mut attach_map = HashMap::new();
-        for attachment in attachments {
-            match &attachment.kind {
-                AttachmentKind::Texture(texture_attachment) => {
-                    framebuffer_texture_2d(
-                        GL_FRAMEBUFFER,
-                        attachment.name,
-                        texture_attachment.target,
-                        texture_attachment.texture.handle(),
-                        texture_attachment.mipmap_level,
-                    );
-                }
-                AttachmentKind::Renderbuffer(renderbuffer_attachment) => {
-                    framebuffer_renderbuffer(
-                        GL_FRAMEBUFFER,
-                        attachment.name,
-                        GL_RENDERBUFFER,
-                        renderbuffer_attachment.renderbuffer.handle(),
-                    );
-                }
+        let mut textures: HashMap<GLuint, TextureAttachment> = HashMap::new();
+        if let Some(texture_attachments) = texture_attachments {
+            for (name, attachment) in texture_attachments {
+                framebuffer_texture_2d(
+                    GL_FRAMEBUFFER,
+                    name,
+                    attachment.target,
+                    attachment.texture.handle(),
+                    attachment.mipmap_level,
+                );
+                textures.insert(name, attachment);
             }
-            attach_map.insert(attachment.name, attachment.kind);
+        }
+
+        let mut renderbuffers: Vec<RenderbufferAttachment> = Vec::new();
+        if let Some(renderbuffer_attachments) = renderbuffer_attachments {
+            for (name, attachment) in renderbuffer_attachments {
+                framebuffer_renderbuffer(
+                    GL_FRAMEBUFFER,
+                    name,
+                    GL_RENDERBUFFER,
+                    attachment.renderbuffer.handle(),
+                );
+                renderbuffers.push(attachment);
+            }
         }
 
         use Error::*;
         match check_framebuffer_status(GL_FRAMEBUFFER) {
             GL_FRAMEBUFFER_COMPLETE => Ok(Framebuffer {
                 handle,
-                attachments: attach_map,
+                textures,
+                renderbuffers,
             }),
             GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT => Err(IncompleteAttachment),
             GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS => Err(DimensionsMismatch),
@@ -82,16 +80,9 @@ impl Framebuffer {
         self.handle
     }
 
-    pub fn attachment_handle(&self, attachment_name: GLenum) -> Option<GLuint> {
-        match self.attachments.get(&attachment_name) {
-            Some(attachment_kind) => match attachment_kind {
-                AttachmentKind::Texture(texture_attachment) => {
-                    Some(texture_attachment.texture.handle())
-                }
-                AttachmentKind::Renderbuffer(renderbuffer_attachment) => {
-                    Some(renderbuffer_attachment.renderbuffer.handle())
-                }
-            },
+    pub fn texture_handle(&self, texture_attachment_name: GLenum) -> Option<GLuint> {
+        match self.textures.get(&texture_attachment_name) {
+            Some(texture_attachment) => Some(texture_attachment.texture.handle()),
             None => None,
         }
     }
