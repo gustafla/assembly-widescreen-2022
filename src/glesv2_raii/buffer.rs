@@ -1,5 +1,5 @@
-use opengles::glesv2::{self, types::*};
 use log::trace;
+use opengles::glesv2::{self, types::*};
 
 pub struct Buffer(GLuint);
 

@@ -1,7 +1,7 @@
 use super::Shader;
+use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::path::Path;
-use log::trace;
 
 pub struct Program(GLuint);
 
@@ -18,14 +18,11 @@ impl From<super::shader::Error> for Error {
 }
 
 impl Program {
-    pub fn from_sources<P: AsRef<Path>>(paths: &[P]) -> Result<Program, Error> {
+    pub fn from_shaders(shaders: &[Shader]) -> Result<Program, Error> {
         let handle = glesv2::create_program();
 
-        let mut shaders = Vec::new();
-        for path in paths {
-            let shader = Shader::from_source(path)?;
+        for shader in shaders {
             glesv2::attach_shader(handle, shader.handle());
-            shaders.push(shader);
         }
 
         glesv2::link_program(handle);
@@ -38,8 +35,29 @@ impl Program {
             return Err(Error::Link(log));
         }
 
-        trace!("Program {} linked", handle);
+        trace!(
+            "Program {} {:?} linked",
+            handle,
+            shaders.iter().map(|s| s.handle()).collect::<Vec<_>>()
+        );
         Ok(Program(handle))
+    }
+
+    pub fn from_sources<P: AsRef<Path>>(paths: &[P]) -> Result<Program, Error> {
+        trace!(
+            "Linking program from {:?}...",
+            paths
+                .iter()
+                .map(|p| p.as_ref().display().to_string())
+                .collect::<Vec<_>>()
+        );
+
+        let mut shaders = Vec::new();
+        for path in paths {
+            shaders.push(Shader::from_source(path)?);
+        }
+
+        Self::from_shaders(&shaders)
     }
 
     pub fn handle(&self) -> GLuint {

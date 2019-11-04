@@ -1,8 +1,8 @@
 use super::Renderbuffer;
 use super::Texture;
+use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::collections::HashMap;
-use log::trace;
 
 #[derive(Debug)]
 pub enum Error {

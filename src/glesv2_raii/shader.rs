@@ -1,8 +1,8 @@
+use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::Path;
-use log::trace;
 
 #[derive(Debug)]
 pub enum Error {

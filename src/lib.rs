@@ -3,10 +3,10 @@
 mod glesv2_raii;
 
 use glesv2_raii::{Buffer, Framebuffer, Program, Texture, TextureAttachment};
+use log::info;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
-use log::info;
 
 struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,

@@ -1,5 +1,5 @@
-use opengles::glesv2::{self, constants::*, types::*};
 use log::trace;
+use opengles::glesv2::{self, constants::*, types::*};
 
 pub struct Texture(GLuint);
 
