@@ -27,7 +27,7 @@ impl Scene {
 
 #[no_mangle]
 extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f64) -> *mut c_void {
-    env_logger::init();
+    simple_logger::init().unwrap();
     glesv2::viewport(0, 0, w, h);
 
     // Create a buffer for post processing pass quad
