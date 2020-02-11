@@ -1,5 +1,4 @@
-.PHONY: run
+.PHONY: build
 
-run:
+build:
 	cargo build
-	cd target/debug; mehustin
