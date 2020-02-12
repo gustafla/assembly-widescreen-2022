@@ -136,6 +136,11 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     glesv2::use_program(scene.post_program.handle());
     glesv2::uniform1i(scene.post_program.uniform_location("u_InputSampler"), 0);
+    glesv2::uniform2f(
+        scene.post_program.uniform_location("u_Resolution"),
+        scene.resolution.0 as f32,
+        scene.resolution.1 as f32,
+    );
 
     glesv2::draw_arrays(GL_TRIANGLES, 0, 6);
 
