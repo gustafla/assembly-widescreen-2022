@@ -1,7 +1,7 @@
 [ ] Particle effect & physics system
 [ ] Implement post processing
   - [x] Vignette
-  - [ ] Noise
+  - [x] Noise
   - [ ] Bloom
   - [x] CRT distortion
 [x] Add proper logging

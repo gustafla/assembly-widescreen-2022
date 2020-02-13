@@ -135,6 +135,14 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     );
 
     glesv2::use_program(scene.post_program.handle());
+    glesv2::uniform1f(
+        scene.post_program.uniform_location("u_NoiseTime"),
+        scene.sync_get("noise_time") as f32,
+    );
+    glesv2::uniform1f(
+        scene.post_program.uniform_location("u_NoiseAmount"),
+        scene.sync_get("noise_amount") as f32,
+    );
     glesv2::uniform1i(scene.post_program.uniform_location("u_InputSampler"), 0);
     glesv2::uniform2f(
         scene.post_program.uniform_location("u_Resolution"),
