@@ -5,7 +5,7 @@
 			<key interpolation="0" value="1000" row="2431"/>
 		</track>
 		<track name="noise_amount">
-			<key interpolation="1" value="0.04" row="0"/>
+			<key interpolation="0" value="0.04" row="0"/>
 		</track>
 	</tracks>
 	<bookmarks/>
