@@ -3,21 +3,18 @@
 mod glesv2_raii;
 mod post;
 
-use glesv2_raii::{Buffer, Program, Shader, UniformValue};
+use glesv2_raii::{Buffer, UniformValue};
 use log::info;
 use opengles::glesv2::{self, constants::*};
 use post::Post;
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
-
-lazy_static::lazy_static! {
-    static ref VERT_SHADER: Shader = Shader::from_source("shader.vert").unwrap();
-}
+use glesv2_raii::ResourceMapper;
 
 pub struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
-    pub resolution: (i32, i32),
-    program: Program,
+    resolution: (i32, i32),
+    resources: ResourceMapper,
     buffer: Buffer,
     post_pass: Post,
 }
@@ -46,11 +43,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
-        program: Program::from_shaders(&[
-            VERT_SHADER.handle(),
-            Shader::from_source("shader.frag").unwrap().handle(),
-        ])
-        .unwrap(),
+        resources: ResourceMapper::new().unwrap(),
         buffer,
         post_pass: Post::new(w, h, "post.frag"),
     });
@@ -70,6 +63,8 @@ extern "C" fn scene_deinit(data: *mut c_void) {
 extern "C" fn scene_render(time: f64, data: *mut c_void) {
     let scene = Box::leak(unsafe { Box::from_raw(data as *mut Scene) });
 
+    let program = scene.resources.program("./shader.vert ./shader.frag");
+
     // Test picture -------------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.post_pass.fbo.handle());
@@ -77,11 +72,11 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
     glesv2::bind_buffer(GL_ARRAY_BUFFER, scene.buffer.handle());
-    let index_pos = scene.program.attrib_location("a_Pos");
+    let index_pos = program.attrib_location("a_Pos");
     glesv2::enable_vertex_attrib_array(index_pos);
     glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, 0, 0);
 
-    glesv2::use_program(scene.program.handle());
+    glesv2::use_program(program.handle());
 
     glesv2::draw_arrays(GL_TRIANGLES, 0, 3);
 
@@ -89,6 +84,7 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, 0);
     scene.post_pass.render(
+        &scene.resources,
         &[],
         &[
             (
