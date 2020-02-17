@@ -64,8 +64,6 @@ impl ResourceMapper {
                         values.push(v.parse::<f32>()?);
                     }
 
-                    dbg!(&values);
-
                     let buffer = Buffer::new();
                     glesv2::bind_buffer(GL_ARRAY_BUFFER, buffer.handle());
                     glesv2::buffer_data(GL_ARRAY_BUFFER, values.as_slice(), GL_STATIC_DRAW);

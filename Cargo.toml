@@ -8,7 +8,6 @@ edition = "2018"
 opengles = { git = "https://github.com/gustafla/rust-opengles" }
 log = { version = "0.4", features = ["release_max_level_warn"] }
 simple_logger = { version = "1", default-features = false }
-lazy_static = "1.4.0"
 
 [lib]
 crate-type = ["cdylib"]
