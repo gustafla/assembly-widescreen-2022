@@ -5,6 +5,7 @@ mod program;
 mod renderbuffer;
 mod shader;
 mod texture;
+mod uniform_value;
 
 pub use self::buffer::Buffer;
 pub use self::error::*;
@@ -13,3 +14,4 @@ pub use self::program::Program;
 pub use self::renderbuffer::Renderbuffer;
 pub use self::shader::Shader;
 pub use self::texture::Texture;
+pub use self::uniform_value::UniformValue;

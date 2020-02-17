@@ -3,7 +3,7 @@
 mod glesv2_raii;
 mod post;
 
-use glesv2_raii::{Buffer, Program, Shader};
+use glesv2_raii::{Buffer, Program, Shader, UniformValue};
 use log::info;
 use opengles::glesv2::{self, constants::*};
 use post::Post;
@@ -88,7 +88,23 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     // Post pass ----------------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, 0);
-    scene.post_pass.render(&scene);
+    scene.post_pass.render(
+        &[],
+        &[
+            (
+                "u_NoiseTime",
+                UniformValue::Float(scene.sync_get("noise_time") as f32),
+            ),
+            (
+                "u_NoiseAmount",
+                UniformValue::Float(scene.sync_get("noise_amount") as f32),
+            ),
+            (
+                "u_Resolution",
+                UniformValue::Vec2(scene.resolution.0 as f32, scene.resolution.1 as f32),
+            ),
+        ],
+    );
 
     glesv2_raii::check().unwrap();
 }

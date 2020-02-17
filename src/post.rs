@@ -1,5 +1,6 @@
-use crate::glesv2_raii::{Buffer, Framebuffer, Program, Shader, Texture, TextureAttachment};
-use crate::Scene;
+use crate::glesv2_raii::{
+    Buffer, Framebuffer, Program, Shader, Texture, TextureAttachment, UniformValue,
+};
 use opengles::glesv2::{self, constants::*, types::*};
 use std::path::Path;
 
@@ -53,12 +54,26 @@ impl Post {
         }
     }
 
-    pub fn render(&self, scene: &Scene) {
+    pub fn render(&self, textures: &[GLuint], uniforms: &[(&str, UniformValue)]) {
+        glesv2::use_program(self.program.handle());
+
         glesv2::active_texture(GL_TEXTURE0);
         glesv2::bind_texture(
             GL_TEXTURE_2D,
             self.fbo.texture_handle(GL_COLOR_ATTACHMENT0).unwrap(),
         );
+        glesv2::uniform1i(self.program.uniform_location("u_InputSampler0"), 0);
+
+        for (i, texture) in textures.iter().enumerate() {
+            glesv2::active_texture(GL_TEXTURE1 + i as GLuint);
+            glesv2::bind_texture(GL_TEXTURE_2D, *texture);
+            let i = i as GLint + 1;
+            glesv2::uniform1i(
+                self.program
+                    .uniform_location(&format!("u_InputSampler{}", i)),
+                i,
+            );
+        }
 
         glesv2::bind_buffer(GL_ARRAY_BUFFER, BUFFER.handle());
         let index_pos = self.program.attrib_location("a_Pos");
@@ -76,21 +91,15 @@ impl Post {
             std::mem::size_of::<f32>() as GLuint * 3,
         );
 
-        glesv2::use_program(self.program.handle());
-        glesv2::uniform1f(
-            self.program.uniform_location("u_NoiseTime"),
-            scene.sync_get("noise_time") as f32,
-        );
-        glesv2::uniform1f(
-            self.program.uniform_location("u_NoiseAmount"),
-            scene.sync_get("noise_amount") as f32,
-        );
-        glesv2::uniform1i(self.program.uniform_location("u_InputSampler"), 0);
-        glesv2::uniform2f(
-            self.program.uniform_location("u_Resolution"),
-            scene.resolution.0 as f32,
-            scene.resolution.1 as f32,
-        );
+        for ufm in uniforms {
+            let loc = self.program.uniform_location(ufm.0);
+            match ufm.1 {
+                UniformValue::Float(x) => glesv2::uniform1f(loc, x),
+                UniformValue::Vec2(x, y) => glesv2::uniform2f(loc, x, y),
+                UniformValue::Vec3(x, y, z) => glesv2::uniform3f(loc, x, y, z),
+                UniformValue::Vec4(x, y, z, w) => glesv2::uniform4f(loc, x, y, z, w),
+            }
+        }
 
         glesv2::draw_arrays(GL_TRIANGLES, 0, 6);
     }
