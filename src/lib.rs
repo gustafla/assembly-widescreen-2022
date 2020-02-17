@@ -3,12 +3,16 @@
 mod glesv2_raii;
 mod post;
 
-use glesv2_raii::{Buffer, Program};
-use post::Post;
+use glesv2_raii::{Buffer, Program, Shader};
 use log::info;
 use opengles::glesv2::{self, constants::*};
+use post::Post;
 use std::ffi::{c_void, CString};
 use std::os::raw::c_char;
+
+lazy_static::lazy_static! {
+    static ref VERT_SHADER: Shader = Shader::from_source("shader.vert").unwrap();
+}
 
 pub struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
@@ -39,13 +43,16 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         GL_STATIC_DRAW,
     );
 
-
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
-        program: Program::from_sources(&["shader.vert", "shader.frag"]).unwrap(),
+        program: Program::from_shaders(&[
+            VERT_SHADER.handle(),
+            Shader::from_source("shader.frag").unwrap().handle(),
+        ])
+        .unwrap(),
         buffer,
-        post_pass: Post::new(w, h),
+        post_pass: Post::new(w, h, "post.frag"),
     });
 
     info!("scene created");

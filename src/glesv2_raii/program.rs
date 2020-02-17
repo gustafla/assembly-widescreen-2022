@@ -18,11 +18,11 @@ impl From<super::shader::Error> for Error {
 }
 
 impl Program {
-    pub fn from_shaders(shaders: &[Shader]) -> Result<Program, Error> {
+    pub fn from_shaders(shaders: &[GLuint]) -> Result<Program, Error> {
         let handle = glesv2::create_program();
 
         for shader in shaders {
-            glesv2::attach_shader(handle, shader.handle());
+            glesv2::attach_shader(handle, *shader);
         }
 
         glesv2::link_program(handle);
@@ -35,11 +35,7 @@ impl Program {
             return Err(Error::Link(log));
         }
 
-        trace!(
-            "Program {} {:?} linked",
-            handle,
-            shaders.iter().map(|s| s.handle()).collect::<Vec<_>>()
-        );
+        trace!("Program {} {:?} linked", handle, shaders);
         Ok(Program(handle))
     }
 
@@ -57,7 +53,13 @@ impl Program {
             shaders.push(Shader::from_source(path)?);
         }
 
-        Self::from_shaders(&shaders)
+        Self::from_shaders(
+            shaders
+                .iter()
+                .map(|s| s.handle())
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
     }
 
     pub fn handle(&self) -> GLuint {

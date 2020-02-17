@@ -1,15 +1,10 @@
+use crate::glesv2_raii::{Buffer, Framebuffer, Program, Shader, Texture, TextureAttachment};
 use crate::Scene;
-use crate::glesv2_raii::{Buffer, Framebuffer, Program, Texture, TextureAttachment};
 use opengles::glesv2::{self, constants::*, types::*};
+use std::path::Path;
 
-pub struct Post {
-    program: Program,
-    buffer: Buffer,
-    pub fbo: Framebuffer,
-}
-
-impl Post {
-    pub fn new(w: i32, h: i32) -> Self {
+lazy_static::lazy_static! {
+    static ref BUFFER: Buffer = {
         let buffer = Buffer::new();
         glesv2::bind_buffer(GL_ARRAY_BUFFER, buffer.handle());
         glesv2::buffer_data(
@@ -20,7 +15,17 @@ impl Post {
             ],
             GL_STATIC_DRAW,
         );
+        buffer
+    };
+}
 
+pub struct Post {
+    program: Program,
+    pub fbo: Framebuffer,
+}
+
+impl Post {
+    pub fn new<P: AsRef<Path>>(w: i32, h: i32, frag_path: P) -> Self {
         let fbo_texture = Texture::new();
         glesv2::bind_texture(GL_TEXTURE_2D, fbo_texture.handle());
         Texture::image::<u8>(GL_TEXTURE_2D, 0, GL_RGB, w, h, GL_UNSIGNED_BYTE, &[]);
@@ -39,8 +44,11 @@ impl Post {
         .unwrap();
 
         Self {
-            program: Program::from_sources(&["shader.vert", "post.frag"]).unwrap(),
-            buffer,
+            program: Program::from_shaders(&[
+                crate::VERT_SHADER.handle(),
+                Shader::from_source(frag_path).unwrap().handle(),
+            ])
+            .unwrap(),
             fbo,
         }
     }
@@ -52,7 +60,7 @@ impl Post {
             self.fbo.texture_handle(GL_COLOR_ATTACHMENT0).unwrap(),
         );
 
-        glesv2::bind_buffer(GL_ARRAY_BUFFER, self.buffer.handle());
+        glesv2::bind_buffer(GL_ARRAY_BUFFER, BUFFER.handle());
         let index_pos = self.program.attrib_location("a_Pos");
         let index_tex_coord = self.program.attrib_location("a_TexCoord");
         let stride = (std::mem::size_of::<f32>() * 5) as GLint;
