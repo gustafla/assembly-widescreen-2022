@@ -1,5 +1,7 @@
 use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
+use std::error;
+use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -8,15 +10,7 @@ use std::str::FromStr;
 
 #[derive(Debug)]
 enum ErrorKind {
-    Io(std::io::Error),
     DetermineBufferType,
-    Parse,
-}
-
-impl From<std::io::Error> for ErrorKind {
-    fn from(error: std::io::Error) -> Self {
-        Self::Io(error)
-    }
 }
 
 #[derive(Debug)]
@@ -25,14 +19,19 @@ pub struct Error {
     kind: ErrorKind,
 }
 
-macro_rules! make_error {
-    ($path:ident) => {
-        |e| Error {
-            path: PathBuf::from($path.as_ref()),
-            kind: ErrorKind::from(e),
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.kind {
+            ErrorKind::DetermineBufferType => writeln!(
+                f,
+                "Failed to determine buffer type for {}",
+                self.path.display()
+            ),
         }
-    };
+    }
 }
+
+impl error::Error for Error {}
 
 trait BufBinding {
     const BIND: GLenum;
@@ -61,13 +60,13 @@ impl Buffer {
     fn from_string<T: BufBinding + FromStr, P: AsRef<Path>>(
         data: String,
         path: P,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Box<dyn error::Error>>
+    where
+        <T as std::str::FromStr>::Err: std::error::Error + 'static,
+    {
         let mut values = Vec::new();
         for v in data.split_ascii_whitespace() {
-            values.push(v.parse::<T>().map_err(|_| Error {
-                path: PathBuf::from(path.as_ref()),
-                kind: ErrorKind::Parse,
-            })?);
+            values.push(v.parse::<T>()?);
         }
 
         let buffer = Self {
@@ -78,23 +77,26 @@ impl Buffer {
         buffer.bind();
         glesv2::buffer_data(T::BIND, values.as_slice(), GL_STATIC_DRAW);
 
-        trace!("Buffer {} ({}) created", buffer.handle, path.as_ref().display());
+        trace!(
+            "Buffer {} ({}) created",
+            buffer.handle,
+            path.as_ref().display()
+        );
         Ok(buffer)
     }
 
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let mut file = File::open(&path).map_err(make_error!(path))?;
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn error::Error>> {
+        let mut file = File::open(&path)?;
         let mut content = String::new();
-        file.read_to_string(&mut content)
-            .map_err(make_error!(path))?;
+        file.read_to_string(&mut content)?;
 
         match path.as_ref().extension().map(|s| s.to_str()) {
             Some(Some("abuf")) => Self::from_string::<f32, P>(content, path),
             Some(Some("ibuf")) => Self::from_string::<i32, P>(content, path),
-            _ => Err(Error {
+            _ => Err(Box::new(Error {
                 path: PathBuf::from(path.as_ref()),
                 kind: ErrorKind::DetermineBufferType,
-            }),
+            })),
         }
     }
 

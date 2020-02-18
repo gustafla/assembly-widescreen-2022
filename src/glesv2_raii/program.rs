@@ -1,24 +1,29 @@
 use super::Shader;
 use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
+use std::error;
+use std::fmt;
 use std::path::Path;
 
-pub struct Program(GLuint);
-
 #[derive(Debug)]
-pub enum Error {
-    Shader(super::shader::Error),
-    Link(Option<String>),
-}
+pub struct Error(Option<String>);
 
-impl From<super::shader::Error> for Error {
-    fn from(e: super::shader::Error) -> Error {
-        Error::Shader(e)
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Failed to link program")?; // TODO path
+        if let Some(s) = &self.0 {
+            writeln!(f, "{}", s)?; // TODO path
+        }
+        Ok(())
     }
 }
 
+impl error::Error for Error {}
+
+pub struct Program(GLuint);
+
 impl Program {
-    pub fn from_shaders(shaders: &[GLuint]) -> Result<Program, Error> {
+    pub fn from_shaders(shaders: &[GLuint]) -> Result<Program, Box<dyn error::Error>> {
         let handle = glesv2::create_program();
 
         for shader in shaders {
@@ -32,14 +37,14 @@ impl Program {
             let log_len = glesv2::get_programiv(handle, GL_INFO_LOG_LENGTH);
             let log = glesv2::get_program_info_log(handle, log_len);
             glesv2::delete_program(handle);
-            return Err(Error::Link(log));
+            return Err(Box::new(Error(log)));
         }
 
         trace!("Program {} {:?} linked", handle, shaders);
         Ok(Program(handle))
     }
 
-    pub fn from_sources<P: AsRef<Path>>(paths: &[P]) -> Result<Program, Error> {
+    pub fn from_sources<P: AsRef<Path>>(paths: &[P]) -> Result<Program, Box<dyn error::Error>> {
         trace!(
             "Linking program from {:?}...",
             paths

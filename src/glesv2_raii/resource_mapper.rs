@@ -1,39 +1,8 @@
 use crate::glesv2_raii::{Buffer, Program, Shader};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, Read};
-
-#[derive(Debug)]
-pub enum Error {
-    Io(io::Error),
-    Buffer(super::buffer::Error),
-    Shader(super::shader::Error),
-    Program(super::program::Error),
-}
-
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Self {
-        Error::Io(error)
-    }
-}
-
-impl From<super::buffer::Error> for Error {
-    fn from(error: super::buffer::Error) -> Self {
-        Error::Buffer(error)
-    }
-}
-
-impl From<super::shader::Error> for Error {
-    fn from(error: super::shader::Error) -> Self {
-        Error::Shader(error)
-    }
-}
-
-impl From<super::program::Error> for Error {
-    fn from(error: super::program::Error) -> Self {
-        Error::Program(error)
-    }
-}
+use std::io::Read;
+use std::error;
 
 pub struct ResourceMapper {
     shaders: HashMap<String, Shader>,
@@ -42,7 +11,7 @@ pub struct ResourceMapper {
 }
 
 impl ResourceMapper {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Result<Self, Box<dyn error::Error>> {
         let mut shaders = HashMap::new();
         let mut buffers = HashMap::new();
 
