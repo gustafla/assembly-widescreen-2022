@@ -1,14 +1,12 @@
 use crate::glesv2_raii::{Buffer, Program, Shader};
-use opengles::glesv2::{self, constants::*};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Read};
-use std::num;
 
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
-    ParseFloat(num::ParseFloatError),
+    Buffer(super::buffer::Error),
     Shader(super::shader::Error),
     Program(super::program::Error),
 }
@@ -19,9 +17,9 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<num::ParseFloatError> for Error {
-    fn from(error: num::ParseFloatError) -> Self {
-        Error::ParseFloat(error)
+impl From<super::buffer::Error> for Error {
+    fn from(error: super::buffer::Error) -> Self {
+        Error::Buffer(error)
     }
 }
 
@@ -40,13 +38,13 @@ impl From<super::program::Error> for Error {
 pub struct ResourceMapper {
     shaders: HashMap<String, Shader>,
     programs: HashMap<String, Program>,
-    array_buffers: HashMap<String, Buffer>,
+    buffers: HashMap<String, Buffer>,
 }
 
 impl ResourceMapper {
     pub fn new() -> Result<Self, Error> {
         let mut shaders = HashMap::new();
-        let mut array_buffers = HashMap::new();
+        let mut buffers = HashMap::new();
 
         for item in std::fs::read_dir("./")? {
             let path = item.unwrap().path();
@@ -54,20 +52,8 @@ impl ResourceMapper {
                 Some("vert") | Some("frag") => {
                     shaders.insert(path.display().to_string(), Shader::from_source(path)?);
                 }
-                Some("abuf") => {
-                    let mut file = File::open(&path)?;
-                    let mut content = String::new();
-                    file.read_to_string(&mut content)?;
-
-                    let mut values = Vec::new();
-                    for v in content.split_ascii_whitespace() {
-                        values.push(v.parse::<f32>()?);
-                    }
-
-                    let buffer = Buffer::new();
-                    glesv2::bind_buffer(GL_ARRAY_BUFFER, buffer.handle());
-                    glesv2::buffer_data(GL_ARRAY_BUFFER, values.as_slice(), GL_STATIC_DRAW);
-                    array_buffers.insert(path.display().to_string(), buffer);
+                Some("abuf") | Some("ibuf") => {
+                    buffers.insert(path.display().to_string(), Buffer::from_file(path)?);
                 }
                 _ => (),
             }
@@ -99,7 +85,7 @@ impl ResourceMapper {
         Ok(ResourceMapper {
             shaders,
             programs,
-            array_buffers,
+            buffers,
         })
     }
 
@@ -111,7 +97,7 @@ impl ResourceMapper {
         self.programs.get(shader_paths).unwrap()
     }
 
-    pub fn array_buffer(&self, path: &str) -> &Buffer {
-        self.array_buffers.get(path).unwrap()
+    pub fn buffer(&self, path: &str) -> &Buffer {
+        self.buffers.get(path).unwrap()
     }
 }

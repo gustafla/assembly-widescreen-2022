@@ -32,8 +32,8 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     glesv2::viewport(0, 0, w, h);
 
     // Create a buffer for test triangle
-    let buffer = Buffer::new();
-    glesv2::bind_buffer(GL_ARRAY_BUFFER, buffer.handle());
+    let buffer = Buffer::new(GL_ARRAY_BUFFER);
+    buffer.bind();
     glesv2::buffer_data(
         GL_ARRAY_BUFFER,
         &[-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0],
@@ -71,7 +71,7 @@ extern "C" fn scene_render(time: f64, data: *mut c_void) {
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    glesv2::bind_buffer(GL_ARRAY_BUFFER, scene.buffer.handle());
+    scene.buffer.bind();
     let index_pos = program.attrib_location("a_Pos");
     glesv2::enable_vertex_attrib_array(index_pos);
     glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, 0, 0);

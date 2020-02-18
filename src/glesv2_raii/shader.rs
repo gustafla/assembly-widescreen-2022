@@ -1,7 +1,7 @@
 use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::fs::File;
-use std::io::{self, prelude::*};
+use std::io::{self, Read};
 use std::path::Path;
 
 #[derive(Debug)]
@@ -25,13 +25,10 @@ impl Shader {
         let mut string = String::new();
         file.read_to_string(&mut string)?;
 
-        let handle = glesv2::create_shader(match path.as_ref().extension() {
-            None => return Err(Error::DetermineShaderStage),
-            Some(os_str) => match os_str.to_str() {
-                Some("frag") => GL_FRAGMENT_SHADER,
-                Some("vert") => GL_VERTEX_SHADER,
-                _ => return Err(Error::DetermineShaderStage),
-            },
+        let handle = glesv2::create_shader(match path.as_ref().extension().map(|s| s.to_str()) {
+            Some(Some("frag")) => GL_FRAGMENT_SHADER,
+            Some(Some("vert")) => GL_VERTEX_SHADER,
+            _ => return Err(Error::DetermineShaderStage),
         });
 
         glesv2::shader_source(handle, string.as_str().as_bytes());

@@ -55,7 +55,7 @@ impl Post {
             );
         }
 
-        glesv2::bind_buffer(GL_ARRAY_BUFFER, resources.array_buffer("./quad.abuf").handle());
+        resources.buffer("./quad.abuf").bind();
         let index_pos = program.attrib_location("a_Pos");
         let index_tex_coord = program.attrib_location("a_TexCoord");
         let stride = (std::mem::size_of::<f32>() * 5) as GLint;
