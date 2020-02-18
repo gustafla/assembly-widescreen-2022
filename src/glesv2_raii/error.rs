@@ -1,33 +1,44 @@
 use opengles::glesv2::{self, constants::*, types::*};
+use std::fmt;
+use std::error;
 
 #[derive(Debug)]
-pub enum Error {
-    Unknown,
-    InvalidEnum,
-    InvalidValue,
-    InvalidOperation,
-    InvalidFramebufferOperation,
-    OutOfMemory,
+pub struct Error(GLenum);
+
+macro_rules! check {
+    ($on:expr, ($($id:ident),+)) => {
+        match $on {
+            $($id => {stringify!($id)}),+
+            _ => "UNKNOWN",
+        }
+    };
 }
 
-impl From<GLenum> for Error {
-    fn from(value: GLenum) -> Self {
-        use Error::*;
-        match value {
-            GL_INVALID_ENUM => InvalidEnum,
-            GL_INVALID_VALUE => InvalidValue,
-            GL_INVALID_OPERATION => InvalidOperation,
-            GL_INVALID_FRAMEBUFFER_OPERATION => InvalidFramebufferOperation,
-            GL_OUT_OF_MEMORY => OutOfMemory,
-            _ => Unknown,
-        }
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(
+            f,
+            "OpenGL ES 2.0 error: {}",
+            check!(
+                self.0,
+                (
+                    GL_INVALID_ENUM,
+                    GL_INVALID_VALUE,
+                    GL_INVALID_OPERATION,
+                    GL_INVALID_FRAMEBUFFER_OPERATION,
+                    GL_OUT_OF_MEMORY
+                )
+            )
+        )
     }
 }
+
+impl error::Error for Error {}
 
 pub fn check() -> Result<(), Error> {
     let status = glesv2::get_error();
     if status != GL_NO_ERROR {
-        Err(Error::from(status))
+        Err(Error(status))
     } else {
         Ok(())
     }
