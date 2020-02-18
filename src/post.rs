@@ -1,6 +1,4 @@
-use crate::glesv2_raii::{
-    Framebuffer, Texture, TextureAttachment, UniformValue, ResourceMapper
-};
+use crate::glesv2_raii::{Framebuffer, ResourceMapper, Texture, TextureAttachment, UniformValue};
 use opengles::glesv2::{self, constants::*, types::*};
 
 pub struct Post {
@@ -27,14 +25,16 @@ impl Post {
         )
         .unwrap();
 
-        Self {
-            fbo,
-            frag_path
-        }
+        Self { fbo, frag_path }
     }
 
-    pub fn render(&self, resources: &ResourceMapper, textures: &[GLuint], uniforms: &[(&str, UniformValue)]) {
-        let program = resources.program("./shader.vert ./post.frag");
+    pub fn render(
+        &self,
+        resources: &ResourceMapper,
+        textures: &[GLuint],
+        uniforms: &[(&str, UniformValue)],
+    ) {
+        let program = resources.program("./shader.vert ./post.frag").unwrap();
         glesv2::use_program(program.handle());
 
         glesv2::active_texture(GL_TEXTURE0);
@@ -48,14 +48,10 @@ impl Post {
             glesv2::active_texture(GL_TEXTURE1 + i as GLuint);
             glesv2::bind_texture(GL_TEXTURE_2D, *texture);
             let i = i as GLint + 1;
-            glesv2::uniform1i(
-                program
-                    .uniform_location(&format!("u_InputSampler{}", i)),
-                i,
-            );
+            glesv2::uniform1i(program.uniform_location(&format!("u_InputSampler{}", i)), i);
         }
 
-        resources.buffer("./quad.abuf").bind();
+        resources.buffer("./quad.abuf").unwrap().bind();
         let index_pos = program.attrib_location("a_Pos");
         let index_tex_coord = program.attrib_location("a_TexCoord");
         let stride = (std::mem::size_of::<f32>() * 5) as GLint;

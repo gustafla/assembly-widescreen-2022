@@ -2,8 +2,6 @@ use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::error;
 use std::fmt;
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -86,9 +84,7 @@ impl Buffer {
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn error::Error>> {
-        let mut file = File::open(&path)?;
-        let mut content = String::new();
-        file.read_to_string(&mut content)?;
+        let content = std::fs::read_to_string(&path)?;
 
         match path.as_ref().extension().map(|s| s.to_str()) {
             Some(Some("abuf")) => Self::from_string::<f32, P>(content, path),

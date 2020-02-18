@@ -2,8 +2,6 @@ use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::error;
 use std::fmt;
-use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -41,9 +39,7 @@ pub struct Shader(GLuint);
 
 impl Shader {
     pub fn from_source<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn error::Error>> {
-        let mut file = File::open(path.as_ref())?;
-        let mut string = String::new();
-        file.read_to_string(&mut string)?;
+        let content = std::fs::read_to_string(&path)?;
 
         let handle = glesv2::create_shader(match path.as_ref().extension().map(|s| s.to_str()) {
             Some(Some("frag")) => GL_FRAGMENT_SHADER,
@@ -56,7 +52,7 @@ impl Shader {
             }
         });
 
-        glesv2::shader_source(handle, string.as_str().as_bytes());
+        glesv2::shader_source(handle, content.as_str().as_bytes());
         glesv2::compile_shader(handle);
 
         let status = glesv2::get_shaderiv(handle, GL_COMPILE_STATUS);

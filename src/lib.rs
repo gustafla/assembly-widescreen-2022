@@ -3,13 +3,12 @@
 mod glesv2_raii;
 mod post;
 
+use glesv2_raii::ResourceMapper;
 use glesv2_raii::{Buffer, UniformValue};
-use log::info;
 use opengles::glesv2::{self, constants::*};
 use post::Post;
 use std::ffi::CString;
 use std::os::raw::c_char;
-use glesv2_raii::ResourceMapper;
 
 pub struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
@@ -26,9 +25,19 @@ impl Scene {
     }
 }
 
+fn log_and_panic(error: Box<dyn std::error::Error>) -> ! {
+    log::error!("{}", error);
+    let mut source = error.source();
+    while let Some(e) = source {
+        log::error!("Caused by {}", e);
+        source = e.source();
+    }
+    panic!();
+}
+
 #[no_mangle]
 extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f64) -> Box<Scene> {
-    simple_logger::init().unwrap();
+    simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
     glesv2::viewport(0, 0, w, h);
 
     // Create a buffer for test triangle
@@ -43,26 +52,29 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
-        resources: ResourceMapper::new().unwrap(),
+        resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
         buffer,
         post_pass: Post::new(w, h, "post.frag"),
     });
 
-    info!("scene created");
+    log::info!("scene created");
 
     scene
 }
 
 #[no_mangle]
 extern "C" fn scene_deinit(_: Box<Scene>) {
-    info!("scene dropped");
+    log::info!("scene dropped");
 }
 
 #[no_mangle]
 extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     let scene = Box::leak(scene);
 
-    let program = scene.resources.program("./shader.vert ./shader.frag");
+    let program = scene
+        .resources
+        .program("./shader.vert ./shader.frag")
+        .unwrap();
 
     // Test picture -------------------------------------------------------------------------------
 
@@ -101,5 +113,5 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
         ],
     );
 
-    glesv2_raii::check().unwrap();
+    glesv2_raii::check().unwrap_or_else(|e| log_and_panic(Box::new(e)));
 }
