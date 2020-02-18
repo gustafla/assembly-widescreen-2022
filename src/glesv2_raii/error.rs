@@ -5,21 +5,12 @@ use std::error;
 #[derive(Debug)]
 pub struct Error(GLenum);
 
-macro_rules! check {
-    ($on:expr, ($($id:ident),+)) => {
-        match $on {
-            $($id => {stringify!($id)}),+
-            _ => "UNKNOWN",
-        }
-    };
-}
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(
             f,
             "OpenGL ES 2.0 error: {}",
-            check!(
+            stringify_match!(
                 self.0,
                 (
                     GL_INVALID_ENUM,

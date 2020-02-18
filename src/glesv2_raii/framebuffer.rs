@@ -3,14 +3,31 @@ use super::Texture;
 use log::trace;
 use opengles::glesv2::{self, constants::*, types::*};
 use std::collections::HashMap;
+use std::error;
+use std::fmt;
 
 #[derive(Debug)]
-pub enum Error {
-    IncompleteAttachment,
-    DimensionsMismatch,
-    MissingAttachment,
-    Unsupported,
+pub struct Error(GLenum);
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(
+            f,
+            "Framebuffer error: {}",
+            stringify_match!(
+                self.0,
+                (
+                    GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT,
+                    GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS,
+                    GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT,
+                    GL_FRAMEBUFFER_UNSUPPORTED
+                )
+            )
+        )
+    }
 }
+
+impl error::Error for Error {}
 
 pub struct TextureAttachment {
     pub target: GLenum,
@@ -64,17 +81,15 @@ impl Framebuffer {
             }
         }
 
-        use Error::*;
-        match glesv2::check_framebuffer_status(GL_FRAMEBUFFER) {
-            GL_FRAMEBUFFER_COMPLETE => Ok(Framebuffer {
+        let status = glesv2::check_framebuffer_status(GL_FRAMEBUFFER);
+        if status != GL_FRAMEBUFFER_COMPLETE {
+            Err(Error(status))
+        } else {
+            Ok(Framebuffer {
                 handle,
                 textures,
                 renderbuffers,
-            }),
-            GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT => Err(IncompleteAttachment),
-            GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS => Err(DimensionsMismatch),
-            GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT => Err(MissingAttachment),
-            _ => Err(Unsupported),
+            })
         }
     }
 

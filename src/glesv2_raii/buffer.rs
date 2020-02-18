@@ -15,8 +15,8 @@ enum ErrorKind {
 
 #[derive(Debug)]
 pub struct Error {
-    path: PathBuf,
     kind: ErrorKind,
+    path: PathBuf,
 }
 
 impl fmt::Display for Error {

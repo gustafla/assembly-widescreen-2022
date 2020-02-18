@@ -1,3 +1,5 @@
+#[macro_use]
+mod macros;
 mod buffer;
 mod error;
 mod framebuffer;
