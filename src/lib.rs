@@ -51,15 +51,10 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
-        projection: *cgmath::perspective(Deg(120f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
-        view: *Matrix4::look_at(
-            Point3::new(0., 0., -4.), // eye
-            Point3::new(0., 0., 0.), // center
-            Vector3::unit_z(),
-        )
-        .as_ref(),
+        projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
+        view: [0f32; 16],
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
-        particle_system: ParticleSystem::new(0.3, 100),
+        particle_system: ParticleSystem::new(1. / 60., 1000),
         bloom_pass: Post::new(w, h, "./bloom.frag"),
         blur_pass_x: Post::new(w, h, "./blurx.frag"),
         blur_pass_y: Post::new(w, h, "./blury.frag"),
@@ -78,7 +73,14 @@ extern "C" fn scene_deinit(_: Box<Scene>) {
 
 #[no_mangle]
 extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
-    let scene = Box::leak(scene);
+    let mut scene = Box::leak(scene);
+
+    scene.view = *Matrix4::look_at(
+        Point3::new(time.sin() as f32 * 3., 0., time.cos() as f32 * 3.), // eye
+        Point3::new(0., 0., 0.),                                         // center
+        Vector3::unit_y(),
+    )
+    .as_ref();
 
     // Particle system ----------------------------------------------------------------------------
 

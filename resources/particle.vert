@@ -13,6 +13,6 @@ void main() {
     v_Pos = a_Pos;
 
     vec4 pos = u_View * u_Model * vec4(a_Pos, 1.0);
-    gl_PointSize = 10.;
+    gl_PointSize = 4.;
     gl_Position = u_Projection * pos;
 }

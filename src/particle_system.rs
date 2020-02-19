@@ -1,6 +1,6 @@
 use crate::Scene;
-use opengles::glesv2::{self, constants::*};
 use cgmath::{prelude::*, Matrix4};
+use opengles::glesv2::{self, constants::*};
 use rand::prelude::*;
 
 pub struct ParticleSystem {
@@ -19,12 +19,12 @@ impl ParticleSystem {
         for _ in 0..frames {
             // Simulate gravity
             for i in 0..1000 {
-                velocities[i * 3 + 2] -= 0.4 * timestep;
+                velocities[i * 3 + 1] -= 0.4 * timestep;
             }
 
             // Simulate drag
             for v in &mut velocities {
-                *v *= 0.9 * timestep;
+                *v *= 0.98;
             }
 
             // Integrate position
