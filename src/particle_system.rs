@@ -1,6 +1,6 @@
 use crate::Scene;
 use cgmath::{prelude::*, Matrix4};
-use opengles::glesv2::{self, constants::*};
+use opengles::glesv2::{self, constants::*, types::*};
 use rand::prelude::*;
 
 pub struct ParticleSystem {
@@ -56,16 +56,20 @@ impl ParticleSystem {
         glesv2::use_program(program.handle());
 
         glesv2::uniform_matrix4fv(
-            program.uniform_location("u_Projection"),
+            program.uniform_location("u_Projection").unwrap(),
             false,
             &scene.projection,
         );
-        glesv2::uniform_matrix4fv(program.uniform_location("u_View"), false, &scene.view);
+        glesv2::uniform_matrix4fv(
+            program.uniform_location("u_View").unwrap(),
+            false,
+            &scene.view,
+        );
         let id: [f32; 16] = *Matrix4::identity().as_ref();
-        glesv2::uniform_matrix4fv(program.uniform_location("u_Model"), false, &id);
+        glesv2::uniform_matrix4fv(program.uniform_location("u_Model").unwrap(), false, &id);
 
         glesv2::bind_buffer(GL_ARRAY_BUFFER, 0);
-        let index_pos = program.attrib_location("a_Pos");
+        let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
 
         glesv2::enable_vertex_attrib_array(index_pos);
         glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &self.positions[i]);

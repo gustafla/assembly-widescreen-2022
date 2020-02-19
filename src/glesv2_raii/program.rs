@@ -71,12 +71,20 @@ impl Program {
         self.0
     }
 
-    pub fn attrib_location(&self, name: &str) -> GLuint {
-        glesv2::get_attrib_location(self.handle(), name) as GLuint
+    pub fn attrib_location(&self, name: &str) -> Option<GLint> {
+        let loc = glesv2::get_attrib_location(self.handle(), name);
+        match loc {
+            -1 => None,
+            _ => Some(loc),
+        }
     }
 
-    pub fn uniform_location(&self, name: &str) -> GLint {
-        glesv2::get_uniform_location(self.handle(), name)
+    pub fn uniform_location(&self, name: &str) -> Option<GLint> {
+        let loc = glesv2::get_uniform_location(self.handle(), name);
+        match loc {
+            -1 => None,
+            _ => Some(loc),
+        }
     }
 }
 

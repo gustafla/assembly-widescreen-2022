@@ -1,4 +1,5 @@
-use crate::glesv2_raii::{Framebuffer, ResourceMapper, Texture, TextureAttachment, UniformValue};
+use crate::glesv2_raii::{Framebuffer, Texture, TextureAttachment, UniformValue};
+use crate::Scene;
 use opengles::glesv2::{self, constants::*, types::*};
 
 pub struct Post {
@@ -25,16 +26,14 @@ impl Post {
         )
         .unwrap();
 
-        Self { fbo, shader_path: format!("./shader.vert {}", frag_path) }
+        Self {
+            fbo,
+            shader_path: format!("./shader.vert {}", frag_path),
+        }
     }
 
-    pub fn render(
-        &self,
-        resources: &ResourceMapper,
-        textures: &[GLuint],
-        uniforms: &[(&str, UniformValue)],
-    ) {
-        let program = resources.program(&self.shader_path).unwrap();
+    pub fn render(&self, scene: &Scene, textures: &[GLuint], uniforms: &[(&str, UniformValue)]) {
+        let program = scene.resources.program(&self.shader_path).unwrap();
         glesv2::use_program(program.handle());
 
         glesv2::active_texture(GL_TEXTURE0);
@@ -42,18 +41,37 @@ impl Post {
             GL_TEXTURE_2D,
             self.fbo.texture_handle(GL_COLOR_ATTACHMENT0).unwrap(),
         );
-        glesv2::uniform1i(program.uniform_location("u_InputSampler0"), 0);
+        glesv2::uniform1i(program.uniform_location("u_InputSampler0").unwrap(), 0);
 
         for (i, texture) in textures.iter().enumerate() {
             glesv2::active_texture(GL_TEXTURE1 + i as GLuint);
             glesv2::bind_texture(GL_TEXTURE_2D, *texture);
             let i = i as GLint + 1;
-            glesv2::uniform1i(program.uniform_location(&format!("u_InputSampler{}", i)), i);
+            glesv2::uniform1i(
+                program
+                    .uniform_location(&format!("u_InputSampler{}", i))
+                    .unwrap(),
+                i,
+            );
         }
 
-        resources.buffer("./quad.abuf").unwrap().bind();
-        let index_pos = program.attrib_location("a_Pos");
-        let index_tex_coord = program.attrib_location("a_TexCoord");
+        if let Some(loc) = program.uniform_location("u_Resolution") {
+            glesv2::uniform2f(loc, scene.resolution.0 as f32, scene.resolution.1 as f32);
+        }
+
+        for ufm in uniforms {
+            let loc = program.uniform_location(ufm.0).unwrap();
+            match ufm.1 {
+                UniformValue::Float(x) => glesv2::uniform1f(loc, x),
+                UniformValue::Vec2(x, y) => glesv2::uniform2f(loc, x, y),
+                UniformValue::Vec3(x, y, z) => glesv2::uniform3f(loc, x, y, z),
+                UniformValue::Vec4(x, y, z, w) => glesv2::uniform4f(loc, x, y, z, w),
+            }
+        }
+
+        scene.resources.buffer("./quad.abuf").unwrap().bind();
+        let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
+        let index_tex_coord = program.attrib_location("a_TexCoord").unwrap() as GLuint;
         let stride = (std::mem::size_of::<f32>() * 5) as GLint;
         glesv2::enable_vertex_attrib_array(index_pos);
         glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, stride, 0);
@@ -66,16 +84,6 @@ impl Post {
             stride,
             std::mem::size_of::<f32>() as GLuint * 3,
         );
-
-        for ufm in uniforms {
-            let loc = program.uniform_location(ufm.0);
-            match ufm.1 {
-                UniformValue::Float(x) => glesv2::uniform1f(loc, x),
-                UniformValue::Vec2(x, y) => glesv2::uniform2f(loc, x, y),
-                UniformValue::Vec3(x, y, z) => glesv2::uniform3f(loc, x, y, z),
-                UniformValue::Vec4(x, y, z, w) => glesv2::uniform4f(loc, x, y, z, w),
-            }
-        }
 
         glesv2::draw_arrays(GL_TRIANGLES, 0, 6);
     }

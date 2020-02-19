@@ -96,7 +96,7 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    scene.bloom_pass.render(&scene.resources, &[], &[]);
+    scene.bloom_pass.render(&scene, &[], &[]);
 
     // X-blur pass --------------------------------------------------------------------------------
 
@@ -104,14 +104,7 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    scene.blur_pass_x.render(
-        &scene.resources,
-        &[],
-        &[(
-            "u_Resolution",
-            UniformValue::Vec2(scene.resolution.0 as f32, scene.resolution.1 as f32),
-        )],
-    );
+    scene.blur_pass_x.render(&scene, &[], &[]);
 
     // Y-blur pass --------------------------------------------------------------------------------
 
@@ -119,20 +112,13 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    scene.blur_pass_y.render(
-        &scene.resources,
-        &[],
-        &[(
-            "u_Resolution",
-            UniformValue::Vec2(scene.resolution.0 as f32, scene.resolution.1 as f32),
-        )],
-    );
+    scene.blur_pass_y.render(&scene, &[], &[]);
 
     // Post pass ----------------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, 0);
     scene.post_pass.render(
-        &scene.resources,
+        &scene,
         &[scene
             .bloom_pass
             .fbo
@@ -143,10 +129,6 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
             (
                 "u_NoiseAmount",
                 UniformValue::Float(scene.sync_get("noise_amount") as f32),
-            ),
-            (
-                "u_Resolution",
-                UniformValue::Vec2(scene.resolution.0 as f32, scene.resolution.1 as f32),
             ),
         ],
     );
