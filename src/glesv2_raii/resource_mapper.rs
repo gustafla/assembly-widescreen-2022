@@ -1,4 +1,5 @@
 use crate::glesv2_raii::{Buffer, Program, Shader};
+use opengles::glesv2;
 use std::collections::HashMap;
 use std::error;
 
@@ -46,6 +47,8 @@ impl ResourceMapper {
                 )?,
             );
         }
+
+        glesv2::release_shader_compiler();
 
         Ok(ResourceMapper {
             shaders,
