@@ -11,6 +11,8 @@ pub struct ResourceMapper {
 
 impl ResourceMapper {
     pub fn new() -> Result<Self, Box<dyn error::Error>> {
+        log::trace!("Loading resources");
+
         let mut shaders = HashMap::new();
         let mut buffers = HashMap::new();
 
@@ -48,6 +50,7 @@ impl ResourceMapper {
             );
         }
 
+        log::trace!("Done, calling glReleaseShaderCompiler");
         glesv2::release_shader_compiler();
 
         Ok(ResourceMapper {
