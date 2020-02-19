@@ -1,20 +1,25 @@
 #![allow(dead_code)]
 
 mod glesv2_raii;
+mod particle_system;
 mod post;
 
+use cgmath::{Deg, Matrix4, Point3, Vector3};
 use glesv2_raii::ResourceMapper;
-use glesv2_raii::{Buffer, UniformValue};
+use glesv2_raii::UniformValue;
 use opengles::glesv2::{self, constants::*};
+use particle_system::ParticleSystem;
 use post::Post;
 use std::ffi::CString;
 use std::os::raw::c_char;
 
 pub struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
-    resolution: (i32, i32),
-    resources: ResourceMapper,
-    buffer: Buffer,
+    pub resolution: (i32, i32),
+    pub projection: [f32; 16],
+    pub view: [f32; 16],
+    pub resources: ResourceMapper,
+    particle_system: ParticleSystem,
     bloom_pass: Post,
     blur_pass_x: Post,
     blur_pass_y: Post,
@@ -22,7 +27,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    fn sync_get(&self, name: &str) -> f64 {
+    pub fn sync_get(&self, name: &str) -> f64 {
         let string = CString::new(name).unwrap();
         (self.sync_get_raw)(string.as_c_str().as_ptr())
     }
@@ -43,20 +48,18 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
     glesv2::viewport(0, 0, w, h);
 
-    // Create a buffer for test triangle
-    let buffer = Buffer::new(GL_ARRAY_BUFFER);
-    buffer.bind();
-    glesv2::buffer_data(
-        GL_ARRAY_BUFFER,
-        &[-0.5f32, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0],
-        GL_STATIC_DRAW,
-    );
-
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
+        projection: *cgmath::perspective(Deg(120f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
+        view: *Matrix4::look_at(
+            Point3::new(0., 0., -4.), // eye
+            Point3::new(0., 0., 0.), // center
+            Vector3::unit_z(),
+        )
+        .as_ref(),
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
-        buffer,
+        particle_system: ParticleSystem::new(0.3, 100),
         bloom_pass: Post::new(w, h, "./bloom.frag"),
         blur_pass_x: Post::new(w, h, "./blurx.frag"),
         blur_pass_y: Post::new(w, h, "./blury.frag"),
@@ -77,25 +80,13 @@ extern "C" fn scene_deinit(_: Box<Scene>) {
 extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     let scene = Box::leak(scene);
 
-    let program = scene
-        .resources
-        .program("./shader.vert ./shader.frag")
-        .unwrap();
-
-    // Test picture -------------------------------------------------------------------------------
+    // Particle system ----------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.bloom_pass.fbo.handle());
-    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
+    glesv2::clear_color(0.2, 0.2, 0.2, 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    scene.buffer.bind();
-    let index_pos = program.attrib_location("a_Pos");
-    glesv2::enable_vertex_attrib_array(index_pos);
-    glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, 0, 0);
-
-    glesv2::use_program(program.handle());
-
-    glesv2::draw_arrays(GL_TRIANGLES, 0, 3);
+    scene.particle_system.render(&scene, time as f32);
 
     // Bloom pass ---------------------------------------------------------------------------------
 
@@ -146,10 +137,7 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
             .texture_handle(GL_COLOR_ATTACHMENT0)
             .unwrap()],
         &[
-            (
-                "u_NoiseTime",
-                UniformValue::Float(scene.sync_get("noise_time") as f32),
-            ),
+            ("u_NoiseTime", UniformValue::Float(time as f32)),
             (
                 "u_NoiseAmount",
                 UniformValue::Float(scene.sync_get("noise_amount") as f32),

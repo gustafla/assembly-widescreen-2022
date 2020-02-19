@@ -3,3 +3,4 @@
 ./shader.vert ./blurx.frag
 ./shader.vert ./blury.frag
 ./shader.vert ./post.frag
+./particle.vert ./particle.frag

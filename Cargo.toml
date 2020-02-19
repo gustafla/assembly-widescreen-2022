@@ -8,6 +8,8 @@ edition = "2018"
 opengles = { git = "https://github.com/gustafla/rust-opengles" }
 log = { version = "0.4", features = ["release_max_level_warn"] }
 simple_logger = { version = "1", default-features = false }
+rand = "0.7.3"
+cgmath = { version = "0.17.0", default-features = false }
 
 [lib]
 crate-type = ["cdylib"]
