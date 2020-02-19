@@ -54,7 +54,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         resolution: (w, h),
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
         buffer,
-        post_pass: Post::new(w, h, "post.frag"),
+        post_pass: Post::new(w, h, "./post.frag"),
     });
 
     log::info!("scene created");

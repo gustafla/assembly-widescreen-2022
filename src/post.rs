@@ -3,11 +3,11 @@ use opengles::glesv2::{self, constants::*, types::*};
 
 pub struct Post {
     pub fbo: Framebuffer,
-    frag_path: &'static str,
+    shader_path: String,
 }
 
 impl Post {
-    pub fn new(w: i32, h: i32, frag_path: &'static str) -> Self {
+    pub fn new(w: i32, h: i32, frag_path: &str) -> Self {
         let fbo_texture = Texture::new();
         glesv2::bind_texture(GL_TEXTURE_2D, fbo_texture.handle());
         Texture::image::<u8>(GL_TEXTURE_2D, 0, GL_RGB, w, h, GL_UNSIGNED_BYTE, &[]);
@@ -25,7 +25,7 @@ impl Post {
         )
         .unwrap();
 
-        Self { fbo, frag_path }
+        Self { fbo, shader_path: format!("./shader.vert {}", frag_path) }
     }
 
     pub fn render(
@@ -34,7 +34,7 @@ impl Post {
         textures: &[GLuint],
         uniforms: &[(&str, UniformValue)],
     ) {
-        let program = resources.program("./shader.vert ./post.frag").unwrap();
+        let program = resources.program(&self.shader_path).unwrap();
         glesv2::use_program(program.handle());
 
         glesv2::active_texture(GL_TEXTURE0);
