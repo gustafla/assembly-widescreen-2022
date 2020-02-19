@@ -15,6 +15,9 @@ pub struct Scene {
     resolution: (i32, i32),
     resources: ResourceMapper,
     buffer: Buffer,
+    bloom_pass: Post,
+    blur_pass_x: Post,
+    blur_pass_y: Post,
     post_pass: Post,
 }
 
@@ -54,6 +57,9 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         resolution: (w, h),
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
         buffer,
+        bloom_pass: Post::new(w, h, "./bloom.frag"),
+        blur_pass_x: Post::new(w, h, "./blurx.frag"),
+        blur_pass_y: Post::new(w, h, "./blury.frag"),
         post_pass: Post::new(w, h, "./post.frag"),
     });
 
@@ -78,7 +84,7 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
 
     // Test picture -------------------------------------------------------------------------------
 
-    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.post_pass.fbo.handle());
+    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.bloom_pass.fbo.handle());
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
@@ -91,12 +97,54 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
 
     glesv2::draw_arrays(GL_TRIANGLES, 0, 3);
 
+    // Bloom pass ---------------------------------------------------------------------------------
+
+    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.blur_pass_x.fbo.handle());
+    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
+    glesv2::clear(GL_COLOR_BUFFER_BIT);
+
+    scene.bloom_pass.render(&scene.resources, &[], &[]);
+
+    // X-blur pass --------------------------------------------------------------------------------
+
+    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.blur_pass_y.fbo.handle());
+    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
+    glesv2::clear(GL_COLOR_BUFFER_BIT);
+
+    scene.blur_pass_x.render(
+        &scene.resources,
+        &[],
+        &[(
+            "u_Resolution",
+            UniformValue::Vec2(scene.resolution.0 as f32, scene.resolution.1 as f32),
+        )],
+    );
+
+    // Y-blur pass --------------------------------------------------------------------------------
+
+    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.post_pass.fbo.handle());
+    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
+    glesv2::clear(GL_COLOR_BUFFER_BIT);
+
+    scene.blur_pass_y.render(
+        &scene.resources,
+        &[],
+        &[(
+            "u_Resolution",
+            UniformValue::Vec2(scene.resolution.0 as f32, scene.resolution.1 as f32),
+        )],
+    );
+
     // Post pass ----------------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, 0);
     scene.post_pass.render(
         &scene.resources,
-        &[],
+        &[scene
+            .bloom_pass
+            .fbo
+            .texture_handle(GL_COLOR_ATTACHMENT0)
+            .unwrap()],
         &[
             (
                 "u_NoiseTime",

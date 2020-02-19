@@ -6,7 +6,8 @@ varying vec2 v_TexCoord;
 
 uniform float u_NoiseTime;
 uniform float u_NoiseAmount;
-uniform sampler2D u_InputSampler;
+uniform sampler2D u_InputSampler0;
+uniform sampler2D u_InputSampler1;
 uniform vec2 u_Resolution;
 
 void main() {
@@ -16,8 +17,10 @@ void main() {
             1. + abs(center.y * center.y) * 0.1,
             1. + abs(center.x * center.x) * 0.2) + vec2(0.5);
 
-    // colors
-    vec3 color = texture2D(u_InputSampler, distor).rgb;
+    // colors (bloom + original capped to 1.0 for vignette)
+    vec3 color = min(
+            texture2D(u_InputSampler0, distor).rgb +
+            texture2D(u_InputSampler1, distor).rgb, 1.);
     color -= length(center * 0.5); // vignette
 
     // grain / noise

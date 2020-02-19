@@ -1,2 +1,5 @@
 ./shader.vert ./shader.frag
+./shader.vert ./bloom.frag
+./shader.vert ./blurx.frag
+./shader.vert ./blury.frag
 ./shader.vert ./post.frag
