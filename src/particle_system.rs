@@ -9,16 +9,19 @@ pub struct ParticleSystem {
 }
 
 impl ParticleSystem {
-    pub fn new(timestep: f32, frames: usize) -> ParticleSystem {
+    pub fn new(particle_count: usize, frames: usize, timestep: f32) -> ParticleSystem {
         let mut rng = rand::thread_rng();
 
-        let mut positions = Vec::new();
-        let mut particles = vec![0f32; 3000];
-        let mut velocities: Vec<_> = (0..3000).map(|_| rng.gen::<f32>() * 2. - 1.).collect();
+        let mut positions = Vec::with_capacity(particle_count * 3 * frames);
+        let mut particles = vec![0f32; particle_count * 3];
+        let mut velocities: Vec<_> = particles
+            .iter()
+            .map(|_| rng.gen::<f32>() * 2. - 1.)
+            .collect();
 
         for _ in 0..frames {
             // Simulate gravity
-            for i in 0..1000 {
+            for i in 0..particle_count {
                 velocities[i * 3 + 1] -= 0.4 * timestep;
             }
 
@@ -28,7 +31,7 @@ impl ParticleSystem {
             }
 
             // Integrate position
-            for i in 0..1000 {
+            for i in 0..particle_count {
                 particles[i * 3] += velocities[i * 3] * timestep;
                 particles[i * 3 + 1] += velocities[i * 3 + 1] * timestep;
                 particles[i * 3 + 2] += velocities[i * 3 + 2] * timestep;
@@ -74,6 +77,6 @@ impl ParticleSystem {
         glesv2::enable_vertex_attrib_array(index_pos);
         glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &self.positions[i]);
 
-        glesv2::draw_arrays(GL_POINTS, 0, 1000);
+        glesv2::draw_arrays(GL_POINTS, 0, self.positions[i].len() as GLint / 3);
     }
 }

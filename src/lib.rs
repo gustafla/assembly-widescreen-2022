@@ -54,7 +54,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
         view: [0f32; 16],
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
-        particle_system: ParticleSystem::new(1. / 60., 1000),
+        particle_system: ParticleSystem::new(10000, 1000, 1. / 30.),
         bloom_pass: Post::new(w, h, "./bloom.frag"),
         blur_pass_x: Post::new(w, h, "./blurx.frag"),
         blur_pass_y: Post::new(w, h, "./blury.frag"),
