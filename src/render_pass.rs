@@ -2,17 +2,21 @@ use crate::glesv2_raii::{Framebuffer, Texture, TextureAttachment, UniformValue};
 use crate::Scene;
 use opengles::glesv2::{self, constants::*, types::*};
 
-pub struct Post {
+pub struct RenderPass {
     pub fbo: Framebuffer,
     shader_path: String,
 }
 
-impl Post {
+impl RenderPass {
     pub fn new(w: i32, h: i32, frag_path: &str) -> Self {
         let fbo_texture = Texture::new();
         glesv2::bind_texture(GL_TEXTURE_2D, fbo_texture.handle());
         Texture::image::<u8>(GL_TEXTURE_2D, 0, GL_RGB, w, h, GL_UNSIGNED_BYTE, &[]);
-        Texture::set_filters(GL_TEXTURE_2D, GL_NEAREST);
+        glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST as GLint);
+        glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST as GLint);
+        glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE as GLint);
+        glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE as GLint);
+
         let fbo = Framebuffer::new(
             Some(vec![(
                 GL_COLOR_ATTACHMENT0,

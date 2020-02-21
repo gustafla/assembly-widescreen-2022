@@ -21,7 +21,7 @@ void main() {
     vec3 color = min(
             texture2D(u_InputSampler0, distor).rgb +
             texture2D(u_InputSampler1, distor).rgb, 1.);
-    color -= length(center * 0.5); // vignette
+    color -= length(center * 0.4); // vignette
 
     // grain / noise
     color += fract(sin(gl_FragCoord.x + gl_FragCoord.y * u_NoiseTime) *

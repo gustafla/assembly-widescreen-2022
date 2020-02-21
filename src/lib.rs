@@ -2,14 +2,14 @@
 
 mod glesv2_raii;
 mod particle_system;
-mod post;
+mod render_pass;
 
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use glesv2_raii::ResourceMapper;
 use glesv2_raii::UniformValue;
 use opengles::glesv2::{self, constants::*};
 use particle_system::ParticleSystem;
-use post::Post;
+use render_pass::RenderPass;
 use std::ffi::CString;
 use std::os::raw::c_char;
 
@@ -20,10 +20,10 @@ pub struct Scene {
     pub view: [f32; 16],
     pub resources: ResourceMapper,
     particle_system: ParticleSystem,
-    bloom_pass: Post,
-    blur_pass_x: Post,
-    blur_pass_y: Post,
-    post_pass: Post,
+    bloom_pass: RenderPass,
+    blur_pass_x: RenderPass,
+    blur_pass_y: RenderPass,
+    post_pass: RenderPass,
 }
 
 impl Scene {
@@ -55,10 +55,10 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         view: [0f32; 16],
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
         particle_system: ParticleSystem::new(10000, 1000, 1. / 30.),
-        bloom_pass: Post::new(w, h, "./bloom.frag"),
-        blur_pass_x: Post::new(w, h, "./two_pass_gaussian_blur.frag"),
-        blur_pass_y: Post::new(w, h, "./two_pass_gaussian_blur.frag"),
-        post_pass: Post::new(w, h, "./post.frag"),
+        bloom_pass: RenderPass::new(w, h, "./bloom.frag"),
+        blur_pass_x: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
+        blur_pass_y: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
+        post_pass: RenderPass::new(w, h, "./post.frag"),
     });
 
     log::info!("scene created");

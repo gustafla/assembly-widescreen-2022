@@ -1,5 +1,5 @@
 use log::trace;
-use opengles::glesv2::{self, constants::*, types::*};
+use opengles::glesv2::{self, types::*};
 
 pub struct Texture(GLuint);
 
@@ -12,11 +12,6 @@ impl Texture {
 
     pub fn handle(&self) -> GLuint {
         self.0
-    }
-
-    pub fn set_filters(target: GLenum, param: GLenum) {
-        glesv2::tex_parameteri(target, GL_TEXTURE_MIN_FILTER, param as GLint);
-        glesv2::tex_parameteri(target, GL_TEXTURE_MAG_FILTER, param as GLint);
     }
 
     pub fn image<T>(
