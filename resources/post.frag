@@ -4,10 +4,11 @@ precision mediump float;
 varying vec3 v_Pos;
 varying vec2 v_TexCoord;
 
-uniform float u_NoiseTime;
 uniform float u_NoiseAmount;
-uniform sampler2D u_InputSampler0;
-uniform sampler2D u_InputSampler1;
+uniform float u_NoiseScale;
+uniform sampler2D u_InputSampler0; // Bloom
+uniform sampler2D u_InputSampler1; // Render
+uniform sampler2D u_InputSampler2; // Noise
 uniform vec2 u_Resolution;
 
 void main() {
@@ -24,8 +25,8 @@ void main() {
     color -= length(center * 0.4); // vignette
 
     // grain / noise
-    color += fract(sin(gl_FragCoord.x + gl_FragCoord.y * u_NoiseTime) *
-            380192.) * u_NoiseAmount;
+    color += texture2D(u_InputSampler2, v_TexCoord * u_NoiseScale).r
+        * u_NoiseAmount;
 
     // output
     if (distor.x < 0. || distor.x > 1. || distor.y < 0. || distor.y > 1.) {

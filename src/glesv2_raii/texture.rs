@@ -35,6 +35,30 @@ impl Texture {
             buffer,
         );
     }
+
+    pub fn sub_image<T>(
+        target: GLenum,
+        level: GLint,
+        xoffset: GLint,
+        yoffset: GLint,
+        width: GLsizei,
+        height: GLsizei,
+        format: GLenum,
+        type_: GLenum,
+        buffer: &[T],
+    ) {
+        glesv2::tex_sub_image_2d(
+            target,
+            level,
+            xoffset,
+            yoffset,
+            width,
+            height,
+            format,
+            type_,
+            buffer,
+        );
+    }
 }
 
 impl Drop for Texture {

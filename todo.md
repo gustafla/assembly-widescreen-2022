@@ -16,7 +16,7 @@
   - [x] Noise
   - [x] Bloom
   - [x] CRT distortion
-  - [ ] Improve post processing noise quality
+  - [x] Improve post processing noise quality
 [x] Add proper logging
 [x] Switch back to idiomatic namespace style
 [x] Use Error::\*;

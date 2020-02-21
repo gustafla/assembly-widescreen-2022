@@ -5,13 +5,16 @@ mod particle_system;
 mod render_pass;
 
 use cgmath::{Deg, Matrix4, Point3, Vector3};
-use glesv2_raii::ResourceMapper;
-use glesv2_raii::UniformValue;
-use opengles::glesv2::{self, constants::*};
+use glesv2_raii::{ResourceMapper, Texture, UniformValue};
+use opengles::glesv2::{self, constants::*, types::*};
 use particle_system::ParticleSystem;
+use rand::prelude::*;
+use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
 use std::ffi::CString;
 use std::os::raw::c_char;
+
+const NOISE_SCALE: i32 = 8;
 
 pub struct Scene {
     sync_get_raw: extern "C" fn(*const c_char) -> f64,
@@ -19,7 +22,9 @@ pub struct Scene {
     pub projection: [f32; 16],
     pub view: [f32; 16],
     pub resources: ResourceMapper,
+    rng: XorShiftRng,
     particle_system: ParticleSystem,
+    noise_texture: Texture,
     bloom_pass: RenderPass,
     blur_pass_x: RenderPass,
     blur_pass_y: RenderPass,
@@ -48,13 +53,34 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
     glesv2::viewport(0, 0, w, h);
 
+    let mut rng = XorShiftRng::seed_from_u64(98341);
+    let particle_system = ParticleSystem::new(&mut rng, 10000, 1000, 1. / 30.);
+
+    let noise_texture = Texture::new();
+    glesv2::bind_texture(GL_TEXTURE_2D, noise_texture.handle());
+    Texture::image::<u8>(
+        GL_TEXTURE_2D,
+        0,
+        GL_LUMINANCE,
+        w / NOISE_SCALE,
+        h / NOISE_SCALE,
+        GL_UNSIGNED_BYTE,
+        &[],
+    );
+    glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST as GLint);
+    glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST as GLint);
+    glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT as GLint);
+    glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT as GLint);
+
     let scene = Box::new(Scene {
         sync_get_raw: get,
         resolution: (w, h),
         projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
         view: [0f32; 16],
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
-        particle_system: ParticleSystem::new(10000, 1000, 1. / 30.),
+        rng: rng,
+        particle_system,
+        noise_texture,
         bloom_pass: RenderPass::new(w, h, "./bloom.frag"),
         blur_pass_x: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
         blur_pass_y: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
@@ -124,20 +150,42 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
 
     // Post pass ----------------------------------------------------------------------------------
 
+    // Generate noise
+    let noise: Vec<u8> = (0..(scene.resolution.0 * scene.resolution.1 / NOISE_SCALE.pow(2)))
+        .map(|_| scene.rng.gen())
+        .collect();
+
+    // Upload noise to Texture
+    glesv2::bind_texture(GL_TEXTURE_2D, scene.noise_texture.handle());
+    Texture::sub_image::<u8>(
+        GL_TEXTURE_2D,
+        0,
+        0,
+        0,
+        scene.resolution.0 / NOISE_SCALE,
+        scene.resolution.1 / NOISE_SCALE,
+        GL_LUMINANCE,
+        GL_UNSIGNED_BYTE,
+        noise.as_slice(),
+    );
+
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, 0);
     scene.post_pass.render(
         &scene,
-        &[scene
-            .bloom_pass
-            .fbo
-            .texture_handle(GL_COLOR_ATTACHMENT0)
-            .unwrap()],
         &[
-            ("u_NoiseTime", UniformValue::Float(time as f32)),
+            scene
+                .bloom_pass
+                .fbo
+                .texture_handle(GL_COLOR_ATTACHMENT0)
+                .unwrap(),
+            scene.noise_texture.handle(),
+        ],
+        &[
             (
                 "u_NoiseAmount",
                 UniformValue::Float(scene.sync_get("noise_amount") as f32),
             ),
+            ("u_NoiseScale", UniformValue::Float(NOISE_SCALE as f32)),
         ],
     );
 

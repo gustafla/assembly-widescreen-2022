@@ -1,7 +1,7 @@
 use crate::Scene;
 use cgmath::{prelude::*, Matrix4};
 use opengles::glesv2::{self, constants::*, types::*};
-use rand::prelude::*;
+use rand::prelude::*; // for seed_from_u64, gen
 
 pub struct ParticleSystem {
     positions: Vec<Vec<f32>>,
@@ -9,9 +9,12 @@ pub struct ParticleSystem {
 }
 
 impl ParticleSystem {
-    pub fn new(particle_count: usize, frames: usize, timestep: f32) -> ParticleSystem {
-        let mut rng = rand::thread_rng();
-
+    pub fn new<R: RngCore>(
+        rng: &mut R,
+        particle_count: usize,
+        frames: usize,
+        timestep: f32,
+    ) -> ParticleSystem {
         let mut positions = Vec::with_capacity(particle_count * 3 * frames);
         let mut particles = vec![0f32; particle_count * 3];
         let mut velocities: Vec<_> = particles
