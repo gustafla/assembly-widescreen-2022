@@ -6,6 +6,7 @@ varying vec2 v_TexCoord;
 
 uniform sampler2D u_InputSampler0;
 uniform vec2 u_Resolution;
+uniform vec2 u_BlurDirection;
 
 #define KERNEL_SIZE 35
 
@@ -50,14 +51,14 @@ void main() {
     vec3 color = vec3(0.);
 
     for (int i=0; i < KERNEL_SIZE; i++) {
-        float pix_offs = 1. / u_Resolution.y * float(i - KERNEL_SIZE/2);
-        vec2 samplepos = vec2(v_TexCoord.x, v_TexCoord.y - pix_offs);
+        vec2 pixel_offset = vec2(1.) / u_Resolution * float(i - KERNEL_SIZE/2);
+        vec2 samplepos = v_TexCoord + pixel_offset * u_BlurDirection;
         color += texture2D(u_InputSampler0, samplepos).rgb * KERNEL[i];
     }
 
     gl_FragColor = vec4(color, 1.);
 }
 
-// TODO DRY or http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
+// TODO http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
 // https://software.intel.com/en-us/blogs/2014/07/15/an-investigation-of-fast-real-time-gpu-based-image-blur-algorithms
 // http://dev.theomader.com/gaussian-kernel-calculator/

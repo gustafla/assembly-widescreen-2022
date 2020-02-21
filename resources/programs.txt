@@ -1,6 +1,5 @@
 ./shader.vert ./shader.frag
 ./shader.vert ./bloom.frag
-./shader.vert ./blurx.frag
-./shader.vert ./blury.frag
+./shader.vert ./two_pass_gaussian_blur.frag
 ./shader.vert ./post.frag
 ./particle.vert ./particle.frag

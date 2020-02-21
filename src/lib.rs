@@ -56,8 +56,8 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
         particle_system: ParticleSystem::new(10000, 1000, 1. / 30.),
         bloom_pass: Post::new(w, h, "./bloom.frag"),
-        blur_pass_x: Post::new(w, h, "./blurx.frag"),
-        blur_pass_y: Post::new(w, h, "./blury.frag"),
+        blur_pass_x: Post::new(w, h, "./two_pass_gaussian_blur.frag"),
+        blur_pass_y: Post::new(w, h, "./two_pass_gaussian_blur.frag"),
         post_pass: Post::new(w, h, "./post.frag"),
     });
 
@@ -104,7 +104,11 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    scene.blur_pass_x.render(&scene, &[], &[]);
+    scene.blur_pass_x.render(
+        &scene,
+        &[],
+        &[("u_BlurDirection", UniformValue::Vec2(1., 0.))],
+    );
 
     // Y-blur pass --------------------------------------------------------------------------------
 
@@ -112,7 +116,11 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    scene.blur_pass_y.render(&scene, &[], &[]);
+    scene.blur_pass_y.render(
+        &scene,
+        &[],
+        &[("u_BlurDirection", UniformValue::Vec2(0., 1.))],
+    );
 
     // Post pass ----------------------------------------------------------------------------------
 
