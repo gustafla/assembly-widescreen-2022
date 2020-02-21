@@ -1,7 +1,7 @@
 <sync rows="128">
 	<tracks>
 		<track name="noise_amount">
-			<key interpolation="0" value="0.02" row="0"/>
+			<key interpolation="0" value="0.04" row="0"/>
 		</track>
 	</tracks>
 	<bookmarks/>
