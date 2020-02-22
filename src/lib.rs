@@ -4,7 +4,7 @@ mod glesv2_raii;
 mod particle_system;
 mod render_pass;
 
-use cgmath::{Deg, Matrix4, Point3, Vector3};
+use cgmath::{Rad, Deg, Angle, Euler, Matrix4, Point3, Quaternion, Vector2, Vector3, InnerSpace};
 use glesv2_raii::{ResourceMapper, Texture, UniformValue};
 use opengles::glesv2::{self, constants::*, types::*};
 use particle_system::{
@@ -58,12 +58,19 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     let timestep = 1. / 30.;
     let particle_system = ParticleSystem::new(
         ParticleSpawner::new(
-            ParticleSpawnerKind::Box([-10., -10., 0.], [10., 10., 10.]),
+            ParticleSpawnerKind::Box([-20., -20., 0.], [20., 20., 20.]),
             ParticleSpawnerMethod::Once(10000),
         ),
-        30 * 60, /* 1min */
+        30 * 200, /* 200 beats */
         timestep,
-        Some(|pos, time| Vector3::unit_y() * (f32::sin(pos.x + time) + 1.) * 3.),
+        Some(|pos, time| {
+            Vector3::unit_y() * (f32::sin(pos.x / 4. + time) * 0.6 + 1.4) * 3.
+                + Quaternion::from(Euler {
+                        x: Rad(0f32),
+                        y: Angle::atan2(pos.x, pos.z),
+                        z: Rad(0f32),
+                    }) * Vector3::unit_x() / Vector2::new(pos.x, pos.z).magnitude() * 9.
+        }),
     );
 
     let noise_texture = Texture::new();
@@ -126,13 +133,17 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     )
     .as_ref();
 
+    glesv2::enable(GL_BLEND);
+    glesv2::blend_func(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     // Particle system ----------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.bloom_pass.fbo.handle());
-    glesv2::clear_color(0.2, 0.2, 0.2, 1.);
+    let light = scene.sync_get("bg_light") as f32;
+    glesv2::clear_color(light, light, light, 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    scene.particle_system.render(&scene, time as f32);
+    scene.particle_system.render(&scene, scene.sync_get("sim_time") as f32);
 
     // Bloom pass ---------------------------------------------------------------------------------
 

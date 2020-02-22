@@ -1,7 +1,7 @@
 mod particle_spawner;
 
 use crate::Scene;
-use cgmath::{prelude::*, Matrix4, Vector3};
+use cgmath::Vector3;
 use opengles::glesv2::{self, constants::*, types::*};
 pub use particle_spawner::*;
 
@@ -92,8 +92,6 @@ impl ParticleSystem {
             false,
             &scene.view,
         );
-        let id: [f32; 16] = *Matrix4::identity().as_ref();
-        glesv2::uniform_matrix4fv(program.uniform_location("u_Model").unwrap(), false, &id);
 
         glesv2::bind_buffer(GL_ARRAY_BUFFER, 0);
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
