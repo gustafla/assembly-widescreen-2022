@@ -7,7 +7,9 @@ mod render_pass;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use glesv2_raii::{ResourceMapper, Texture, UniformValue};
 use opengles::glesv2::{self, constants::*, types::*};
-use particle_system::ParticleSystem;
+use particle_system::{
+    ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
+};
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
@@ -53,8 +55,15 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
     glesv2::viewport(0, 0, w, h);
 
-    let mut rng = XorShiftRng::seed_from_u64(98341);
-    let particle_system = ParticleSystem::new(&mut rng, 10000, 1000, 1. / 30.);
+    let timestep = 1. / 30.;
+    let particle_system = ParticleSystem::new(
+        ParticleSpawner::new(
+            ParticleSpawnerKind::Box([-1., -1., -1.], [1., 1., 1.]),
+            ParticleSpawnerMethod::Rate(100., timestep),
+        ),
+        30 * 60, /* 1min */
+        timestep,
+    );
 
     let noise_texture = Texture::new();
     glesv2::bind_texture(GL_TEXTURE_2D, noise_texture.handle());
@@ -78,7 +87,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
         view: [0f32; 16],
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
-        rng: rng,
+        rng: XorShiftRng::seed_from_u64(98341),
         particle_system,
         noise_texture,
         bloom_pass: RenderPass::new(w, h, "./bloom.frag"),
@@ -102,8 +111,16 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     let mut scene = Box::leak(scene);
 
     scene.view = *Matrix4::look_at(
-        Point3::new(time.sin() as f32 * 3., 0., time.cos() as f32 * 3.), // eye
-        Point3::new(0., 0., 0.),                                         // center
+        Point3::new(
+            scene.sync_get("cam:pos.x") as f32,
+            scene.sync_get("cam:pos.y") as f32,
+            scene.sync_get("cam:pos.z") as f32,
+        ), // eye
+        Point3::new(
+            scene.sync_get("cam:target.x") as f32,
+            scene.sync_get("cam:target.y") as f32,
+            scene.sync_get("cam:target.z") as f32,
+        ), // center
         Vector3::unit_y(),
     )
     .as_ref();

@@ -1,31 +1,33 @@
+mod particle_spawner;
+
 use crate::Scene;
 use cgmath::{prelude::*, Matrix4};
 use opengles::glesv2::{self, constants::*, types::*};
-use rand::prelude::*; // for seed_from_u64, gen
+pub use particle_spawner::*;
 
 pub struct ParticleSystem {
-    positions: Vec<Vec<f32>>,
+    position_frames: Vec<Vec<f32>>,
     timestep: f32,
 }
 
 impl ParticleSystem {
-    pub fn new<R: RngCore>(
-        rng: &mut R,
-        particle_count: usize,
-        frames: usize,
-        timestep: f32,
-    ) -> ParticleSystem {
-        let mut positions = Vec::with_capacity(particle_count * 3 * frames);
-        let mut particles = vec![0f32; particle_count * 3];
-        let mut velocities: Vec<_> = particles
-            .iter()
-            .map(|_| rng.gen::<f32>() * 2. - 1.)
-            .collect();
+    pub fn new(mut spawner: ParticleSpawner, frames: usize, timestep: f32) -> ParticleSystem {
+        let mut position_frames = Vec::with_capacity(spawner.count_hint(frames) * 3);
+        let mut positions = Vec::new();
+        let mut velocities = Vec::new();
+        let mut masses = Vec::new();
 
         for _ in 0..frames {
+            // Spawn particles
+            if let Some(v) = spawner.next() {
+                positions.extend(&v);
+                velocities.extend(vec![0f32; v.len()]);
+                masses.extend(vec![2f32; v.len() / 3]);
+            }
+
             // Simulate gravity
-            for i in 0..particle_count {
-                velocities[i * 3 + 1] -= 0.4 * timestep;
+            for i in 0..masses.len() {
+                velocities[i * 3 + 1] -= masses[i] * timestep;
             }
 
             // Simulate drag
@@ -34,25 +36,25 @@ impl ParticleSystem {
             }
 
             // Integrate position
-            for i in 0..particle_count {
-                particles[i * 3] += velocities[i * 3] * timestep;
-                particles[i * 3 + 1] += velocities[i * 3 + 1] * timestep;
-                particles[i * 3 + 2] += velocities[i * 3 + 2] * timestep;
+            for i in 0..positions.len().min(velocities.len()) / 3 {
+                positions[i * 3] += velocities[i * 3] * timestep;
+                positions[i * 3 + 1] += velocities[i * 3 + 1] * timestep;
+                positions[i * 3 + 2] += velocities[i * 3 + 2] * timestep;
             }
 
             // Store frame state
-            positions.push(particles.clone());
+            position_frames.push(positions.clone());
         }
 
         ParticleSystem {
-            positions,
+            position_frames,
             timestep,
         }
     }
 
     pub fn render(&self, scene: &Scene, time: f32) {
         let i = (time / self.timestep) as usize;
-        let i = i.min(self.positions.len() - 1); // clamp to frame count
+        let i = i.min(self.position_frames.len() - 1); // clamp to frame count
 
         let program = scene
             .resources
@@ -78,8 +80,8 @@ impl ParticleSystem {
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
 
         glesv2::enable_vertex_attrib_array(index_pos);
-        glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &self.positions[i]);
+        glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &self.position_frames[i]);
 
-        glesv2::draw_arrays(GL_POINTS, 0, self.positions[i].len() as GLint / 3);
+        glesv2::draw_arrays(GL_POINTS, 0, self.position_frames[i].len() as GLint / 3);
     }
 }

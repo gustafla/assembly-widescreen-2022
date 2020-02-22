@@ -1,5 +1,5 @@
 [ ] Particle effect & physics system
-  - [ ] Spawning boxes
+  - [x] Spawning boxes
     - [ ] Shaped by mesh?
     - [ ] Shaped by font glyphs?
   - [x] Basic particle rendering

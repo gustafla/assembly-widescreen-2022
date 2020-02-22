@@ -3,6 +3,27 @@
 		<track name="noise_amount">
 			<key interpolation="0" value="0.04" row="0"/>
 		</track>
+		<track name="cam:pos.x">
+			<key interpolation="3" value="0" row="0"/>
+			<key interpolation="3" value="2" row="32"/>
+			<key interpolation="0" value="-3" row="64"/>
+		</track>
+		<track name="cam:pos.y">
+			<key interpolation="3" value="0" row="0"/>
+			<key interpolation="0" value="3" row="64"/>
+		</track>
+		<track name="cam:pos.z">
+			<key interpolation="0" value="2" row="0"/>
+		</track>
+		<track name="cam:target.x">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
+		<track name="cam:target.y">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
+		<track name="cam:target.z">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
 	</tracks>
 	<bookmarks/>
 </sync>
