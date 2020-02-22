@@ -23,6 +23,11 @@ impl ParticleSystem {
         let mut masses = Vec::with_capacity(spawner.count_hint(frames));
 
         for frame in 0..frames {
+            // Print progress
+            if frame % 100 == 0 {
+                log::info!("{}%", frame * 100 / frames);
+            }
+
             // Spawn particles
             if let Some(v) = spawner.next() {
                 positions.extend(&v);
