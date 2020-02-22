@@ -17,10 +17,10 @@ impl ParticleSystem {
         timestep: f32,
         wind_field: Option<fn(Vector3<f32>, f32) -> Vector3<f32>>, // fn(pos, time) -> force
     ) -> ParticleSystem {
-        let mut position_frames = Vec::with_capacity(spawner.count_hint(frames) * 3);
-        let mut positions = Vec::new();
-        let mut velocities = Vec::new();
-        let mut masses = Vec::new();
+        let mut position_frames = Vec::with_capacity(frames);
+        let mut positions = Vec::with_capacity(spawner.count_hint(frames) * 3);
+        let mut velocities = Vec::with_capacity(spawner.count_hint(frames) * 3);
+        let mut masses = Vec::with_capacity(spawner.count_hint(frames));
 
         for frame in 0..frames {
             // Spawn particles
