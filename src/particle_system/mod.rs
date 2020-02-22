@@ -1,7 +1,7 @@
 mod particle_spawner;
 
 use crate::Scene;
-use cgmath::{prelude::*, Matrix4};
+use cgmath::{prelude::*, Matrix4, Vector3};
 use opengles::glesv2::{self, constants::*, types::*};
 pub use particle_spawner::*;
 
@@ -11,18 +11,37 @@ pub struct ParticleSystem {
 }
 
 impl ParticleSystem {
-    pub fn new(mut spawner: ParticleSpawner, frames: usize, timestep: f32) -> ParticleSystem {
+    pub fn new(
+        mut spawner: ParticleSpawner,
+        frames: usize,
+        timestep: f32,
+        wind_field: Option<fn(Vector3<f32>, f32) -> Vector3<f32>>, // fn(pos, time) -> force
+    ) -> ParticleSystem {
         let mut position_frames = Vec::with_capacity(spawner.count_hint(frames) * 3);
         let mut positions = Vec::new();
         let mut velocities = Vec::new();
         let mut masses = Vec::new();
 
-        for _ in 0..frames {
+        for frame in 0..frames {
             // Spawn particles
             if let Some(v) = spawner.next() {
                 positions.extend(&v);
                 velocities.extend(vec![0f32; v.len()]);
                 masses.extend(vec![2f32; v.len() / 3]);
+            }
+
+            // Simulate wind
+            if let Some(wind_field) = wind_field {
+                for i in 0..masses.len() {
+                    let force = wind_field(
+                        Vector3::new(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]),
+                        timestep * frame as f32,
+                    );
+
+                    velocities[i * 3] += force.x / masses[i] * timestep;
+                    velocities[i * 3 + 1] += force.y / masses[i] * timestep;
+                    velocities[i * 3 + 2] += force.z / masses[i] * timestep;
+                }
             }
 
             // Simulate gravity

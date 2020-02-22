@@ -58,11 +58,12 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     let timestep = 1. / 30.;
     let particle_system = ParticleSystem::new(
         ParticleSpawner::new(
-            ParticleSpawnerKind::Box([-1., -1., -1.], [1., 1., 1.]),
-            ParticleSpawnerMethod::Rate(100., timestep),
+            ParticleSpawnerKind::Box([-10., -10., 0.], [10., 10., 10.]),
+            ParticleSpawnerMethod::Once(10000),
         ),
         30 * 60, /* 1min */
         timestep,
+        Some(|pos, time| Vector3::unit_y() * (f32::sin(pos.x + time) + 1.) * 3.),
     );
 
     let noise_texture = Texture::new();

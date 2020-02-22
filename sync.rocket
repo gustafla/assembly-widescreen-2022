@@ -1,4 +1,4 @@
-<sync rows="128">
+<sync rows="1016">
 	<tracks>
 		<track name="noise_amount">
 			<key interpolation="0" value="0.04" row="0"/>
