@@ -1,8 +1,8 @@
-<sync rows="1184">
+<sync rows="2424">
 	<tracks>
 		<track name="sim_time">
 			<key interpolation="1" value="0" row="0"/>
-			<key interpolation="0" value="10" row="1183"/>
+			<key interpolation="0" value="20" row="1183"/>
 		</track>
 		<track name="noise_amount">
 			<key interpolation="0" value="0.05" row="0"/>
