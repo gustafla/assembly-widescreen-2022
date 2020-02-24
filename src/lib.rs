@@ -141,8 +141,7 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     // Particle system ----------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.bloom_pass.fbo.handle());
-    let light = scene.sync_get("bg_light") as f32;
-    glesv2::clear_color(light, light, light, 1.);
+    glesv2::clear_color(0., 0., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
     scene
