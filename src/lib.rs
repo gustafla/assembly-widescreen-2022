@@ -4,7 +4,7 @@ mod glesv2_raii;
 mod particle_system;
 mod render_pass;
 
-use cgmath::{Rad, Deg, Angle, Euler, Matrix4, Point3, Quaternion, Vector2, Vector3, InnerSpace};
+use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
 use glesv2_raii::{ResourceMapper, Texture, UniformValue};
 use opengles::glesv2::{self, constants::*, types::*};
 use particle_system::{
@@ -55,22 +55,24 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
     glesv2::viewport(0, 0, w, h);
 
-    let timestep = 1. / 5.;
+    let timestep = 1. / 2.;
     let particle_system = ParticleSystem::new(
         ParticleSpawner::new(
             ParticleSpawnerKind::Box((-2., -2., -2.), (2., 2., 2.)),
-            ParticleSpawnerMethod::Once(30000),
+            ParticleSpawnerMethod::Once(1000000),
         ),
-        5 * 100, /* 100 beats */
+        10.,
         timestep,
-        Some(|pos, time| {
-            Vector3::unit_y() * (f32::sin(pos.x / 4. + time) * 0.6 + 1.4) * 3.
+        |pos, time| {
+            Vector3::unit_y() * f32::sin(pos.x / 4. + time) * 0.6
                 + Quaternion::from(Euler {
-                        x: Rad(0f32),
-                        y: Angle::atan2(pos.x, pos.z),
-                        z: Rad(0f32),
-                    }) * Vector3::unit_x() / Vector2::new(pos.x, pos.z).magnitude() * 9. * (pos.y+2.)
-        }),
+                    x: Rad(0f32),
+                    y: Angle::atan2(pos.x, pos.z),
+                    z: Rad(0f32),
+                }) * Vector3::unit_x()
+                    / Vector2::new(pos.x, pos.z).magnitude()
+                    * (pos.y + 2.)
+        },
     );
 
     let noise_texture = Texture::new();
@@ -143,7 +145,9 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     glesv2::clear_color(light, light, light, 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
-    scene.particle_system.render(&scene, scene.sync_get("sim_time") as f32);
+    scene
+        .particle_system
+        .render(&scene, scene.sync_get("sim_time") as f32);
 
     // Bloom pass ---------------------------------------------------------------------------------
 

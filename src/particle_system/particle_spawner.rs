@@ -1,3 +1,4 @@
+use cgmath::Vector3;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use std::sync::Mutex;
@@ -39,24 +40,18 @@ impl ParticleSpawner {
         }
     }
 
-    fn spawn(&mut self, n: usize) -> Vec<f32> {
+    fn spawn(&mut self, n: usize) -> Vec<Vector3<f32>> {
         match self.kind {
-            ParticleSpawnerKind::Point(x, y, z) => {
-                let positions: Vec<_> = std::iter::repeat([x, y, z]).take(n).collect();
-                positions.iter().flatten().map(|f| *f).collect()
-            }
-            ParticleSpawnerKind::Box(pos1, pos2) => {
-                let positions: Vec<_> = (0..n)
-                    .map(|_| {
-                        [
-                            self.rng.gen_range(pos1.0, pos2.0),
-                            self.rng.gen_range(pos1.1, pos2.1),
-                            self.rng.gen_range(pos1.2, pos2.2),
-                        ]
-                    })
-                    .collect();
-                positions.iter().flatten().map(|f| *f).collect()
-            }
+            ParticleSpawnerKind::Point(x, y, z) => vec![Vector3::new(x, y, z); n],
+            ParticleSpawnerKind::Box(pos1, pos2) => (0..n)
+                .map(|_| {
+                    Vector3::new(
+                        self.rng.gen_range(pos1.0, pos2.0),
+                        self.rng.gen_range(pos1.1, pos2.1),
+                        self.rng.gen_range(pos1.2, pos2.2),
+                    )
+                })
+                .collect(),
         }
     }
 
@@ -81,7 +76,7 @@ impl ParticleSpawner {
 }
 
 impl std::iter::Iterator for ParticleSpawner {
-    type Item = Vec<f32>;
+    type Item = Vec<Vector3<f32>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let result = match self.method {

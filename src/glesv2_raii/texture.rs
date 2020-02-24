@@ -48,15 +48,7 @@ impl Texture {
         buffer: &[T],
     ) {
         glesv2::tex_sub_image_2d(
-            target,
-            level,
-            xoffset,
-            yoffset,
-            width,
-            height,
-            format,
-            type_,
-            buffer,
+            target, level, xoffset, yoffset, width, height, format, type_, buffer,
         );
     }
 }

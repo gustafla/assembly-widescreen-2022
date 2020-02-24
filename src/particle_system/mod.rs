@@ -1,26 +1,27 @@
 mod particle_spawner;
 
 use crate::Scene;
-use cgmath::Vector3;
+use cgmath::{Vector3, VectorSpace};
 use opengles::glesv2::{self, constants::*, types::*};
 pub use particle_spawner::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 pub struct ParticleSystem {
-    position_frames: Vec<Vec<Vec<f32>>>, // group(frame(coords(f32)))
-    timestep: f32,
+    position_frames: Vec<Vec<Vec<Vector3<f32>>>>, // group(frame(coords))
+    time_step: f32,
 }
 
 impl ParticleSystem {
     pub fn new(
         spawner: ParticleSpawner,
-        frames: usize,
-        timestep: f32,
-        wind_field: Option<fn(Vector3<f32>, f32) -> Vector3<f32>>, // fn(pos, time) -> force
+        time_limit: f32,
+        time_step: f32,
+        force_field: fn(Vector3<f32>, f32) -> Vector3<f32>, // fn(pos, time) -> force
     ) -> ParticleSystem {
         let cpus = num_cpus::get();
         let mut position_frames = Vec::with_capacity(cpus);
+        let frames = (time_limit / time_step) as usize;
         for _ in 0..cpus {
             position_frames.push(Mutex::new(Vec::with_capacity(frames)));
         }
@@ -35,8 +36,8 @@ impl ParticleSystem {
 
             threads.push(thread::spawn(move || {
                 let count_hint = spawners[cpu].lock().unwrap().count_hint(frames);
-                let mut positions = Vec::with_capacity(count_hint * 3);
-                let mut velocities = Vec::with_capacity(count_hint * 3);
+                let mut positions = Vec::with_capacity(count_hint);
+                let mut velocities = Vec::with_capacity(count_hint);
                 let mut masses = Vec::with_capacity(count_hint);
 
                 for frame in 0..frames {
@@ -48,43 +49,24 @@ impl ParticleSystem {
                     // Spawn particles
                     if let Some(v) = spawners[cpu].lock().unwrap().next() {
                         positions.extend(&v);
-                        velocities.extend(vec![0f32; v.len()]);
-                        masses.extend(vec![2f32; v.len() / 3]);
+                        velocities.extend(vec![Vector3::new(0., 0., 0.); v.len()]);
+                        masses.extend(vec![1f32; v.len()]);
                     }
 
-                    // Simulate wind
-                    if let Some(wind_field) = wind_field {
-                        for i in 0..masses.len() {
-                            let force = wind_field(
-                                Vector3::new(
-                                    positions[i * 3],
-                                    positions[i * 3 + 1],
-                                    positions[i * 3 + 2],
-                                ),
-                                timestep * frame as f32,
-                            );
-
-                            velocities[i * 3] += force.x / masses[i] * timestep;
-                            velocities[i * 3 + 1] += force.y / masses[i] * timestep;
-                            velocities[i * 3 + 2] += force.z / masses[i] * timestep;
-                        }
+                    // Simulate wind and gravity etc
+                    for i in 0..positions.len().min(masses.len()) {
+                        let force = force_field(positions[i], time_step * frame as f32);
+                        velocities[i] += force / masses[i] * time_step;
                     }
 
-                    // Simulate gravity
-                    for i in 0..masses.len() {
-                        velocities[i * 3 + 1] -= masses[i] * timestep;
-                    }
-
-                    // Simulate drag
-                    for v in &mut velocities {
+                    // Simulate drag TODO?
+                    /*for v in &mut velocities {
                         *v *= 0.98;
-                    }
+                    }*/
 
                     // Integrate position
-                    for i in 0..positions.len().min(velocities.len()) / 3 {
-                        positions[i * 3] += velocities[i * 3] * timestep;
-                        positions[i * 3 + 1] += velocities[i * 3 + 1] * timestep;
-                        positions[i * 3 + 2] += velocities[i * 3 + 2] * timestep;
+                    for i in 0..positions.len().min(velocities.len()) {
+                        positions[i] += velocities[i] * time_step;
                     }
 
                     // Store frame state
@@ -103,7 +85,7 @@ impl ParticleSystem {
 
         ParticleSystem {
             position_frames,
-            timestep,
+            time_step,
         }
     }
 
@@ -130,11 +112,21 @@ impl ParticleSystem {
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
         glesv2::enable_vertex_attrib_array(index_pos);
 
-        let i = (time / self.timestep) as usize;
+        let i = (time / self.time_step) as usize;
         for frame_group in &self.position_frames {
-            let i = i.min(frame_group.len() - 1); // clamp to frame count
-            glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &frame_group[i]);
-            glesv2::draw_arrays(GL_POINTS, 0, frame_group[i].len() as GLint / 3);
+            let i = i.min(frame_group.len() - 2); // clamp to frame count
+            let interpolated: Vec<[f32; 3]> = frame_group[i]
+                .iter()
+                .zip(frame_group[i + 1].iter())
+                .map(|(p1, p2)| {
+                    p1.lerp(*p2, ((time / self.time_step) - i as f32).min(1.))
+                        .into()
+                })
+                .collect();
+            let interpolated: Vec<f32> = interpolated.iter().flatten().map(|f| *f).collect();
+
+            glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &interpolated);
+            glesv2::draw_arrays(GL_POINTS, 0, interpolated.len() as GLint / 3);
         }
     }
 }
