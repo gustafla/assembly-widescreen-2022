@@ -17,16 +17,14 @@ void main() {
     vec2 distor = center * vec2(
             1. + abs(center.y * center.y) * 0.1,
             1. + abs(center.x * center.x) * 0.2) + vec2(0.5);
+    vec2 noisecoord = v_TexCoord * u_NoiseScale;
 
-    // colors (bloom + original capped to 1.0 for vignette)
+    // colors (bloom + original + noise)
     vec3 color = min(
             texture2D(u_InputSampler0, distor).rgb +
             texture2D(u_InputSampler1, distor).rgb, 1.);
-    color -= length(center * 0.4); // vignette
-
-    // grain / noise
-    color += texture2D(u_InputSampler2, v_TexCoord * u_NoiseScale).r
-        * u_NoiseAmount;
+    color = max(color - length(center * 0.4), 0.); // vignette
+    color += texture2D(u_InputSampler2, noisecoord).r * u_NoiseAmount; // noise
 
     // output
     if (distor.x < 0. || distor.x > 1. || distor.y < 0. || distor.y > 1.) {
