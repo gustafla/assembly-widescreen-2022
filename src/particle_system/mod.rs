@@ -97,6 +97,11 @@ impl ParticleSystem {
 
         glesv2::use_program(program.handle());
 
+        glesv2::uniform2f(
+            program.uniform_location("u_Resolution").unwrap(),
+            scene.resolution.0 as f32,
+            scene.resolution.1 as f32,
+        );
         glesv2::uniform_matrix4fv(
             program.uniform_location("u_Projection").unwrap(),
             false,
