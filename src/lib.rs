@@ -55,13 +55,13 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
     glesv2::viewport(0, 0, w, h);
 
-    let timestep = 1. / 30.;
+    let timestep = 1. / 5.;
     let particle_system = ParticleSystem::new(
         ParticleSpawner::new(
-            ParticleSpawnerKind::Box([-20., -20., 0.], [20., 20., 20.]),
-            ParticleSpawnerMethod::Once(10000),
+            ParticleSpawnerKind::Box((-2., -2., -2.), (2., 2., 2.)),
+            ParticleSpawnerMethod::Once(30000),
         ),
-        30 * 200, /* 200 30th beats */
+        5 * 100, /* 100 beats */
         timestep,
         Some(|pos, time| {
             Vector3::unit_y() * (f32::sin(pos.x / 4. + time) * 0.6 + 1.4) * 3.
@@ -69,7 +69,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
                         x: Rad(0f32),
                         y: Angle::atan2(pos.x, pos.z),
                         z: Rad(0f32),
-                    }) * Vector3::unit_x() / Vector2::new(pos.x, pos.z).magnitude() * 9.
+                    }) * Vector3::unit_x() / Vector2::new(pos.x, pos.z).magnitude() * 9. * (pos.y+2.)
         }),
     );
 

@@ -4,8 +4,8 @@ use std::sync::Mutex;
 
 #[derive(Clone, Copy)]
 pub enum ParticleSpawnerKind {
-    Point([f32; 3]),
-    Box([f32; 3], [f32; 3]),
+    Point(f32, f32, f32),
+    Box((f32, f32, f32), (f32, f32, f32)),
 }
 
 pub enum ParticleSpawnerMethod {
@@ -41,17 +41,17 @@ impl ParticleSpawner {
 
     fn spawn(&mut self, n: usize) -> Vec<f32> {
         match self.kind {
-            ParticleSpawnerKind::Point(pos) => {
-                let positions: Vec<_> = std::iter::repeat(pos).take(n).collect();
+            ParticleSpawnerKind::Point(x, y, z) => {
+                let positions: Vec<_> = std::iter::repeat([x, y, z]).take(n).collect();
                 positions.iter().flatten().map(|f| *f).collect()
             }
             ParticleSpawnerKind::Box(pos1, pos2) => {
                 let positions: Vec<_> = (0..n)
                     .map(|_| {
                         [
-                            self.rng.gen_range(pos1[0], pos2[0]),
-                            self.rng.gen_range(pos1[1], pos2[1]),
-                            self.rng.gen_range(pos1[2], pos2[2]),
+                            self.rng.gen_range(pos1.0, pos2.0),
+                            self.rng.gen_range(pos1.1, pos2.1),
+                            self.rng.gen_range(pos1.2, pos2.2),
                         ]
                     })
                     .collect();
