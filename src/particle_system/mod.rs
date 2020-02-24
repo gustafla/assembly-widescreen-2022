@@ -124,8 +124,8 @@ impl ParticleSystem {
                 .iter()
                 .zip(frame_group[i + 1].iter())
                 .map(|(p1, p2)| {
-                    p1.lerp(*p2, ((time / self.time_step) - i as f32).min(1.))
-                        .into()
+                    let inbetween = (time / self.time_step) - i as f32;
+                    p1.lerp(*p2, inbetween).into()
                 })
                 .collect();
             let interpolated: Vec<f32> = interpolated.iter().flatten().map(|f| *f).collect();
