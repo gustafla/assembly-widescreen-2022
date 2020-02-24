@@ -23,8 +23,10 @@ impl ParticleSystem {
         let mut position_frames = Vec::with_capacity(cpus);
         let frames = (time_limit / time_step) as usize;
         for _ in 0..cpus {
+            // One Mutex<Vec of frames> per thread to avoid congestion
             position_frames.push(Mutex::new(Vec::with_capacity(frames)));
         }
+        // Arc is needed for lifetime reasons, no scoped threads in stable at the time of writing
         let position_frames = Arc::new(position_frames);
         let spawners = Arc::new(spawner.split(cpus));
 
@@ -75,8 +77,10 @@ impl ParticleSystem {
             }));
         }
 
+        // Wait for simulations to finish
         threads.into_iter().for_each(|t| t.join().unwrap());
 
+        // Move out of Arc and Mutexes
         let position_frames: Vec<_> = Arc::try_unwrap(position_frames)
             .unwrap()
             .into_iter()
