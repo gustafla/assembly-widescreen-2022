@@ -11,6 +11,10 @@ simple_logger = { version = "1", default-features = false }
 rand = "0.7.3"
 rand_xorshift = "0.2.0"
 cgmath = { version = "0.17.0", default-features = false }
+num_cpus = "1.12.0"
 
 [lib]
 crate-type = ["cdylib"]
+
+[profile.dev]
+opt-level = 3

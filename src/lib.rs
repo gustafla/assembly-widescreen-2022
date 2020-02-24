@@ -61,7 +61,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
             ParticleSpawnerKind::Box([-20., -20., 0.], [20., 20., 20.]),
             ParticleSpawnerMethod::Once(10000),
         ),
-        30 * 200, /* 200 beats */
+        30 * 200, /* 200 30th beats */
         timestep,
         Some(|pos, time| {
             Vector3::unit_y() * (f32::sin(pos.x / 4. + time) * 0.6 + 1.4) * 3.
