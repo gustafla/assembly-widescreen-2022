@@ -1,7 +1,6 @@
 use cgmath::Vector3;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
-use std::sync::Mutex;
 
 #[derive(Clone, Copy)]
 pub enum ParticleSpawnerKind {
@@ -55,11 +54,11 @@ impl ParticleSpawner {
         }
     }
 
-    pub fn split(mut self, n: usize) -> Vec<Mutex<Self>> {
+    pub fn split(mut self, n: usize) -> Vec<Self> {
         (0..n)
             .map(|_| {
                 use ParticleSpawnerMethod::*;
-                let s = ParticleSpawner {
+                ParticleSpawner {
                     kind: self.kind,
                     method: match self.method {
                         Once(count) => Once(count / n),
@@ -68,8 +67,7 @@ impl ParticleSpawner {
                     rng: XorShiftRng::seed_from_u64(self.rng.gen()),
                     spawned: self.spawned / n,
                     remainder: self.remainder / n as f32,
-                };
-                Mutex::new(s)
+                }
             })
             .collect()
     }
