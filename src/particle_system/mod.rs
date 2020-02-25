@@ -105,22 +105,17 @@ impl ParticleSystem {
         let i = (time / self.time_step) as usize;
         for frame_group in &self.position_frames {
             let i = i.min(frame_group.len() - 2); // clamp to frame count
-            let interpolated: Vec<[f32; 3]> = frame_group[i]
+            let interpolated: Vec<_> = frame_group[i]
                 .iter()
                 .zip(frame_group[i + 1].iter())
-                .map(|(p1, p2)| {
-                    let inbetween = (time / self.time_step) - i as f32;
-                    p1.lerp(*p2, inbetween).into()
-                })
-                .collect();
-            let interpolated: Vec<f32> = interpolated
-                .iter()
-                .flatten()
-                .map(|f| f.to_owned())
+                .map(|(p1, p2)| p1.lerp(*p2, (time / self.time_step) - i as f32))
                 .collect();
 
+            // unsafe: this OpenGL call assumes tightly packed content, while Vector3<f32>
+            // (which is a repr(C) struct of three f32:s) is aligned to 4 on x86, x86-64 and ARM
+            // (aka self aligned), I'm concerned this may be a possible source of bugs.
             glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &interpolated);
-            glesv2::draw_arrays(GL_POINTS, 0, interpolated.len() as GLint / 3);
+            glesv2::draw_arrays(GL_POINTS, 0, interpolated.len() as GLint);
         }
     }
 }
