@@ -16,5 +16,8 @@ num_cpus = "1.12.0"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+discrete-gpu = []
+
 [profile.dev]
 opt-level = 3
