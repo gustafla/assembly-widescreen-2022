@@ -1,5 +1,6 @@
 mod particle_spawner;
 
+use crate::glesv2_raii::Buffer;
 use crate::Scene;
 use cgmath::{Vector3, VectorSpace};
 use opengles::glesv2::{self, constants::*, types::*};
@@ -9,6 +10,7 @@ use std::thread;
 pub struct ParticleSystem {
     position_frames: Vec<Vec<Vec<Vector3<f32>>>>, // group(frame(coords))
     time_step: f32,
+    buffer: Buffer,
 }
 
 impl ParticleSystem {
@@ -68,9 +70,25 @@ impl ParticleSystem {
             }));
         }
 
+        let position_frames: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+
+        // Find maximum count of particles
+        let largest = position_frames
+            .iter()
+            .flatten()
+            .map(|v| v.len())
+            .max()
+            .unwrap();
+
+        // Allocate OpenGL buffer for maximum count of particles
+        let buffer = Buffer::new(GL_ARRAY_BUFFER);
+        buffer.bind();
+        glesv2::buffer_data(GL_ARRAY_BUFFER, &vec![0f32; largest * cpus], GL_DYNAMIC_DRAW);
+
         ParticleSystem {
-            position_frames: threads.into_iter().map(|t| t.join().unwrap()).collect(),
+            position_frames,
             time_step,
+            buffer,
         }
     }
 
@@ -98,9 +116,11 @@ impl ParticleSystem {
             &scene.view,
         );
 
-        glesv2::bind_buffer(GL_ARRAY_BUFFER, 0);
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
         glesv2::enable_vertex_attrib_array(index_pos);
+
+        // Bind the VBO before usage
+        self.buffer.bind();
 
         let i = (time / self.time_step) as usize;
         for frame_group in &self.position_frames {
@@ -111,10 +131,10 @@ impl ParticleSystem {
                 .map(|(p1, p2)| p1.lerp(*p2, (time / self.time_step) - i as f32))
                 .collect();
 
-            // unsafe: this OpenGL call assumes tightly packed content, while Vector3<f32>
-            // (which is a repr(C) struct of three f32:s) is aligned to 4 on x86, x86-64 and ARM
-            // (aka self aligned), I'm concerned this may be a possible source of bugs.
-            glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &interpolated);
+            // Upload to OpenGL buffer
+            glesv2::buffer_sub_data(GL_ARRAY_BUFFER, 0, &interpolated);
+
+            glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, 0, 0);
             glesv2::draw_arrays(GL_POINTS, 0, interpolated.len() as GLint);
         }
     }
