@@ -14,14 +14,18 @@ use particle_system::{
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
+use std::collections::HashMap;
 use std::ffi::CString;
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_void};
+use std::rc::Rc;
 use terrain::Terrain;
 
 const NOISE_SCALE: i32 = 8;
 
 pub struct Scene {
-    sync_get_raw: extern "C" fn(*const c_char) -> f64,
+    tracks: HashMap<Rc<CString>, *const c_void>,
+    sync_get_track_raw: extern "C" fn(*const c_char) -> *const c_void,
+    sync_get_value_raw: extern "C" fn(*const c_void) -> f64,
     pub resolution: (i32, i32),
     pub projection: [f32; 16],
     pub view: [f32; 16],
@@ -37,9 +41,17 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn sync_get(&self, name: &str) -> f64 {
-        let string = CString::new(name).unwrap();
-        (self.sync_get_raw)(string.as_c_str().as_ptr())
+    pub fn sync_get(&mut self, name: &str) -> f64 {
+        let string = Rc::new(CString::new(name).unwrap());
+        let get = self.sync_get_track_raw;
+        let track = self
+            .tracks
+            .entry(string.clone())
+            .or_insert_with(|| {
+                log::trace!("Calling get track {:?}", string);
+                get(string.as_c_str().as_ptr())
+            });
+        (self.sync_get_value_raw)(*track)
     }
 }
 
@@ -54,7 +66,12 @@ fn log_and_panic(error: Box<dyn std::error::Error>) -> ! {
 }
 
 #[no_mangle]
-extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f64) -> Box<Scene> {
+extern "C" fn scene_init(
+    w: i32,
+    h: i32,
+    sync_get_track_raw: extern "C" fn(*const c_char) -> *const c_void,
+    sync_get_value_raw: extern "C" fn(*const c_void) -> f64,
+) -> Box<Scene> {
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
 
     glesv2::viewport(0, 0, w, h);
@@ -98,7 +115,9 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
     glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT as GLint);
 
     let scene = Box::new(Scene {
-        sync_get_raw: get,
+        tracks: HashMap::new(),
+        sync_get_track_raw,
+        sync_get_value_raw,
         resolution: (w, h),
         projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
         view: [0f32; 16],
@@ -156,9 +175,8 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
 
     glesv2::enable(GL_BLEND);
 
-    scene
-        .particle_system
-        .render(&scene, scene.sync_get("sim_time") as f32);
+    let sim_time = scene.sync_get("sim_time") as f32;
+    scene.particle_system.render(&scene, sim_time);
 
     glesv2::disable(GL_BLEND);
 
@@ -215,6 +233,7 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
         noise.as_slice(),
     );
 
+    let noise_amount = UniformValue::Float(scene.sync_get("noise_amount") as f32);
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, 0);
     scene.post_pass.render(
         &scene,
@@ -227,10 +246,7 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
             scene.noise_texture.handle(),
         ],
         &[
-            (
-                "u_NoiseAmount",
-                UniformValue::Float(scene.sync_get("noise_amount") as f32),
-            ),
+            ("u_NoiseAmount", noise_amount),
             ("u_NoiseScale", UniformValue::Float(NOISE_SCALE as f32)),
         ],
     );
