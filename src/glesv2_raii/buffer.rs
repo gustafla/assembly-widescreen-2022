@@ -73,7 +73,7 @@ impl Buffer {
         };
 
         buffer.bind();
-        glesv2::buffer_data(T::BIND, values.as_slice(), GL_STATIC_DRAW);
+        buffer.data(values.as_slice(), GL_STATIC_DRAW);
 
         trace!(
             "Buffer {} ({}) created",
@@ -98,6 +98,14 @@ impl Buffer {
 
     pub fn bind(&self) {
         glesv2::bind_buffer(self.binding, self.handle);
+    }
+
+    pub fn data<T>(&self, data: &[T], hint: GLenum) {
+        glesv2::buffer_data(self.binding, data, hint);
+    }
+
+    pub fn sub_data<T>(&self, offset: i32, data: &[T]) {
+        glesv2::buffer_sub_data(self.binding, offset, data);
     }
 }
 

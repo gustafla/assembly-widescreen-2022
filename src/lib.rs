@@ -3,6 +3,7 @@
 mod glesv2_raii;
 mod particle_system;
 mod render_pass;
+mod terrain;
 
 use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
 use glesv2_raii::{ResourceMapper, Texture, UniformValue};
@@ -15,6 +16,7 @@ use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
 use std::ffi::CString;
 use std::os::raw::c_char;
+use terrain::Terrain;
 
 const NOISE_SCALE: i32 = 8;
 
@@ -26,6 +28,7 @@ pub struct Scene {
     pub resources: ResourceMapper,
     rng: XorShiftRng,
     particle_system: ParticleSystem,
+    terrain: Terrain,
     noise_texture: Texture,
     bloom_pass: RenderPass,
     blur_pass_x: RenderPass,
@@ -53,7 +56,10 @@ fn log_and_panic(error: Box<dyn std::error::Error>) -> ! {
 #[no_mangle]
 extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f64) -> Box<Scene> {
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
+
     glesv2::viewport(0, 0, w, h);
+    glesv2::blend_func(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glesv2::enable(GL_CULL_FACE);
 
     let particle_system = ParticleSystem::new(
         ParticleSpawner::new(
@@ -99,6 +105,7 @@ extern "C" fn scene_init(w: i32, h: i32, get: extern "C" fn(*const c_char) -> f6
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
         rng: XorShiftRng::seed_from_u64(98341),
         particle_system,
+        terrain: Terrain::new(200, 200, |_, _| 0f32),
         noise_texture,
         bloom_pass: RenderPass::new(w, h, "./bloom.frag"),
         blur_pass_x: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
@@ -135,18 +142,25 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     )
     .as_ref();
 
-    glesv2::enable(GL_BLEND);
-    glesv2::blend_func(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // Particle system ----------------------------------------------------------------------------
+    glesv2::disable(GL_BLEND);
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.bloom_pass.fbo.handle());
     glesv2::clear_color(0., 0., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT);
 
+    // Terrain ------------------------------------------------------------------------------------
+
+    scene.terrain.render(&scene);
+
+    // Particle system ----------------------------------------------------------------------------
+
+    glesv2::enable(GL_BLEND);
+
     scene
         .particle_system
         .render(&scene, scene.sync_get("sim_time") as f32);
+
+    glesv2::disable(GL_BLEND);
 
     // Bloom pass ---------------------------------------------------------------------------------
 

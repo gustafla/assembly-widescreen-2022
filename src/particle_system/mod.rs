@@ -87,11 +87,7 @@ impl ParticleSystem {
             // Allocate OpenGL buffer for maximum count of particles
             let buffer = Buffer::new(GL_ARRAY_BUFFER);
             buffer.bind();
-            glesv2::buffer_data(
-                GL_ARRAY_BUFFER,
-                &vec![0f32; largest * cpus],
-                GL_DYNAMIC_DRAW,
-            );
+            buffer.data(&vec![0f32; largest * cpus], GL_DYNAMIC_DRAW);
 
             ParticleSystem {
                 position_frames,
@@ -112,7 +108,7 @@ impl ParticleSystem {
     pub fn render(&self, scene: &Scene, time: f32) {
         let program = scene
             .resources
-            .program("./particle.vert ./particle.frag")
+            .program("./particle.vert ./flatshade.frag")
             .unwrap();
 
         glesv2::use_program(program.handle());
@@ -154,7 +150,7 @@ impl ParticleSystem {
             #[cfg(feature = "discrete-gpu")]
             {
                 // Upload to OpenGL buffer
-                glesv2::buffer_sub_data(GL_ARRAY_BUFFER, 0, &interpolated);
+                self.buffer.sub_data(0, &interpolated);
                 glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, 0, 0);
             }
 

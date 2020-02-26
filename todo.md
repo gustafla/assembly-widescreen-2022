@@ -1,15 +1,18 @@
-[ ] Particle effect & physics system
+[x] Particle effect & physics system
   - [x] Spawning boxes
     - [ ] Spherical
     - [ ] Shaped by mesh?
     - [ ] Shaped by font glyphs?
   - [x] Basic particle rendering
-  - [ ] Wind field
-    - [ ] Dynamic wind field
+  - [x] Wind field
+    - [x] Dynamic wind field
     - [ ] Grass?
   - [ ] Particle color, size and transparency tweaks
+  - [ ] Particle density precalc and lighting
 [ ] Background
   - [ ] Terrain?
+    - [x] Positions
+    - [ ] Normals
   - [ ] Sprites/logos?
 [ ] Sync, camera & choreography
 [x] Implement post processing

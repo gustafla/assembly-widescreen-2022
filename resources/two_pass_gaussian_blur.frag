@@ -1,7 +1,6 @@
 #version 100
 precision mediump float;
 
-varying vec3 v_Pos;
 varying vec2 v_TexCoord;
 
 uniform sampler2D u_InputSampler0;
