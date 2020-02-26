@@ -18,7 +18,8 @@ impl Terrain {
             for z in 0i32..zsize as i32 {
                 let x = (x - xsize as i32 / 2) as f32;
                 let z = -(z - zsize as i32 / 2) as f32;
-                geometry.push(Vector3::new(x, height_map(x, z), z));
+                geometry.push(Vector3::new(x, height_map(x, z), z)); // Position
+                geometry.push(Vector3::unit_y()); // Normal
             }
         }
 
@@ -34,7 +35,7 @@ impl Terrain {
                 indices.push(i * zsize + zsize + j); // B
             }
 
-            // degenerate triangle(s?)
+            // Degenerate triangle(s?)
             indices.push(i * zsize + zsize - 1); // C
             indices.push(i * zsize + zsize - 1); // C
             indices.push((i + 1) * zsize); // D
@@ -52,7 +53,10 @@ impl Terrain {
     }
 
     pub fn render(&self, scene: &Scene) {
-        let program = scene.resources.program("./poly.vert ./flatshade.frag").unwrap();
+        let program = scene
+            .resources
+            .program("./poly.vert ./flatshade.frag")
+            .unwrap();
 
         glesv2::use_program(program.handle());
 
@@ -68,12 +72,25 @@ impl Terrain {
         );
 
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
+        let index_normal = program.attrib_location("a_Normal").unwrap() as GLuint;
 
         self.vertex_buffer.bind();
         self.index_buffer.bind();
 
         glesv2::enable_vertex_attrib_array(index_pos);
-        glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, 0, 0);
+        glesv2::enable_vertex_attrib_array(index_normal);
+
+        let float_size = std::mem::size_of::<GLfloat>();
+        let stride = float_size as GLsizei * 6;
+        glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, stride, 0);
+        glesv2::vertex_attrib_pointer_offset(
+            index_normal,
+            3,
+            GL_FLOAT,
+            false,
+            stride,
+            float_size as GLuint * 3,
+        );
 
         glesv2::draw_elements::<GLushort>(GL_TRIANGLE_STRIP, self.count, GL_UNSIGNED_SHORT, &[]);
     }
