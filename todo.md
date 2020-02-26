@@ -12,7 +12,7 @@
 [ ] Background
   - [ ] Terrain?
     - [x] Positions
-    - [ ] Normals
+    - [x] Normals
   - [ ] Sprites/logos?
 [ ] Sync, camera & choreography
 [x] Implement post processing

@@ -1,6 +1,6 @@
 use crate::glesv2_raii::Buffer;
 use crate::Scene;
-use cgmath::Vector3;
+use cgmath::{InnerSpace, Vector3};
 use opengles::glesv2::{self, constants::*, types::*};
 
 pub struct Terrain {
@@ -19,7 +19,15 @@ impl Terrain {
                 let x = (x - xsize as i32 / 2) as f32;
                 let z = -(z - zsize as i32 / 2) as f32;
                 geometry.push(Vector3::new(x, height_map(x, z), z)); // Position
-                geometry.push(Vector3::unit_y()); // Normal
+
+                let pos1 = Vector3::new(x, height_map(x, z - 1.), z - 1.);
+                let pos2 = Vector3::new(x - 1., height_map(x - 1., z), z);
+                let pos3 = geometry.last().unwrap();
+
+                let u = pos2 - pos1;
+                let v = pos3 - pos1;
+
+                geometry.push(u.cross(v).normalize()); // Normal
             }
         }
 

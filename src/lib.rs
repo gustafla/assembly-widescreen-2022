@@ -44,13 +44,10 @@ impl Scene {
     pub fn sync_get(&mut self, name: &str) -> f64 {
         let string = Rc::new(CString::new(name).unwrap());
         let get = self.sync_get_track_raw;
-        let track = self
-            .tracks
-            .entry(string.clone())
-            .or_insert_with(|| {
-                log::trace!("Calling get track {:?}", string);
-                get(string.as_c_str().as_ptr())
-            });
+        let track = self.tracks.entry(string.clone()).or_insert_with(|| {
+            log::trace!("Calling get track {:?}", string);
+            get(string.as_c_str().as_ptr())
+        });
         (self.sync_get_value_raw)(*track)
     }
 }
@@ -124,7 +121,7 @@ extern "C" fn scene_init(
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
         rng: XorShiftRng::seed_from_u64(98341),
         particle_system,
-        terrain: Terrain::new(200, 200, |_, _| 0f32),
+        terrain: Terrain::new(200, 200, |x, z| (x / 10.).sin() * z * 0.1),
         noise_texture,
         bloom_pass: RenderPass::new(w, h, "./bloom.frag"),
         blur_pass_x: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
