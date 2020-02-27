@@ -93,6 +93,8 @@ extern "C" fn scene_init(
                     * (pos.y + 2.))
                     * (5. - time).max(0.)
         },
+        (8, 2, 8),
+        (200., 1., 200.)
     );
 
     let noise_texture = Texture::new();
@@ -121,7 +123,7 @@ extern "C" fn scene_init(
         resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
         rng: XorShiftRng::seed_from_u64(98341),
         particle_system,
-        terrain: Terrain::new(200, 200, |x, z| (x / 10.).sin() * z * 0.1),
+        terrain: Terrain::new(200, 200, |x, z| (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.),
         noise_texture,
         bloom_pass: RenderPass::new(w, h, "./bloom.frag"),
         blur_pass_x: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
@@ -166,13 +168,13 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
 
     // Terrain ------------------------------------------------------------------------------------
 
-    scene.terrain.render(&scene);
+    let sim_time = scene.sync_get("sim_time") as f32;
+    scene.terrain.render(&scene, sim_time, &scene.particle_system);
 
     // Particle system ----------------------------------------------------------------------------
 
     glesv2::enable(GL_BLEND);
 
-    let sim_time = scene.sync_get("sim_time") as f32;
     scene.particle_system.render(&scene, sim_time);
 
     glesv2::disable(GL_BLEND);
