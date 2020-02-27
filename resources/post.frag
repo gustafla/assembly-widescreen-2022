@@ -16,6 +16,11 @@ void main() {
     vec2 distor = center * vec2(
             1. + abs(center.y * center.y) * 0.1,
             1. + abs(center.x * center.x) * 0.2) + vec2(0.5);
+
+    if (distor.x < 0. || distor.x > 1. || distor.y < 0. || distor.y > 1.) {
+        discard; // Hide "overscan" at edges
+    }
+
     vec2 noisecoord = v_TexCoord * u_NoiseScale;
 
     // colors (clamp(bloom + original - vignette) + noise)
@@ -26,9 +31,5 @@ void main() {
         texture2D(u_InputSampler2, noisecoord).r * u_NoiseAmount; // noise
 
     // output
-    if (distor.x < 0. || distor.x > 1. || distor.y < 0. || distor.y > 1.) {
-        gl_FragColor = vec4(vec3(0.), 1.); // Hide "overscan" at edges
-    } else {
-        gl_FragColor = vec4(color, 1.); // Actual output
-    }
+    gl_FragColor = vec4(color, 1.);
 }
