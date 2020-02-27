@@ -14,7 +14,7 @@ impl Renderbuffer {
         self.0
     }
 
-    pub fn storage<T>(format: GLenum, width: GLsizei, height: GLsizei) {
+    pub fn storage(format: GLenum, width: GLsizei, height: GLsizei) {
         glesv2::renderbuffer_storage(GL_RENDERBUFFER, format, width, height);
     }
 }

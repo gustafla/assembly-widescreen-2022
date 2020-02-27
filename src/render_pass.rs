@@ -1,4 +1,6 @@
-use crate::glesv2_raii::{Framebuffer, Texture, TextureAttachment, UniformValue};
+use crate::glesv2_raii::{
+    Framebuffer, RenderbufferAttachment, Texture, TextureAttachment, UniformValue,
+};
 use crate::Scene;
 use opengles::glesv2::{self, constants::*, types::*};
 
@@ -8,7 +10,12 @@ pub struct RenderPass {
 }
 
 impl RenderPass {
-    pub fn new(w: i32, h: i32, frag_path: &str) -> Self {
+    pub fn new(
+        w: i32,
+        h: i32,
+        frag_path: &str,
+        renderbuffers: Option<Vec<(GLenum, RenderbufferAttachment)>>,
+    ) -> Self {
         let fbo_texture = Texture::new();
         glesv2::bind_texture(GL_TEXTURE_2D, fbo_texture.handle());
         Texture::image::<u8>(GL_TEXTURE_2D, 0, GL_RGB, w, h, GL_UNSIGNED_BYTE, &[]);
@@ -26,7 +33,7 @@ impl RenderPass {
                     mipmap_level: 0,
                 },
             )]),
-            None,
+            renderbuffers,
         )
         .unwrap();
 

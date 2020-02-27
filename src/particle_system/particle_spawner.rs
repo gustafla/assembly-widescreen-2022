@@ -14,6 +14,7 @@ pub enum ParticleSpawnerMethod {
 }
 
 pub struct ParticleSpawner {
+    position: Vector3<f32>,
     kind: ParticleSpawnerKind,
     method: ParticleSpawnerMethod,
     rng: XorShiftRng,
@@ -22,8 +23,13 @@ pub struct ParticleSpawner {
 }
 
 impl ParticleSpawner {
-    pub fn new(kind: ParticleSpawnerKind, method: ParticleSpawnerMethod) -> Self {
+    pub fn new(
+        position: Vector3<f32>,
+        kind: ParticleSpawnerKind,
+        method: ParticleSpawnerMethod,
+    ) -> Self {
         ParticleSpawner {
+            position,
             kind,
             method,
             rng: XorShiftRng::seed_from_u64(609),
@@ -41,14 +47,14 @@ impl ParticleSpawner {
 
     fn spawn(&mut self, n: usize) -> Vec<Vector3<f32>> {
         match self.kind {
-            ParticleSpawnerKind::Point(x, y, z) => vec![Vector3::new(x, y, z); n],
+            ParticleSpawnerKind::Point(x, y, z) => vec![Vector3::new(x, y, z) + self.position; n],
             ParticleSpawnerKind::Box(pos1, pos2) => (0..n)
                 .map(|_| {
                     Vector3::new(
                         self.rng.gen_range(pos1.0, pos2.0),
                         self.rng.gen_range(pos1.1, pos2.1),
                         self.rng.gen_range(pos1.2, pos2.2),
-                    )
+                    ) + self.position
                 })
                 .collect(),
         }
@@ -59,6 +65,7 @@ impl ParticleSpawner {
             .map(|_| {
                 use ParticleSpawnerMethod::*;
                 ParticleSpawner {
+                    position: self.position,
                     kind: self.kind,
                     method: match self.method {
                         Once(count) => Once(count / n),

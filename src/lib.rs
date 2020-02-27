@@ -6,7 +6,7 @@ mod render_pass;
 mod terrain;
 
 use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
-use glesv2_raii::{ResourceMapper, Texture, UniformValue};
+use glesv2_raii::{Renderbuffer, RenderbufferAttachment, ResourceMapper, Texture, UniformValue};
 use opengles::glesv2::{self, constants::*, types::*};
 use particle_system::{
     ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
@@ -74,11 +74,13 @@ extern "C" fn scene_init(
     glesv2::viewport(0, 0, w, h);
     glesv2::blend_func(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glesv2::enable(GL_CULL_FACE);
+    glesv2::depth_func(GL_LESS);
 
     let particle_system = ParticleSystem::new(
         ParticleSpawner::new(
+            Vector3::new(0., 2., 0.),
             ParticleSpawnerKind::Box((-5., -5., -5.), (5., 5., 5.)),
-            ParticleSpawnerMethod::Once(1000000),
+            ParticleSpawnerMethod::Once(100000),
         ),
         30.,
         60,
@@ -93,8 +95,6 @@ extern "C" fn scene_init(
                     * (pos.y + 2.))
                     * (5. - time).max(0.)
         },
-        (8, 2, 8),
-        (200., 1., 200.)
     );
 
     let noise_texture = Texture::new();
@@ -125,10 +125,20 @@ extern "C" fn scene_init(
         particle_system,
         terrain: Terrain::new(200, 200, |x, z| (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.),
         noise_texture,
-        bloom_pass: RenderPass::new(w, h, "./bloom.frag"),
-        blur_pass_x: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
-        blur_pass_y: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag"),
-        post_pass: RenderPass::new(w, h, "./post.frag"),
+        bloom_pass: RenderPass::new(
+            w,
+            h,
+            "./bloom.frag",
+            Some(vec![(GL_DEPTH_ATTACHMENT, {
+                let renderbuffer = Renderbuffer::new();
+                glesv2::bind_renderbuffer(GL_RENDERBUFFER, renderbuffer.handle());
+                Renderbuffer::storage(GL_DEPTH_COMPONENT16, w, h);
+                RenderbufferAttachment { renderbuffer }
+            })]),
+        ),
+        blur_pass_x: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag", None),
+        blur_pass_y: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag", None),
+        post_pass: RenderPass::new(w, h, "./post.frag", None),
     });
 
     log::info!("scene created");
@@ -142,7 +152,7 @@ extern "C" fn scene_deinit(_: Box<Scene>) {
 }
 
 #[no_mangle]
-extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
+extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
     let mut scene = Box::leak(scene);
 
     scene.view = *Matrix4::look_at(
@@ -160,38 +170,35 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     )
     .as_ref();
 
-    glesv2::disable(GL_BLEND);
-
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.bloom_pass.fbo.handle());
     glesv2::clear_color(0., 0., 0., 1.);
-    glesv2::clear(GL_COLOR_BUFFER_BIT);
-
-    // Terrain ------------------------------------------------------------------------------------
-
-    let sim_time = scene.sync_get("sim_time") as f32;
-    scene.terrain.render(&scene, sim_time, &scene.particle_system);
+    glesv2::clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Particle system ----------------------------------------------------------------------------
 
-    glesv2::enable(GL_BLEND);
+    glesv2::enable(GL_DEPTH_TEST);
+    //glesv2::enable(GL_BLEND);
 
-    scene.particle_system.render(&scene, sim_time);
+    let sim_time = scene.sync_get("sim_time") as f32;
+    let lightpos = scene.particle_system.render(&scene, sim_time, 128);
 
     glesv2::disable(GL_BLEND);
+
+    // Terrain ------------------------------------------------------------------------------------
+
+    scene.terrain.render(&scene, lightpos);
+
+    glesv2::disable(GL_DEPTH_TEST);
 
     // Bloom pass ---------------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.blur_pass_x.fbo.handle());
-    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
-    glesv2::clear(GL_COLOR_BUFFER_BIT);
 
     scene.bloom_pass.render(&scene, &[], &[]);
 
     // X-blur pass --------------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.blur_pass_y.fbo.handle());
-    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
-    glesv2::clear(GL_COLOR_BUFFER_BIT);
 
     scene.blur_pass_x.render(
         &scene,
@@ -202,8 +209,6 @@ extern "C" fn scene_render(time: f64, scene: Box<Scene>) {
     // Y-blur pass --------------------------------------------------------------------------------
 
     glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.post_pass.fbo.handle());
-    glesv2::clear_color(f32::sin(time as f32), 1., 0., 1.);
-    glesv2::clear(GL_COLOR_BUFFER_BIT);
 
     scene.blur_pass_y.render(
         &scene,

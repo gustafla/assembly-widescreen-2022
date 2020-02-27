@@ -1,5 +1,5 @@
 use crate::glesv2_raii::Buffer;
-use crate::{ParticleSystem, Scene};
+use crate::{Scene};
 use cgmath::{InnerSpace, Vector3};
 use opengles::glesv2::{self, constants::*, types::*};
 
@@ -60,10 +60,10 @@ impl Terrain {
         }
     }
 
-    pub fn render(&self, scene: &Scene, time: f32, particle_system: &ParticleSystem) {
+    pub fn render(&self, scene: &Scene, lightpos: Vec<f32>) {
         let program = scene
             .resources
-            .program("./poly.vert ./flatshade.frag")
+            .program("./gouraud.vert ./flatshade.frag")
             .unwrap();
 
         glesv2::use_program(program.handle());
@@ -78,33 +78,9 @@ impl Terrain {
             false,
             &scene.view,
         );
-        let density_voxel_count = particle_system.get_density_voxel_count();
-        glesv2::uniform1i(
-            program.uniform_location("u_LightCountX").unwrap(),
-            density_voxel_count.0,
-        );
-        glesv2::uniform1i(
-            program.uniform_location("u_LightCountY").unwrap(),
-            density_voxel_count.1,
-        );
-        glesv2::uniform1i(
-            program.uniform_location("u_LightCountZ").unwrap(),
-            density_voxel_count.2,
-        );
-        let scale = particle_system.get_density_voxel_scale();
-        glesv2::uniform3f(
-            program.uniform_location("u_LightGridScale").unwrap(),
-            scale.0,
-            scale.1,
-            scale.2,
-        );
-        glesv2::uniform1fv(
-            program.uniform_location("u_LightIntensity").unwrap(),
-            &particle_system.get_densities(time),
-        );
-        glesv2::uniform1f(
-            program.uniform_location("u_LightIntensityScale").unwrap(),
-            10000f32,
+        glesv2::uniform3fv(
+            program.uniform_location("u_LightPosition").unwrap(),
+            &lightpos,
         );
 
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
