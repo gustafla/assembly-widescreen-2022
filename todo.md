@@ -8,7 +8,7 @@
     - [x] Dynamic wind field
     - [ ] Grass?
   - [ ] Particle color, size and transparency tweaks
-  - [ ] Particle density precalc and lighting
+  - [/] Particle density precalc and lighting
 [ ] Background
   - [ ] Terrain?
     - [x] Positions

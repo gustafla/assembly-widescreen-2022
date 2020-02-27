@@ -79,7 +79,7 @@ extern "C" fn scene_init(
     let particle_system = ParticleSystem::new(
         ParticleSpawner::new(
             Vector3::new(0., 2., 0.),
-            ParticleSpawnerKind::Box((-5., -5., -5.), (5., 5., 5.)),
+            ParticleSpawnerKind::Box((-5., 0., -5.), (5., 5., 5.)),
             ParticleSpawnerMethod::Once(100000),
         ),
         30.,
@@ -155,12 +155,13 @@ extern "C" fn scene_deinit(_: Box<Scene>) {
 extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
     let mut scene = Box::leak(scene);
 
+    let cam_pos = Point3::new(
+        scene.sync_get("cam:pos.x") as f32,
+        scene.sync_get("cam:pos.y") as f32,
+        scene.sync_get("cam:pos.z") as f32,
+    );
     scene.view = *Matrix4::look_at(
-        Point3::new(
-            scene.sync_get("cam:pos.x") as f32,
-            scene.sync_get("cam:pos.y") as f32,
-            scene.sync_get("cam:pos.z") as f32,
-        ), // eye
+        cam_pos,
         Point3::new(
             scene.sync_get("cam:target.x") as f32,
             scene.sync_get("cam:target.y") as f32,
@@ -174,20 +175,22 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
     glesv2::clear_color(0., 0., 0., 1.);
     glesv2::clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Particle system ----------------------------------------------------------------------------
+    // Terrain and particle system ----------------------------------------------------------------
 
     glesv2::enable(GL_DEPTH_TEST);
-    //glesv2::enable(GL_BLEND);
+    glesv2::enable(GL_BLEND);
 
     let sim_time = scene.sync_get("sim_time") as f32;
-    let lightpos = scene.particle_system.render(&scene, sim_time, 128);
-
-    glesv2::disable(GL_BLEND);
-
-    // Terrain ------------------------------------------------------------------------------------
-
+    let lightpos =
+        scene
+            .particle_system
+            .prepare(cam_pos.to_homogeneous().truncate(), sim_time, 128);
     scene.terrain.render(&scene, lightpos);
 
+
+    scene.particle_system.render(&scene);
+
+    glesv2::disable(GL_BLEND);
     glesv2::disable(GL_DEPTH_TEST);
 
     // Bloom pass ---------------------------------------------------------------------------------

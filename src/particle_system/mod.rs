@@ -1,18 +1,15 @@
 mod particle_spawner;
 
-#[cfg(feature = "discrete-gpu")]
-use crate::glesv2_raii::Buffer;
 use crate::Scene;
-use cgmath::{Vector3, VectorSpace};
+use cgmath::{MetricSpace, Vector3, VectorSpace};
 use opengles::glesv2::{self, constants::*, types::*};
 pub use particle_spawner::*;
 use std::thread;
 
 pub struct ParticleSystem {
     position_frames: Vec<Vec<Vec<Vector3<f32>>>>, // group(frame(coords, n = particles))
+    interpolated: Vec<Vector3<f32>>,
     time_step: f32,
-    #[cfg(feature = "discrete-gpu")]
-    buffer: Buffer,
 }
 
 impl ParticleSystem {
@@ -76,32 +73,60 @@ impl ParticleSystem {
 
         let position_frames: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
 
-        #[cfg(feature = "discrete-gpu")]
-        let buffer = {
-            // Find maximum count of particles
-            let largest = position_frames
-                .iter()
-                .flatten()
-                .map(|v| v.len())
-                .max()
-                .unwrap();
-
-            // Allocate OpenGL buffer for maximum count of particles
-            let buffer = Buffer::new(GL_ARRAY_BUFFER);
-            buffer.bind();
-            buffer.data(&vec![0f32; largest * cpus], GL_DYNAMIC_DRAW);
-            buffer
-        };
+        // Find maximum count of particles
+        let largest = position_frames
+            .iter()
+            .flatten()
+            .map(|v| v.len())
+            .max()
+            .unwrap();
 
         ParticleSystem {
             position_frames,
+            interpolated: Vec::with_capacity(largest * cpus),
             time_step,
-            #[cfg(feature = "discrete-gpu")]
-            buffer,
         }
     }
 
-    pub fn render(&self, scene: &Scene, time: f32, lights: usize) -> Vec<f32> {
+    pub fn prepare(&mut self, campos: Vector3<f32>, time: f32, lights: usize) -> Vec<f32> {
+        // Clear last results
+        self.interpolated.clear();
+
+        // Allocate vec for particles to be selected as lights
+        let mut selected_lights = Vec::with_capacity(lights * 3);
+
+        let i = (time / self.time_step) as usize;
+        for frame_group in &self.position_frames {
+            let i = i.min(frame_group.len() - 2); // clamp to frame count
+            let interpolated: Vec<_> = frame_group[i]
+                .iter()
+                .zip(frame_group[i + 1].iter())
+                .map(|(p1, p2)| p1.lerp(*p2, (time / self.time_step) - i as f32))
+                .collect();
+
+            self.interpolated.extend(interpolated);
+        }
+
+        // Select n points to be used for lighting
+        for selection in 0..lights {
+            // First are fine for random distributions
+            let selection = self.interpolated[selection];
+            selected_lights.extend(&[selection.x, selection.y, selection.z]);
+        }
+
+        if glesv2::get_booleanv(GL_DEPTH_TEST) && glesv2::get_booleanv(GL_BLEND) {
+            // Sort particles because of alpha blending + depth testing = difficult
+            self.interpolated.sort_unstable_by(|a, b| {
+                b.distance2(campos)
+                    .partial_cmp(&a.distance2(campos))
+                    .unwrap()
+            });
+        }
+
+        selected_lights
+    }
+
+    pub fn render(&self, scene: &Scene) {
         let program = scene
             .resources
             .program("./particle.vert ./flatshade.frag")
@@ -125,46 +150,11 @@ impl ParticleSystem {
             &scene.view,
         );
 
-        let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
-        glesv2::enable_vertex_attrib_array(index_pos);
-
-        // Bind the VBO before usage, or clear binding if not using buffers
-        #[cfg(feature = "discrete-gpu")]
-        self.buffer.bind();
-        #[cfg(not(feature = "discrete-gpu"))]
         glesv2::bind_buffer(GL_ARRAY_BUFFER, 0);
 
-        // Allocate vec for particles to be selected as lights
-        let mut selected_lights = Vec::with_capacity(lights * 3);
-
-        let i = (time / self.time_step) as usize;
-        for frame_group in &self.position_frames {
-            let i = i.min(frame_group.len() - 2); // clamp to frame count
-            let interpolated: Vec<_> = frame_group[i]
-                .iter()
-                .zip(frame_group[i + 1].iter())
-                .map(|(p1, p2)| p1.lerp(*p2, (time / self.time_step) - i as f32))
-                .collect();
-
-            for selection in 0..lights / self.position_frames.len() {
-                // First are fine for random distributions
-                let selection = interpolated[selection];
-                selected_lights.extend(&[selection.x, selection.y, selection.z]);
-            }
-
-            #[cfg(feature = "discrete-gpu")]
-            {
-                // Upload to OpenGL buffer
-                self.buffer.sub_data(0, &interpolated);
-                glesv2::vertex_attrib_pointer_offset(index_pos, 3, GL_FLOAT, false, 0, 0);
-            }
-
-            #[cfg(not(feature = "discrete-gpu"))]
-            glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &interpolated);
-
-            glesv2::draw_arrays(GL_POINTS, 0, interpolated.len() as GLint);
-        }
-
-        selected_lights
+        let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
+        glesv2::enable_vertex_attrib_array(index_pos);
+        glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &self.interpolated);
+        glesv2::draw_arrays(GL_POINTS, 0, self.interpolated.len() as GLint);
     }
 }
