@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use cgmath::{InnerSpace, Vector3};
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 
@@ -6,6 +6,7 @@ use rand_xorshift::XorShiftRng;
 pub enum ParticleSpawnerKind {
     Point(f32, f32, f32),
     Box((f32, f32, f32), (f32, f32, f32)),
+    Sphere(f32, f32), // internal radius, external radius
 }
 
 pub enum ParticleSpawnerMethod {
@@ -55,6 +56,18 @@ impl ParticleSpawner {
                         self.rng.gen_range(pos1.1, pos2.1),
                         self.rng.gen_range(pos1.2, pos2.2),
                     ) + self.position
+                })
+                .collect(),
+            ParticleSpawnerKind::Sphere(int_r, ext_r) => (0..n)
+                .map(|_| {
+                    Vector3::new(
+                        self.rng.gen_range(-1., 1.),
+                        self.rng.gen_range(-1., 1.),
+                        self.rng.gen_range(-1., 1.),
+                    )
+                    .normalize()
+                        * self.rng.gen_range(int_r, ext_r)
+                        + self.position
                 })
                 .collect(),
         }
