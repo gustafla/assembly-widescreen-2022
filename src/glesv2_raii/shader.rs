@@ -1,5 +1,5 @@
 use log::trace;
-use opengles::glesv2::{self, constants::*, types::*};
+use opengles::prelude::*;
 use std::error;
 use std::fmt;
 use std::path::{Path, PathBuf};

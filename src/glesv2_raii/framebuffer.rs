@@ -1,7 +1,7 @@
 use super::Renderbuffer;
 use super::Texture;
 use log::trace;
-use opengles::glesv2::{self, constants::*, types::*};
+use opengles::prelude::*;
 use std::collections::HashMap;
 use std::error;
 use std::fmt;

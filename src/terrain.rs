@@ -1,7 +1,7 @@
 use crate::glesv2_raii::Buffer;
-use crate::{Scene};
+use crate::Scene;
 use cgmath::{InnerSpace, Vector3};
-use opengles::glesv2::{self, constants::*, types::*};
+use opengles::prelude::*;
 
 pub struct Terrain {
     vertex_buffer: Buffer,

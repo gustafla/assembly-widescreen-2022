@@ -7,7 +7,7 @@ mod terrain;
 
 use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
 use glesv2_raii::{Renderbuffer, RenderbufferAttachment, ResourceMapper, Texture, UniformValue};
-use opengles::glesv2::{self, constants::*, types::*};
+use opengles::prelude::*;
 use particle_system::{
     ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
 };
@@ -186,7 +186,6 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
             .particle_system
             .prepare(cam_pos.to_homogeneous().truncate(), sim_time, 128);
     scene.terrain.render(&scene, lightpos);
-
 
     scene.particle_system.render(&scene);
 

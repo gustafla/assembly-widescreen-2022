@@ -1,5 +1,5 @@
 use crate::glesv2_raii::{Buffer, Program, Shader};
-use opengles::glesv2;
+use opengles::prelude::*;
 use std::collections::HashMap;
 use std::error;
 

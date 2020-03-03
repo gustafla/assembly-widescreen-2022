@@ -2,7 +2,7 @@ use crate::glesv2_raii::{
     Framebuffer, RenderbufferAttachment, Texture, TextureAttachment, UniformValue,
 };
 use crate::Scene;
-use opengles::glesv2::{self, constants::*, types::*};
+use opengles::prelude::*;
 
 pub struct RenderPass {
     pub fbo: Framebuffer,

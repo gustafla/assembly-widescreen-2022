@@ -2,7 +2,7 @@ mod particle_spawner;
 
 use crate::Scene;
 use cgmath::{MetricSpace, Vector3, VectorSpace};
-use opengles::glesv2::{self, constants::*, types::*};
+use opengles::prelude::*;
 pub use particle_spawner::*;
 use std::thread;
 
