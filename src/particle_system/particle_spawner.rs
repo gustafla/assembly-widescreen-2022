@@ -4,13 +4,16 @@ use rand_xorshift::XorShiftRng;
 
 #[derive(Clone, Copy)]
 pub enum ParticleSpawnerKind {
+    #[allow(dead_code)]
     Point(f32, f32, f32),
     Box((f32, f32, f32), (f32, f32, f32)),
+    #[allow(dead_code)]
     Sphere(f32, f32), // internal radius, external radius
 }
 
 pub enum ParticleSpawnerMethod {
     Once(usize),
+    #[allow(dead_code)]
     Rate(f32, f32),
 }
 

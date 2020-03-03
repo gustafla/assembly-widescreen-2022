@@ -1,12 +1,15 @@
 mod particle_spawner;
 
-use crate::Scene;
+use crate::{
+    glesv2::{self, types::*, RcGl},
+    Scene,
+};
 use cgmath::{MetricSpace, Vector3, VectorSpace};
-use opengles::prelude::*;
 pub use particle_spawner::*;
 use std::thread;
 
 pub struct ParticleSystem {
+    gl: RcGl,
     position_frames: Vec<Vec<Vec<Vector3<f32>>>>, // group(frame(coords, n = particles))
     interpolated: Vec<Vector3<f32>>,
     time_step: f32,
@@ -14,6 +17,7 @@ pub struct ParticleSystem {
 
 impl ParticleSystem {
     pub fn new(
+        gl: RcGl,
         spawner: ParticleSpawner,
         duration: f32,
         steps: usize,
@@ -82,6 +86,7 @@ impl ParticleSystem {
             .unwrap();
 
         ParticleSystem {
+            gl,
             position_frames,
             interpolated: Vec::with_capacity(largest * cpus),
             time_step,
@@ -114,7 +119,14 @@ impl ParticleSystem {
             selected_lights.extend(&[selection.x, selection.y, selection.z]);
         }
 
-        if glesv2::get_booleanv(GL_DEPTH_TEST) && glesv2::get_booleanv(GL_BLEND) {
+        let mut depth_test = glesv2::FALSE;
+        let mut blend = glesv2::FALSE;
+        unsafe {
+            self.gl.GetBooleanv(glesv2::DEPTH_TEST, &mut depth_test);
+            self.gl.GetBooleanv(glesv2::BLEND, &mut blend);
+        }
+
+        if depth_test == glesv2::TRUE && blend == glesv2::TRUE {
             // Sort particles because of alpha blending + depth testing = difficult
             self.interpolated.sort_unstable_by(|a, b| {
                 b.distance2(campos)
@@ -132,29 +144,41 @@ impl ParticleSystem {
             .program("./particle.vert ./flatshade.frag")
             .unwrap();
 
-        glesv2::use_program(program.handle());
+        unsafe {
+            self.gl.UseProgram(program.handle());
 
-        glesv2::uniform2f(
-            program.uniform_location("u_Resolution").unwrap(),
-            scene.resolution.0 as f32,
-            scene.resolution.1 as f32,
-        );
-        glesv2::uniform_matrix4fv(
-            program.uniform_location("u_Projection").unwrap(),
-            false,
-            &scene.projection,
-        );
-        glesv2::uniform_matrix4fv(
-            program.uniform_location("u_View").unwrap(),
-            false,
-            &scene.view,
-        );
+            self.gl.Uniform2f(
+                program.uniform_location("u_Resolution").unwrap(),
+                scene.resolution.0 as f32,
+                scene.resolution.1 as f32,
+            );
+            self.gl.UniformMatrix4fv(
+                program.uniform_location("u_Projection").unwrap(),
+                1,
+                glesv2::FALSE,
+                scene.projection.as_ptr(),
+            );
+            self.gl.UniformMatrix4fv(
+                program.uniform_location("u_View").unwrap(),
+                1,
+                glesv2::FALSE,
+                scene.view.as_ptr(),
+            );
 
-        glesv2::bind_buffer(GL_ARRAY_BUFFER, 0);
+            self.gl.BindBuffer(glesv2::ARRAY_BUFFER, 0);
 
-        let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
-        glesv2::enable_vertex_attrib_array(index_pos);
-        glesv2::vertex_attrib_pointer(index_pos, 3, GL_FLOAT, false, 0, &self.interpolated);
-        glesv2::draw_arrays(GL_POINTS, 0, self.interpolated.len() as GLint);
+            let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
+            self.gl.EnableVertexAttribArray(index_pos);
+            self.gl.VertexAttribPointer(
+                index_pos,
+                3,
+                glesv2::FLOAT,
+                glesv2::FALSE,
+                0,
+                self.interpolated.as_ptr() as *const GLvoid,
+            );
+            self.gl
+                .DrawArrays(glesv2::POINTS, 0, self.interpolated.len() as GLint);
+        }
     }
 }

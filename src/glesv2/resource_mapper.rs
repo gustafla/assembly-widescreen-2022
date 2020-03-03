@@ -1,16 +1,16 @@
-use crate::glesv2_raii::{Buffer, Program, Shader};
-use opengles::prelude::*;
+use super::{Buffer, Program, RcGl, Shader};
 use std::collections::HashMap;
 use std::error;
 
 pub struct ResourceMapper {
+    #[allow(dead_code)]
     shaders: HashMap<String, Shader>,
     programs: HashMap<String, Program>,
     buffers: HashMap<String, Buffer>,
 }
 
 impl ResourceMapper {
-    pub fn new() -> Result<Self, Box<dyn error::Error>> {
+    pub fn new(gl: RcGl) -> Result<Self, Box<dyn error::Error>> {
         log::trace!("Loading resources");
 
         let mut shaders = HashMap::new();
@@ -20,10 +20,16 @@ impl ResourceMapper {
             let path = item?.path();
             match path.extension().map(|s| s.to_str()) {
                 Some(Some("vert")) | Some(Some("frag")) => {
-                    shaders.insert(path.display().to_string(), Shader::from_source(path)?);
+                    shaders.insert(
+                        path.display().to_string(),
+                        Shader::from_source(gl.clone(), path)?,
+                    );
                 }
                 Some(Some("abuf")) | Some(Some("ibuf")) => {
-                    buffers.insert(path.display().to_string(), Buffer::from_file(path)?);
+                    buffers.insert(
+                        path.display().to_string(),
+                        Buffer::from_file(gl.clone(), path)?,
+                    );
                 }
                 _ => (),
             }
@@ -37,6 +43,7 @@ impl ResourceMapper {
             programs.insert(
                 desc.to_string(),
                 Program::from_shaders(
+                    gl.clone(),
                     desc.split_ascii_whitespace()
                         .map(|p| {
                             shaders
@@ -51,7 +58,9 @@ impl ResourceMapper {
         }
 
         log::trace!("Done, calling glReleaseShaderCompiler");
-        glesv2::release_shader_compiler();
+        unsafe {
+            gl.ReleaseShaderCompiler();
+        }
 
         Ok(ResourceMapper {
             shaders,
@@ -60,6 +69,7 @@ impl ResourceMapper {
         })
     }
 
+    #[allow(dead_code)]
     fn shader(&self, path: &str) -> Option<&Shader> {
         self.shaders.get(path)
     }

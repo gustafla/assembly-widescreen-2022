@@ -1,13 +1,13 @@
-#![allow(dead_code)]
-
-mod glesv2_raii;
+mod glesv2;
 mod particle_system;
 mod render_pass;
 mod terrain;
 
 use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
-use glesv2_raii::{Renderbuffer, RenderbufferAttachment, ResourceMapper, Texture, UniformValue};
-use opengles::prelude::*;
+pub use glesv2::{
+    types::*, Gles2, RcGl, Renderbuffer, RenderbufferAttachment, ResourceMapper, Texture,
+    UniformValue,
+};
 use particle_system::{
     ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
 };
@@ -20,6 +20,11 @@ use std::os::raw::{c_char, c_void};
 use std::rc::Rc;
 use terrain::Terrain;
 
+#[link(name = "SDL2")]
+extern "C" {
+    fn SDL_GL_GetProcAddress(proc: *const c_char) -> *mut c_void;
+}
+
 const NOISE_SCALE: i32 = 8;
 
 pub struct Scene {
@@ -30,10 +35,11 @@ pub struct Scene {
     pub projection: [f32; 16],
     pub view: [f32; 16],
     pub resources: ResourceMapper,
+    pub gl: RcGl,
     rng: XorShiftRng,
+    noise_texture: Texture,
     particle_system: ParticleSystem,
     terrain: Terrain,
-    noise_texture: Texture,
     bloom_pass: RenderPass,
     blur_pass_x: RenderPass,
     blur_pass_y: RenderPass,
@@ -46,7 +52,7 @@ impl Scene {
         let get = self.sync_get_track_raw;
         let track = self.tracks.entry(string.clone()).or_insert_with(|| {
             log::trace!("Calling get track {:?}", string);
-            get(string.as_c_str().as_ptr())
+            get(string.as_ptr())
         });
         (self.sync_get_value_raw)(*track)
     }
@@ -71,12 +77,20 @@ extern "C" fn scene_init(
 ) -> Box<Scene> {
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
 
-    glesv2::viewport(0, 0, w, h);
-    glesv2::blend_func(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glesv2::enable(GL_CULL_FACE);
-    glesv2::depth_func(GL_LESS);
+    let gl = Rc::new(Gles2::load_with(|s| unsafe {
+        SDL_GL_GetProcAddress(CString::new(s).unwrap().as_ptr())
+    }));
+    log::info!("GL ES 2.0 loaded.");
+
+    unsafe {
+        gl.Viewport(0, 0, w, h);
+        gl.BlendFunc(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
+        gl.Enable(glesv2::CULL_FACE);
+        gl.DepthFunc(glesv2::LESS);
+    }
 
     let particle_system = ParticleSystem::new(
+        gl.clone(),
         ParticleSpawner::new(
             Vector3::new(0., 2., 0.),
             ParticleSpawnerKind::Box((-5., 0., -5.), (5., 5., 5.)),
@@ -97,21 +111,41 @@ extern "C" fn scene_init(
         },
     );
 
-    let noise_texture = Texture::new();
-    glesv2::bind_texture(GL_TEXTURE_2D, noise_texture.handle());
-    Texture::image::<u8>(
-        GL_TEXTURE_2D,
-        0,
-        GL_LUMINANCE,
-        w / NOISE_SCALE,
-        h / NOISE_SCALE,
-        GL_UNSIGNED_BYTE,
-        &[],
-    );
-    glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST as GLint);
-    glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST as GLint);
-    glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT as GLint);
-    glesv2::tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT as GLint);
+    let noise_texture = Texture::new(gl.clone());
+
+    unsafe {
+        gl.BindTexture(glesv2::TEXTURE_2D, noise_texture.handle());
+        Texture::image::<u8>(
+            gl.clone(),
+            glesv2::TEXTURE_2D,
+            0,
+            glesv2::LUMINANCE,
+            w / NOISE_SCALE,
+            h / NOISE_SCALE,
+            glesv2::UNSIGNED_BYTE,
+            None,
+        );
+        gl.TexParameteri(
+            glesv2::TEXTURE_2D,
+            glesv2::TEXTURE_MIN_FILTER,
+            glesv2::NEAREST as GLint,
+        );
+        gl.TexParameteri(
+            glesv2::TEXTURE_2D,
+            glesv2::TEXTURE_MAG_FILTER,
+            glesv2::NEAREST as GLint,
+        );
+        gl.TexParameteri(
+            glesv2::TEXTURE_2D,
+            glesv2::TEXTURE_WRAP_S,
+            glesv2::REPEAT as GLint,
+        );
+        gl.TexParameteri(
+            glesv2::TEXTURE_2D,
+            glesv2::TEXTURE_WRAP_T,
+            glesv2::REPEAT as GLint,
+        );
+    }
 
     let scene = Box::new(Scene {
         tracks: HashMap::new(),
@@ -120,25 +154,31 @@ extern "C" fn scene_init(
         resolution: (w, h),
         projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
         view: [0f32; 16],
-        resources: ResourceMapper::new().unwrap_or_else(|e| log_and_panic(e)),
+        resources: ResourceMapper::new(gl.clone()).unwrap_or_else(|e| log_and_panic(e)),
+        gl: gl.clone(),
         rng: XorShiftRng::seed_from_u64(98341),
-        particle_system,
-        terrain: Terrain::new(200, 200, |x, z| (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.),
         noise_texture,
+        particle_system,
+        terrain: Terrain::new(gl.clone(), 200, 200, |x, z| {
+            (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.
+        }),
         bloom_pass: RenderPass::new(
+            gl.clone(),
             w,
             h,
             "./bloom.frag",
-            Some(vec![(GL_DEPTH_ATTACHMENT, {
-                let renderbuffer = Renderbuffer::new();
-                glesv2::bind_renderbuffer(GL_RENDERBUFFER, renderbuffer.handle());
-                Renderbuffer::storage(GL_DEPTH_COMPONENT16, w, h);
+            Some(vec![(glesv2::DEPTH_ATTACHMENT, {
+                let renderbuffer = Renderbuffer::new(gl.clone());
+                unsafe {
+                    gl.BindRenderbuffer(glesv2::RENDERBUFFER, renderbuffer.handle());
+                }
+                Renderbuffer::storage(gl.clone(), glesv2::DEPTH_COMPONENT16, w, h);
                 RenderbufferAttachment { renderbuffer }
             })]),
         ),
-        blur_pass_x: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag", None),
-        blur_pass_y: RenderPass::new(w, h, "./two_pass_gaussian_blur.frag", None),
-        post_pass: RenderPass::new(w, h, "./post.frag", None),
+        blur_pass_x: RenderPass::new(gl.clone(), w, h, "./two_pass_gaussian_blur.frag", None),
+        blur_pass_y: RenderPass::new(gl.clone(), w, h, "./two_pass_gaussian_blur.frag", None),
+        post_pass: RenderPass::new(gl.clone(), w, h, "./post.frag", None),
     });
 
     log::info!("scene created");
@@ -171,14 +211,22 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
     )
     .as_ref();
 
-    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.bloom_pass.fbo.handle());
-    glesv2::clear_color(0., 0., 0., 1.);
-    glesv2::clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    unsafe {
+        scene
+            .gl
+            .BindFramebuffer(glesv2::FRAMEBUFFER, scene.bloom_pass.fbo.handle());
+        scene.gl.ClearColor(0., 0., 0., 1.);
+        scene
+            .gl
+            .Clear(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
+    }
 
     // Terrain and particle system ----------------------------------------------------------------
 
-    glesv2::enable(GL_DEPTH_TEST);
-    glesv2::enable(GL_BLEND);
+    unsafe {
+        scene.gl.Enable(glesv2::DEPTH_TEST);
+        scene.gl.Enable(glesv2::BLEND);
+    }
 
     let sim_time = scene.sync_get("sim_time") as f32;
     let lightpos =
@@ -189,18 +237,28 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
 
     scene.particle_system.render(&scene);
 
-    glesv2::disable(GL_BLEND);
-    glesv2::disable(GL_DEPTH_TEST);
+    unsafe {
+        scene.gl.Disable(glesv2::BLEND);
+        scene.gl.Disable(glesv2::DEPTH_TEST);
+    }
 
     // Bloom pass ---------------------------------------------------------------------------------
 
-    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.blur_pass_x.fbo.handle());
+    unsafe {
+        scene
+            .gl
+            .BindFramebuffer(glesv2::FRAMEBUFFER, scene.blur_pass_x.fbo.handle());
+    }
 
     scene.bloom_pass.render(&scene, &[], &[]);
 
     // X-blur pass --------------------------------------------------------------------------------
 
-    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.blur_pass_y.fbo.handle());
+    unsafe {
+        scene
+            .gl
+            .BindFramebuffer(glesv2::FRAMEBUFFER, scene.blur_pass_y.fbo.handle());
+    }
 
     scene.blur_pass_x.render(
         &scene,
@@ -210,7 +268,11 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
 
     // Y-blur pass --------------------------------------------------------------------------------
 
-    glesv2::bind_framebuffer(GL_FRAMEBUFFER, scene.post_pass.fbo.handle());
+    unsafe {
+        scene
+            .gl
+            .BindFramebuffer(glesv2::FRAMEBUFFER, scene.post_pass.fbo.handle());
+    }
 
     scene.blur_pass_y.render(
         &scene,
@@ -226,28 +288,35 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
         .collect();
 
     // Upload noise to Texture
-    glesv2::bind_texture(GL_TEXTURE_2D, scene.noise_texture.handle());
-    Texture::sub_image::<u8>(
-        GL_TEXTURE_2D,
-        0,
-        0,
-        0,
-        scene.resolution.0 / NOISE_SCALE,
-        scene.resolution.1 / NOISE_SCALE,
-        GL_LUMINANCE,
-        GL_UNSIGNED_BYTE,
-        noise.as_slice(),
-    );
+    unsafe {
+        scene
+            .gl
+            .BindTexture(glesv2::TEXTURE_2D, scene.noise_texture.handle());
+        Texture::sub_image::<u8>(
+            scene.gl.clone(),
+            glesv2::TEXTURE_2D,
+            0,
+            0,
+            0,
+            scene.resolution.0 / NOISE_SCALE,
+            scene.resolution.1 / NOISE_SCALE,
+            glesv2::LUMINANCE,
+            glesv2::UNSIGNED_BYTE,
+            noise.as_slice(),
+        );
+    }
 
     let noise_amount = UniformValue::Float(scene.sync_get("noise_amount") as f32);
-    glesv2::bind_framebuffer(GL_FRAMEBUFFER, 0);
+    unsafe {
+        scene.gl.BindFramebuffer(glesv2::FRAMEBUFFER, 0);
+    }
     scene.post_pass.render(
         &scene,
         &[
             scene
                 .bloom_pass
                 .fbo
-                .texture_handle(GL_COLOR_ATTACHMENT0)
+                .texture_handle(glesv2::COLOR_ATTACHMENT0)
                 .unwrap(),
             scene.noise_texture.handle(),
         ],
@@ -257,5 +326,5 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
         ],
     );
 
-    glesv2_raii::check().unwrap_or_else(|e| log_and_panic(Box::new(e)));
+    glesv2::check(scene.gl.clone()).unwrap_or_else(|e| log_and_panic(Box::new(e)));
 }

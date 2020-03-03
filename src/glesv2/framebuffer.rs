@@ -1,7 +1,5 @@
-use super::Renderbuffer;
-use super::Texture;
+use super::{types::*, RcGl, Renderbuffer, Texture};
 use log::trace;
-use opengles::prelude::*;
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
@@ -17,10 +15,10 @@ impl fmt::Display for Error {
             stringify_match!(
                 self.0,
                 (
-                    GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT,
-                    GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS,
-                    GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT,
-                    GL_FRAMEBUFFER_UNSUPPORTED
+                    FRAMEBUFFER_INCOMPLETE_ATTACHMENT,
+                    FRAMEBUFFER_INCOMPLETE_DIMENSIONS,
+                    FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT,
+                    FRAMEBUFFER_UNSUPPORTED
                 )
             )
         )
@@ -40,55 +38,65 @@ pub struct RenderbufferAttachment {
 }
 
 pub struct Framebuffer {
+    gl: RcGl,
     handle: GLuint,
     textures: HashMap<GLenum, TextureAttachment>,
-    renderbuffers: Vec<RenderbufferAttachment>,
+    _renderbuffers: Vec<RenderbufferAttachment>,
 }
 
 impl Framebuffer {
     pub fn new(
+        gl: RcGl,
         texture_attachments: Option<Vec<(GLenum, TextureAttachment)>>,
         renderbuffer_attachments: Option<Vec<(GLenum, RenderbufferAttachment)>>,
     ) -> Result<Framebuffer, Error> {
-        let handle = glesv2::gen_framebuffers(1)[0];
-        trace!("Framebuffer {} created", handle);
-        glesv2::bind_framebuffer(GL_FRAMEBUFFER, handle);
+        let mut handle = 0;
+        unsafe {
+            gl.GenFramebuffers(1, &mut handle);
+            trace!("Framebuffer {} created", handle);
+            gl.BindFramebuffer(super::FRAMEBUFFER, handle);
+        }
 
         let mut textures: HashMap<GLuint, TextureAttachment> = HashMap::new();
         if let Some(texture_attachments) = texture_attachments {
             for (name, attachment) in texture_attachments {
-                glesv2::framebuffer_texture_2d(
-                    GL_FRAMEBUFFER,
-                    name,
-                    attachment.target,
-                    attachment.texture.handle(),
-                    attachment.mipmap_level,
-                );
+                unsafe {
+                    gl.FramebufferTexture2D(
+                        super::FRAMEBUFFER,
+                        name,
+                        attachment.target,
+                        attachment.texture.handle(),
+                        attachment.mipmap_level,
+                    );
+                }
                 textures.insert(name, attachment);
             }
         }
 
-        let mut renderbuffers: Vec<RenderbufferAttachment> = Vec::new();
+        let mut _renderbuffers: Vec<RenderbufferAttachment> = Vec::new();
         if let Some(renderbuffer_attachments) = renderbuffer_attachments {
             for (name, attachment) in renderbuffer_attachments {
-                glesv2::framebuffer_renderbuffer(
-                    GL_FRAMEBUFFER,
-                    name,
-                    GL_RENDERBUFFER,
-                    attachment.renderbuffer.handle(),
-                );
-                renderbuffers.push(attachment);
+                unsafe {
+                    gl.FramebufferRenderbuffer(
+                        super::FRAMEBUFFER,
+                        name,
+                        super::RENDERBUFFER,
+                        attachment.renderbuffer.handle(),
+                    );
+                }
+                _renderbuffers.push(attachment);
             }
         }
 
-        let status = glesv2::check_framebuffer_status(GL_FRAMEBUFFER);
-        if status != GL_FRAMEBUFFER_COMPLETE {
+        let status = unsafe { gl.CheckFramebufferStatus(super::FRAMEBUFFER) };
+        if status != super::FRAMEBUFFER_COMPLETE {
             Err(Error(status))
         } else {
             Ok(Framebuffer {
+                gl,
                 handle,
                 textures,
-                renderbuffers,
+                _renderbuffers,
             })
         }
     }
@@ -108,6 +116,8 @@ impl Framebuffer {
 impl Drop for Framebuffer {
     fn drop(&mut self) {
         trace!("Framebuffer {} dropped", self.handle());
-        glesv2::delete_framebuffers(&[self.handle()]);
+        unsafe {
+            self.gl.DeleteFramebuffers(1, &self.handle());
+        }
     }
 }

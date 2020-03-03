@@ -1,4 +1,4 @@
-use opengles::prelude::*;
+use super::{types::*, RcGl};
 use std::error;
 use std::fmt;
 
@@ -13,11 +13,11 @@ impl fmt::Display for Error {
             stringify_match!(
                 self.0,
                 (
-                    GL_INVALID_ENUM,
-                    GL_INVALID_VALUE,
-                    GL_INVALID_OPERATION,
-                    GL_INVALID_FRAMEBUFFER_OPERATION,
-                    GL_OUT_OF_MEMORY
+                    INVALID_ENUM,
+                    INVALID_VALUE,
+                    INVALID_OPERATION,
+                    INVALID_FRAMEBUFFER_OPERATION,
+                    OUT_OF_MEMORY
                 )
             )
         )
@@ -26,9 +26,9 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {}
 
-pub fn check() -> Result<(), Error> {
-    let status = glesv2::get_error();
-    if status != GL_NO_ERROR {
+pub fn check(gl: RcGl) -> Result<(), Error> {
+    let status = unsafe { gl.GetError() };
+    if status != super::NO_ERROR {
         Err(Error(status))
     } else {
         Ok(())

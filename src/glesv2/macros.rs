@@ -2,7 +2,7 @@
 macro_rules! stringify_match {
     ($on:expr, ($($id:ident),+)) => {
         match $on {
-            $($id => {stringify!($id)}),+
+            $(super::$id => {stringify!($id)}),+
             _ => "UNKNOWN",
         }
     };

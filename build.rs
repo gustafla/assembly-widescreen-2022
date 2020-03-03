@@ -1,8 +1,18 @@
+use gl_generator::{Api, Fallbacks, Profile, Registry, StructGenerator};
 use std::env;
 use std::fs;
 use std::path::Path;
 
-fn main() {
+fn generate_gl() {
+    let dest = Path::new(&env::var("OUT_DIR").unwrap()).join("gles2_bindings.rs");
+    let mut file = fs::File::create(&dest).unwrap();
+
+    Registry::new(Api::Gles2, (2, 0), Profile::Core, Fallbacks::All, [])
+        .write_bindings(StructGenerator, &mut file)
+        .unwrap();
+}
+
+fn add_resources() {
     // Copy resource files from resources to target directory
     let target_dir = Path::new(&env::var("OUT_DIR").unwrap())
         .join("..")
@@ -22,4 +32,9 @@ fn main() {
 
         fs::copy(source_path, target_path).unwrap();
     }
+}
+
+fn main() {
+    generate_gl();
+    add_resources();
 }
