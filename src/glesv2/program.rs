@@ -46,8 +46,7 @@ impl Program {
         }
 
         if status as GLboolean == super::FALSE {
-            let info_log = super::get_info_log(
-                gl.clone(),
+            let info_log = gl.get_info_log(
                 handle,
                 super::Gles2::GetProgramiv,
                 super::Gles2::GetProgramInfoLog,

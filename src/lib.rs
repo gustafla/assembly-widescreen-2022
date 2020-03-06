@@ -20,11 +20,6 @@ use std::os::raw::{c_char, c_void};
 use std::rc::Rc;
 use terrain::Terrain;
 
-#[link(name = "SDL2")]
-extern "C" {
-    fn SDL_GL_GetProcAddress(proc: *const c_char) -> *mut c_void;
-}
-
 const NOISE_SCALE: i32 = 8;
 
 pub struct Scene {
@@ -77,10 +72,7 @@ extern "C" fn scene_init(
 ) -> Box<Scene> {
     simple_logger::init().unwrap_or_else(|e| panic!("Failed to initialize logger\n{}", e));
 
-    let gl = Rc::new(Gles2::load_with(|s| unsafe {
-        SDL_GL_GetProcAddress(CString::new(s).unwrap().as_ptr())
-    }));
-    log::info!("GL ES 2.0 loaded.");
+    let gl = RcGl::new();
 
     unsafe {
         gl.Viewport(0, 0, w, h);
