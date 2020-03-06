@@ -1,4 +1,4 @@
-use crate::glesv2::{self, types::*, Buffer, RcGl};
+use crate::glesv2::{self, types::*, Buffer, RcGl, UniformValue};
 use crate::Scene;
 use cgmath::{InnerSpace, Vector3};
 
@@ -72,27 +72,20 @@ impl Terrain {
             .program("./gouraud.vert ./flatshade.frag")
             .unwrap();
 
-        unsafe {
-            self.gl.UseProgram(program.handle());
-
-            self.gl.UniformMatrix4fv(
+        program.bind(Some(&[
+            (
                 program.uniform_location("u_Projection").unwrap(),
-                1,
-                glesv2::FALSE,
-                scene.projection.as_ptr(),
-            );
-            self.gl.UniformMatrix4fv(
+                UniformValue::Matrix4fv(1, scene.projection.as_ptr()),
+            ),
+            (
                 program.uniform_location("u_View").unwrap(),
-                1,
-                glesv2::FALSE,
-                scene.view.as_ptr(),
-            );
-            self.gl.Uniform3fv(
+                UniformValue::Matrix4fv(1, scene.view.as_ptr()),
+            ),
+            (
                 program.uniform_location("u_LightPosition").unwrap(),
-                (lightpos.len() / 3) as GLsizei,
-                lightpos.as_ptr(),
-            );
-        }
+                UniformValue::Vec3fv((lightpos.len() / 3) as GLsizei, lightpos.as_ptr()),
+            ),
+        ]));
 
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
         let index_normal = program.attrib_location("a_Normal").unwrap() as GLuint;
@@ -100,14 +93,13 @@ impl Terrain {
         self.vertex_buffer.bind();
         self.index_buffer.bind();
 
+        let float_size = std::mem::size_of::<GLfloat>();
+        let stride = float_size as GLsizei * 6;
+
         unsafe {
             self.gl.EnableVertexAttribArray(index_pos);
             self.gl.EnableVertexAttribArray(index_normal);
-        }
 
-        let float_size = std::mem::size_of::<GLfloat>();
-        let stride = float_size as GLsizei * 6;
-        unsafe {
             self.gl.VertexAttribPointer(
                 index_pos,
                 3,

@@ -217,7 +217,7 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
     scene.blur_pass_x.render(
         &scene,
         &[],
-        &[("u_BlurDirection", UniformValue::Vec2(1., 0.))],
+        &[("u_BlurDirection", UniformValue::Vec2f(1., 0.))],
     );
 
     // Y-blur pass --------------------------------------------------------------------------------
@@ -226,7 +226,7 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
     scene.blur_pass_y.render(
         &scene,
         &[],
-        &[("u_BlurDirection", UniformValue::Vec2(0., 1.))],
+        &[("u_BlurDirection", UniformValue::Vec2f(0., 1.))],
     );
 
     // Post pass ----------------------------------------------------------------------------------

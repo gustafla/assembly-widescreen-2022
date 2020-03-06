@@ -51,49 +51,46 @@ impl RenderPass {
     pub fn render(&self, scene: &Scene, textures: &[GLuint], uniforms: &[(&str, UniformValue)]) {
         let program = scene.resources.program(&self.shader_path).unwrap();
 
+        let mut uniforms: Vec<(GLint, UniformValue)> = uniforms
+            .into_iter()
+            .map(|(loc, val)| (program.uniform_location(loc).unwrap(), *val))
+            .collect();
+
+        uniforms.push((
+            program.uniform_location("u_InputSampler0").unwrap(),
+            UniformValue::Int(0),
+        ));
+
         unsafe {
-            self.gl.UseProgram(program.handle());
             self.gl.ActiveTexture(glesv2::TEXTURE0);
             self.gl.BindTexture(
                 glesv2::TEXTURE_2D,
                 self.fbo.texture_handle(glesv2::COLOR_ATTACHMENT0).unwrap(),
             );
-            self.gl
-                .Uniform1i(program.uniform_location("u_InputSampler0").unwrap(), 0);
         }
-
         for (i, texture) in textures.iter().enumerate() {
             unsafe {
                 self.gl.ActiveTexture(glesv2::TEXTURE1 + i as GLuint);
                 self.gl.BindTexture(glesv2::TEXTURE_2D, *texture);
-                let i = i as GLint + 1;
-                self.gl.Uniform1i(
-                    program
-                        .uniform_location(&format!("u_InputSampler{}", i))
-                        .unwrap(),
-                    i,
-                );
             }
+
+            let i = i as GLint + 1;
+            uniforms.push((
+                program
+                    .uniform_location(&format!("u_InputSampler{}", i))
+                    .unwrap(),
+                UniformValue::Int(i),
+            ));
         }
 
         if let Some(loc) = program.uniform_location("u_Resolution") {
-            unsafe {
-                self.gl
-                    .Uniform2f(loc, scene.resolution.0 as f32, scene.resolution.1 as f32);
-            }
+            uniforms.push((
+                loc,
+                UniformValue::Vec2f(scene.resolution.0 as f32, scene.resolution.1 as f32),
+            ));
         }
 
-        for ufm in uniforms {
-            let loc = program.uniform_location(ufm.0).unwrap();
-            unsafe {
-                match ufm.1 {
-                    UniformValue::Float(x) => self.gl.Uniform1f(loc, x),
-                    UniformValue::Vec2(x, y) => self.gl.Uniform2f(loc, x, y),
-                    UniformValue::Vec3(x, y, z) => self.gl.Uniform3f(loc, x, y, z),
-                    UniformValue::Vec4(x, y, z, w) => self.gl.Uniform4f(loc, x, y, z, w),
-                }
-            }
-        }
+        program.bind(Some(&uniforms));
 
         scene.resources.buffer("./quad.abuf").unwrap().bind();
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;

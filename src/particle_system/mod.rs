@@ -1,7 +1,7 @@
 mod particle_spawner;
 
 use crate::{
-    glesv2::{self, types::*, RcGl},
+    glesv2::{self, types::*, RcGl, UniformValue},
     Scene,
 };
 use cgmath::{MetricSpace, Vector3, VectorSpace};
@@ -144,27 +144,22 @@ impl ParticleSystem {
             .program("./particle.vert ./flatshade.frag")
             .unwrap();
 
-        unsafe {
-            self.gl.UseProgram(program.handle());
-
-            self.gl.Uniform2f(
+        program.bind(Some(&[
+            (
                 program.uniform_location("u_Resolution").unwrap(),
-                scene.resolution.0 as f32,
-                scene.resolution.1 as f32,
-            );
-            self.gl.UniformMatrix4fv(
+                UniformValue::Vec2f(scene.resolution.0 as f32, scene.resolution.1 as f32),
+            ),
+            (
                 program.uniform_location("u_Projection").unwrap(),
-                1,
-                glesv2::FALSE,
-                scene.projection.as_ptr(),
-            );
-            self.gl.UniformMatrix4fv(
+                UniformValue::Matrix4fv(1, scene.projection.as_ptr()),
+            ),
+            (
                 program.uniform_location("u_View").unwrap(),
-                1,
-                glesv2::FALSE,
-                scene.view.as_ptr(),
-            );
+                UniformValue::Matrix4fv(1, scene.view.as_ptr()),
+            ),
+        ]));
 
+        unsafe {
             self.gl.BindBuffer(glesv2::ARRAY_BUFFER, 0);
 
             let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
