@@ -20,9 +20,18 @@ impl Renderbuffer {
         self.handle
     }
 
-    pub fn storage(gl: RcGl, format: GLenum, width: GLsizei, height: GLsizei) {
+    pub fn bind(&self) {
         unsafe {
-            gl.RenderbufferStorage(super::RENDERBUFFER, format, width, height);
+            self.gl.BindRenderbuffer(super::RENDERBUFFER, self.handle());
+        }
+    }
+
+    pub fn storage(&self, format: GLenum, width: GLsizei, height: GLsizei) {
+        self.bind();
+
+        unsafe {
+            self.gl
+                .RenderbufferStorage(super::RENDERBUFFER, format, width, height);
         }
     }
 }

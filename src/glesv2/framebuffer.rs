@@ -105,6 +105,20 @@ impl Framebuffer {
         self.handle
     }
 
+    pub fn bind(&self, clear_flags: GLbitfield) {
+        unsafe {
+            self.gl.BindFramebuffer(super::FRAMEBUFFER, self.handle());
+            self.gl.Clear(clear_flags);
+        }
+    }
+
+    pub fn bind_default(gl: RcGl, clear_flags: GLbitfield) {
+        unsafe {
+            gl.BindFramebuffer(super::FRAMEBUFFER, 0);
+            gl.Clear(clear_flags);
+        }
+    }
+
     pub fn texture_handle(&self, texture_attachment_name: GLenum) -> Option<GLuint> {
         match self.textures.get(&texture_attachment_name) {
             Some(texture_attachment) => Some(texture_attachment.texture.handle()),

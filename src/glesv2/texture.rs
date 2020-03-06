@@ -4,25 +4,31 @@ use log::trace;
 pub struct Texture {
     gl: RcGl,
     handle: GLuint,
+    target: GLenum,
 }
 
 impl Texture {
-    pub fn new(gl: RcGl) -> Texture {
+    pub fn new(gl: RcGl, target: GLenum) -> Texture {
         let mut handle = 0;
         unsafe {
             gl.GenTextures(1, &mut handle);
         }
         trace!("Texture {} created", handle);
-        Texture { gl, handle }
+        Texture { gl, handle, target }
     }
 
     pub fn handle(&self) -> GLuint {
         self.handle
     }
 
+    pub fn bind(&self) {
+        unsafe {
+            self.gl.BindTexture(self.target, self.handle());
+        }
+    }
+
     pub fn image<T>(
-        gl: RcGl,
-        target: GLenum,
+        &self,
         level: GLint,
         format: GLenum,
         width: GLsizei,
@@ -30,9 +36,10 @@ impl Texture {
         type_: GLenum,
         buffer: Option<&[T]>,
     ) {
+        self.bind();
         unsafe {
-            gl.TexImage2D(
-                target,
+            self.gl.TexImage2D(
+                self.target,
                 level,
                 format as GLint,
                 width,
@@ -50,8 +57,7 @@ impl Texture {
     }
 
     pub fn sub_image<T>(
-        gl: RcGl,
-        target: GLenum,
+        &self,
         level: GLint,
         xoffset: GLint,
         yoffset: GLint,
@@ -61,9 +67,10 @@ impl Texture {
         type_: GLenum,
         buffer: &[T],
     ) {
+        self.bind();
         unsafe {
-            gl.TexSubImage2D(
-                target,
+            self.gl.TexSubImage2D(
+                self.target,
                 level,
                 xoffset,
                 yoffset,
@@ -73,6 +80,16 @@ impl Texture {
                 type_,
                 buffer.as_ptr() as *const GLvoid,
             );
+        }
+    }
+
+    pub fn parameters(&self, params: &[(GLenum, GLenum)]) {
+        self.bind();
+        for param in params {
+            unsafe {
+                self.gl
+                    .TexParameteri(self.target, param.0, param.1 as GLint);
+            }
         }
     }
 }

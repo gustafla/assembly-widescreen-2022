@@ -18,42 +18,14 @@ impl RenderPass {
         frag_path: &str,
         renderbuffers: Option<Vec<(GLenum, RenderbufferAttachment)>>,
     ) -> Self {
-        let fbo_texture = Texture::new(gl.clone());
-        unsafe {
-            gl.BindTexture(glesv2::TEXTURE_2D, fbo_texture.handle());
-        }
-        Texture::image::<u8>(
-            gl.clone(),
-            glesv2::TEXTURE_2D,
-            0,
-            glesv2::RGB,
-            w,
-            h,
-            glesv2::UNSIGNED_BYTE,
-            None,
-        );
-        unsafe {
-            gl.TexParameteri(
-                glesv2::TEXTURE_2D,
-                glesv2::TEXTURE_MIN_FILTER,
-                glesv2::NEAREST as GLint,
-            );
-            gl.TexParameteri(
-                glesv2::TEXTURE_2D,
-                glesv2::TEXTURE_MAG_FILTER,
-                glesv2::NEAREST as GLint,
-            );
-            gl.TexParameteri(
-                glesv2::TEXTURE_2D,
-                glesv2::TEXTURE_WRAP_S,
-                glesv2::CLAMP_TO_EDGE as GLint,
-            );
-            gl.TexParameteri(
-                glesv2::TEXTURE_2D,
-                glesv2::TEXTURE_WRAP_T,
-                glesv2::CLAMP_TO_EDGE as GLint,
-            );
-        }
+        let fbo_texture = Texture::new(gl.clone(), glesv2::TEXTURE_2D);
+        fbo_texture.image::<u8>(0, glesv2::RGB, w, h, glesv2::UNSIGNED_BYTE, None);
+        fbo_texture.parameters(&[
+            (glesv2::TEXTURE_MIN_FILTER, glesv2::NEAREST),
+            (glesv2::TEXTURE_MAG_FILTER, glesv2::NEAREST),
+            (glesv2::TEXTURE_WRAP_S, glesv2::CLAMP_TO_EDGE),
+            (glesv2::TEXTURE_WRAP_T, glesv2::CLAMP_TO_EDGE),
+        ]);
 
         let fbo = Framebuffer::new(
             gl.clone(),
