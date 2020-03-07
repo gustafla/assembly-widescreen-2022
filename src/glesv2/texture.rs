@@ -21,8 +21,9 @@ impl Texture {
         self.handle
     }
 
-    pub fn bind(&self) {
+    pub fn bind(&self, unit: GLuint) {
         unsafe {
+            self.gl.ActiveTexture(super::TEXTURE0 + unit);
             self.gl.BindTexture(self.target, self.handle());
         }
     }
@@ -36,7 +37,7 @@ impl Texture {
         type_: GLenum,
         buffer: Option<&[T]>,
     ) {
-        self.bind();
+        self.bind(0);
         unsafe {
             self.gl.TexImage2D(
                 self.target,
@@ -67,7 +68,7 @@ impl Texture {
         type_: GLenum,
         buffer: &[T],
     ) {
-        self.bind();
+        self.bind(0);
         unsafe {
             self.gl.TexSubImage2D(
                 self.target,
@@ -84,7 +85,7 @@ impl Texture {
     }
 
     pub fn parameters(&self, params: &[(GLenum, GLenum)]) {
-        self.bind();
+        self.bind(0);
         for param in params {
             unsafe {
                 self.gl

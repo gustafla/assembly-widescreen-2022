@@ -119,9 +119,9 @@ impl Framebuffer {
         }
     }
 
-    pub fn texture_handle(&self, texture_attachment_name: GLenum) -> Option<GLuint> {
+    pub fn texture(&self, texture_attachment_name: GLenum) -> Option<&Texture> {
         match self.textures.get(&texture_attachment_name) {
-            Some(texture_attachment) => Some(texture_attachment.texture.handle()),
+            Some(texture_attachment) => Some(&texture_attachment.texture),
             None => None,
         }
     }

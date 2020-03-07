@@ -257,9 +257,9 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
             scene
                 .bloom_pass
                 .fbo
-                .texture_handle(glesv2::COLOR_ATTACHMENT0)
+                .texture(glesv2::COLOR_ATTACHMENT0)
                 .unwrap(),
-            scene.noise_texture.handle(),
+            &scene.noise_texture,
         ],
         &[
             ("u_NoiseAmount", noise_amount),

@@ -48,7 +48,7 @@ impl RenderPass {
         }
     }
 
-    pub fn render(&self, scene: &Scene, textures: &[GLuint], uniforms: &[(&str, UniformValue)]) {
+    pub fn render(&self, scene: &Scene, textures: &[&Texture], uniforms: &[(&str, UniformValue)]) {
         let program = scene.resources.program(&self.shader_path).unwrap();
 
         let mut uniforms: Vec<(GLint, UniformValue)> = uniforms
@@ -61,25 +61,15 @@ impl RenderPass {
             UniformValue::Int(0),
         ));
 
-        unsafe {
-            self.gl.ActiveTexture(glesv2::TEXTURE0);
-            self.gl.BindTexture(
-                glesv2::TEXTURE_2D,
-                self.fbo.texture_handle(glesv2::COLOR_ATTACHMENT0).unwrap(),
-            );
-        }
+        self.fbo.texture(glesv2::COLOR_ATTACHMENT0).unwrap().bind(0);
         for (i, texture) in textures.iter().enumerate() {
-            unsafe {
-                self.gl.ActiveTexture(glesv2::TEXTURE1 + i as GLuint);
-                self.gl.BindTexture(glesv2::TEXTURE_2D, *texture);
-            }
-
-            let i = i as GLint + 1;
+            let i = i + 1;
+            texture.bind(i as GLuint);
             uniforms.push((
                 program
                     .uniform_location(&format!("u_InputSampler{}", i))
                     .unwrap(),
-                UniformValue::Int(i),
+                UniformValue::Int(i as GLint),
             ));
         }
 
