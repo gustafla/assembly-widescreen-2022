@@ -119,14 +119,7 @@ impl ParticleSystem {
             selected_lights.extend(&[selection.x, selection.y, selection.z]);
         }
 
-        let mut depth_test = glesv2::FALSE;
-        let mut blend = glesv2::FALSE;
-        unsafe {
-            self.gl.GetBooleanv(glesv2::DEPTH_TEST, &mut depth_test);
-            self.gl.GetBooleanv(glesv2::BLEND, &mut blend);
-        }
-
-        if depth_test == glesv2::TRUE && blend == glesv2::TRUE {
+        if self.gl.get_booleanv(glesv2::DEPTH_TEST) && self.gl.get_booleanv(glesv2::BLEND) {
             // Sort particles because of alpha blending + depth testing = difficult
             self.interpolated.sort_unstable_by(|a, b| {
                 b.distance2(campos)

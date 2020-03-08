@@ -111,4 +111,20 @@ impl RcGl {
             self.DepthFunc(func);
         }
     }
+
+    pub fn get_booleanv(&self, name: GLenum) -> bool {
+        let mut value = FALSE;
+        unsafe {
+            self.GetBooleanv(name, &mut value);
+        }
+        value == TRUE
+    }
+
+    pub fn get_integerv(&self, name: GLenum) -> GLint {
+        let mut value = 0;
+        unsafe {
+            self.GetIntegerv(name, &mut value);
+        }
+        value
+    }
 }
