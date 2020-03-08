@@ -81,4 +81,34 @@ impl RcGl {
 
         CString::new(log).unwrap().into_string().unwrap()
     }
+
+    pub fn enable(&self, name: GLenum) {
+        unsafe {
+            self.Enable(name);
+        }
+    }
+
+    pub fn disable(&self, name: GLenum) {
+        unsafe {
+            self.Disable(name);
+        }
+    }
+
+    pub fn viewport(&self, x: GLint, y: GLint, width: GLsizei, height: GLsizei) {
+        unsafe {
+            self.Viewport(x, y, width, height);
+        }
+    }
+
+    pub fn blend_func(&self, sfactor: GLenum, dfactor: GLenum) {
+        unsafe {
+            self.BlendFunc(sfactor, dfactor);
+        }
+    }
+
+    pub fn depth_func(&self, func: GLenum) {
+        unsafe {
+            self.DepthFunc(func);
+        }
+    }
 }

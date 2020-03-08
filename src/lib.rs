@@ -74,12 +74,10 @@ extern "C" fn scene_init(
 
     let gl = RcGl::new();
 
-    unsafe {
-        gl.Viewport(0, 0, w, h);
-        gl.BlendFunc(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
-        gl.Enable(glesv2::CULL_FACE);
-        gl.DepthFunc(glesv2::LESS);
-    }
+    gl.viewport(0, 0, w, h);
+    gl.blend_func(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
+    gl.enable(glesv2::CULL_FACE);
+    gl.depth_func(glesv2::LESS);
 
     let particle_system = ParticleSystem::new(
         gl.clone(),
@@ -187,10 +185,8 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
 
     // Terrain and particle system ----------------------------------------------------------------
 
-    unsafe {
-        scene.gl.Enable(glesv2::DEPTH_TEST);
-        scene.gl.Enable(glesv2::BLEND);
-    }
+    scene.gl.enable(glesv2::DEPTH_TEST);
+    scene.gl.enable(glesv2::BLEND);
 
     let sim_time = scene.sync_get("sim_time") as f32;
     let lightpos =
@@ -201,10 +197,8 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
 
     scene.particle_system.render(&scene);
 
-    unsafe {
-        scene.gl.Disable(glesv2::BLEND);
-        scene.gl.Disable(glesv2::DEPTH_TEST);
-    }
+    scene.gl.disable(glesv2::BLEND);
+    scene.gl.disable(glesv2::DEPTH_TEST);
 
     // Bloom pass ---------------------------------------------------------------------------------
 
