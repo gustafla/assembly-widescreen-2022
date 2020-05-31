@@ -11,6 +11,7 @@ rand = "0.7.3"
 rand_xorshift = "0.2.0"
 cgmath = { version = "0.17.0", default-features = false }
 num_cpus = "1.13.0"
+isosurface = "0.0.4"
 
 [build-dependencies]
 gl_generator = "0.14.0"

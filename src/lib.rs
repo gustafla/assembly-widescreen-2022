@@ -1,4 +1,5 @@
 mod glesv2;
+mod distance_field_model;
 mod particle_system;
 mod render_pass;
 mod terrain;
@@ -8,6 +9,7 @@ pub use glesv2::{
     types::*, Framebuffer, Gles2, RcGl, Renderbuffer, RenderbufferAttachment, ResourceMapper,
     Texture, UniformValue,
 };
+use distance_field_model::DistanceFieldModel;
 use particle_system::{
     ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
 };
@@ -33,6 +35,7 @@ pub struct Scene {
     pub gl: RcGl,
     rng: XorShiftRng,
     noise_texture: Texture,
+    ball: DistanceFieldModel,
     particle_system: ParticleSystem,
     terrain: Terrain,
     bloom_pass: RenderPass,
@@ -78,6 +81,8 @@ extern "C" fn scene_init(
     gl.blend_func(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
     gl.enable(glesv2::CULL_FACE);
     gl.depth_func(glesv2::LESS);
+
+    let ball = DistanceFieldModel::new(gl.clone());
 
     let particle_system = ParticleSystem::new(
         gl.clone(),
@@ -128,6 +133,7 @@ extern "C" fn scene_init(
         gl: gl.clone(),
         rng: XorShiftRng::seed_from_u64(98341),
         noise_texture,
+        ball,
         particle_system,
         terrain: Terrain::new(gl.clone(), 200, 200, |x, z| {
             (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.
@@ -194,6 +200,9 @@ extern "C" fn scene_render(_time: f64, scene: Box<Scene>) {
             .particle_system
             .prepare(cam_pos.to_homogeneous().truncate(), sim_time, 128);
     scene.terrain.render(&scene, lightpos);
+
+    // Isosurface mesh
+    scene.ball.render(&scene);
 
     scene.particle_system.render(&scene);
 
