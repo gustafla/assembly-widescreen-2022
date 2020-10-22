@@ -51,7 +51,7 @@ impl Texture {
                 if let Some(buffer) = buffer {
                     buffer.as_ptr() as *const GLvoid
                 } else {
-                    0 as *const GLvoid
+                    std::ptr::null()
                 },
             );
         }

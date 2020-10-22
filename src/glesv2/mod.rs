@@ -1,3 +1,4 @@
+#![allow(clippy::all)]
 #[macro_use]
 mod macros;
 mod buffer;
@@ -44,10 +45,17 @@ impl Deref for RcGl {
     }
 }
 
+impl Default for RcGl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RcGl {
     pub fn new() -> Self {
         let gl = Self(Rc::new(Gles2::load_with(|s| unsafe {
-            SDL_GL_GetProcAddress(CString::new(s).unwrap().as_ptr())
+            let cstring = CString::new(s).unwrap();
+            SDL_GL_GetProcAddress(cstring.as_ptr())
         })));
         log::info!("GL ES 2.0 loaded.");
         gl

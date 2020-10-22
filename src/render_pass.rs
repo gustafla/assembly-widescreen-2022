@@ -52,7 +52,7 @@ impl RenderPass {
         let program = scene.resources.program(&self.shader_path).unwrap();
 
         let mut uniforms: Vec<(GLint, UniformValue)> = uniforms
-            .into_iter()
+            .iter()
             .map(|(loc, val)| (program.uniform_location(loc).unwrap(), *val))
             .collect();
 
@@ -94,7 +94,7 @@ impl RenderPass {
                 glesv2::FLOAT,
                 glesv2::FALSE,
                 stride,
-                0 as *const GLvoid,
+                std::ptr::null::<GLvoid>(),
             );
             self.gl.EnableVertexAttribArray(index_tex_coord);
             self.gl.VertexAttribPointer(

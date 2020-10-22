@@ -106,7 +106,7 @@ impl Terrain {
                 glesv2::FLOAT,
                 glesv2::FALSE,
                 stride,
-                0 as *const GLvoid,
+                std::ptr::null::<GLvoid>(),
             );
             self.gl.VertexAttribPointer(
                 index_normal,
@@ -121,7 +121,7 @@ impl Terrain {
                 glesv2::TRIANGLE_STRIP,
                 self.count,
                 glesv2::UNSIGNED_SHORT,
-                0 as *const GLvoid,
+                std::ptr::null::<GLvoid>(),
             );
         }
     }
