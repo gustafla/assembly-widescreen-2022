@@ -1,4 +1,4 @@
-use gl_generator::{Api, Fallbacks, Profile, Registry, StructGenerator};
+use gl_generator::{Api, Fallbacks, Profile, Registry, StaticStructGenerator};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -8,7 +8,7 @@ fn generate_gl() {
     let mut file = fs::File::create(&dest).unwrap();
 
     Registry::new(Api::Gles2, (2, 0), Profile::Core, Fallbacks::All, [])
-        .write_bindings(StructGenerator, &mut file)
+        .write_bindings(StaticStructGenerator, &mut file)
         .unwrap();
 }
 

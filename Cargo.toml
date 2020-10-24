@@ -11,12 +11,16 @@ rand = "0.7.3"
 rand_xorshift = "0.2.0"
 cgmath = { version = "0.17.0", default-features = false }
 num_cpus = "1.13.0"
+anyhow = "1.0.33"
+glutin = "0.25.1"
 
 [build-dependencies]
 gl_generator = "0.14.0"
 
-[lib]
-crate-type = ["cdylib"]
-
 [profile.dev]
 opt-level = 3
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
