@@ -2,7 +2,7 @@ mod particle_spawner;
 
 use crate::{
     glesv2::{self, types::*, RcGl, UniformValue},
-    Scene,
+    Demo,
 };
 use cgmath::{MetricSpace, Vector3, VectorSpace};
 pub use particle_spawner::*;
@@ -131,8 +131,8 @@ impl ParticleSystem {
         selected_lights
     }
 
-    pub fn render(&self, scene: &Scene) {
-        let program = scene
+    pub fn render(&self, demo: &Demo) {
+        let program = demo
             .resources
             .program("./particle.vert ./flatshade.frag")
             .unwrap();
@@ -140,15 +140,15 @@ impl ParticleSystem {
         program.bind(Some(&[
             (
                 program.uniform_location("u_Resolution").unwrap(),
-                UniformValue::Vec2f(scene.resolution.0 as f32, scene.resolution.1 as f32),
+                UniformValue::Vec2f(demo.resolution.0 as f32, demo.resolution.1 as f32),
             ),
             (
                 program.uniform_location("u_Projection").unwrap(),
-                UniformValue::Matrix4fv(1, scene.projection.as_ptr()),
+                UniformValue::Matrix4fv(1, demo.projection.as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                UniformValue::Matrix4fv(1, scene.view.as_ptr()),
+                UniformValue::Matrix4fv(1, demo.view.as_ptr()),
             ),
         ]));
 

@@ -1,39 +1,17 @@
 use super::{types::*, RcGl};
 use log::trace;
-use std::error;
-use std::fmt;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 
-#[derive(Debug)]
-enum ErrorKind {
-    DetermineShaderStage,
-    Compile(Option<String>), // file path, error log
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Failed to read shader source file {0}: {1}")]
+    ReadSourceFile(PathBuf, std::io::Error),
+    #[error("Failed to determine the stage of shader {0}")]
+    DetermineShaderStage(PathBuf),
+    #[error("Compiling shader {0} failed: {1:?}")]
+    Compile(PathBuf, Option<String>),
 }
-
-#[derive(Debug)]
-pub struct Error {
-    kind: ErrorKind,
-    path: PathBuf,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self.kind {
-            ErrorKind::DetermineShaderStage => {
-                writeln!(f, "Failed to determine stage of {}", self.path.display())
-            }
-            ErrorKind::Compile(s) => {
-                writeln!(f, "{}: shader compiler error", self.path.display())?;
-                if let Some(s) = s {
-                    writeln!(f, "{}", s)?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-impl error::Error for Error {}
 
 pub struct Shader {
     gl: RcGl,
@@ -41,19 +19,15 @@ pub struct Shader {
 }
 
 impl Shader {
-    pub fn from_source<P: AsRef<Path>>(gl: RcGl, path: P) -> Result<Self, Box<dyn error::Error>> {
-        let content = std::fs::read_to_string(&path)?;
+    pub fn from_source<P: AsRef<Path>>(gl: RcGl, path: P) -> Result<Self, Error> {
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| Error::ReadSourceFile(PathBuf::from(path.as_ref()), e))?;
 
         let handle = unsafe {
             gl.CreateShader(match path.as_ref().extension().map(|s| s.to_str()) {
                 Some(Some("frag")) => super::FRAGMENT_SHADER,
                 Some(Some("vert")) => super::VERTEX_SHADER,
-                _ => {
-                    return Err(Box::new(Error {
-                        kind: ErrorKind::DetermineShaderStage,
-                        path: PathBuf::from(path.as_ref()),
-                    }))
-                }
+                _ => return Err(Error::DetermineShaderStage(PathBuf::from(path.as_ref()))),
             })
         };
 
@@ -80,10 +54,7 @@ impl Shader {
                 gl.DeleteShader(handle);
             }
 
-            return Err(Box::new(Error {
-                kind: ErrorKind::Compile(Some(info_log)),
-                path: PathBuf::from(path.as_ref()),
-            }));
+            return Err(Error::Compile(PathBuf::from(path.as_ref()), Some(info_log)));
         }
 
         trace!("Shader {} ({}) compiled", handle, path.as_ref().display());

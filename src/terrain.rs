@@ -1,5 +1,5 @@
 use crate::glesv2::{self, types::*, Buffer, RcGl, UniformValue};
-use crate::Scene;
+use crate::Demo;
 use cgmath::{InnerSpace, Vector3};
 
 pub struct Terrain {
@@ -66,8 +66,8 @@ impl Terrain {
         }
     }
 
-    pub fn render(&self, scene: &Scene, lightpos: Vec<f32>) {
-        let program = scene
+    pub fn render(&self, demo: &Demo, lightpos: Vec<f32>) {
+        let program = demo
             .resources
             .program("./gouraud.vert ./flatshade.frag")
             .unwrap();
@@ -75,11 +75,11 @@ impl Terrain {
         program.bind(Some(&[
             (
                 program.uniform_location("u_Projection").unwrap(),
-                UniformValue::Matrix4fv(1, scene.projection.as_ptr()),
+                UniformValue::Matrix4fv(1, demo.projection.as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                UniformValue::Matrix4fv(1, scene.view.as_ptr()),
+                UniformValue::Matrix4fv(1, demo.view.as_ptr()),
             ),
             (
                 program.uniform_location("u_LightPosition").unwrap(),

@@ -1,24 +1,16 @@
 use super::{types::*, RcGl, Shader, UniformValue};
 use log::trace;
-use std::error;
 use std::ffi::CString;
-use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use thiserror::Error;
 
-#[derive(Debug)]
-pub struct Error(Option<String>);
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "Failed to link program")?; // TODO path
-        if let Some(s) = &self.0 {
-            writeln!(f, "{}", s)?; // TODO path
-        }
-        Ok(())
-    }
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error(transparent)]
+    Shader(#[from] super::shader::Error),
+    #[error("Failed to link shaders {0:?}: {1:?}")]
+    Link(Option<Vec<PathBuf>>, Option<String>),
 }
-
-impl error::Error for Error {}
 
 pub struct Program {
     gl: RcGl,
@@ -26,7 +18,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn from_shaders(gl: RcGl, shaders: &[GLuint]) -> Result<Program, Box<dyn error::Error>> {
+    pub fn from_shaders(gl: RcGl, shaders: &[GLuint]) -> Result<Program, Error> {
         let handle = unsafe { gl.CreateProgram() };
 
         for shader in shaders {
@@ -55,17 +47,14 @@ impl Program {
                 gl.DeleteProgram(handle);
             }
 
-            return Err(Box::new(Error(Some(info_log))));
+            return Err(Error::Link(None, Some(info_log)));
         }
 
         trace!("Program {} {:?} linked", handle, shaders);
         Ok(Program { gl, handle })
     }
 
-    pub fn from_sources<P: AsRef<Path>>(
-        gl: RcGl,
-        paths: &[P],
-    ) -> Result<Program, Box<dyn error::Error>> {
+    pub fn from_sources<P: AsRef<Path>>(gl: RcGl, paths: &[P]) -> Result<Program, Error> {
         trace!(
             "Linking program from {:?}...",
             paths
@@ -87,6 +76,16 @@ impl Program {
                 .collect::<Vec<_>>()
                 .as_slice(),
         )
+        .map_err(|e| {
+            if let Error::Link(None, Some(info_log)) = e {
+                Error::Link(
+                    Some(paths.iter().map(|p| PathBuf::from(p.as_ref())).collect()),
+                    Some(info_log),
+                )
+            } else {
+                e
+            }
+        })
     }
 
     pub fn handle(&self) -> GLuint {

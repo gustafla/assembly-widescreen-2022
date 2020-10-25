@@ -2,7 +2,7 @@ use crate::glesv2::{
     self, types::*, Framebuffer, RcGl, RenderbufferAttachment, Texture, TextureAttachment,
     UniformValue,
 };
-use crate::Scene;
+use crate::Demo;
 
 pub struct RenderPass {
     gl: RcGl,
@@ -48,8 +48,8 @@ impl RenderPass {
         }
     }
 
-    pub fn render(&self, scene: &Scene, textures: &[&Texture], uniforms: &[(&str, UniformValue)]) {
-        let program = scene.resources.program(&self.shader_path).unwrap();
+    pub fn render(&self, demo: &Demo, textures: &[&Texture], uniforms: &[(&str, UniformValue)]) {
+        let program = demo.resources.program(&self.shader_path).unwrap();
 
         let mut uniforms: Vec<(GLint, UniformValue)> = uniforms
             .iter()
@@ -76,13 +76,13 @@ impl RenderPass {
         if let Some(loc) = program.uniform_location("u_Resolution") {
             uniforms.push((
                 loc,
-                UniformValue::Vec2f(scene.resolution.0 as f32, scene.resolution.1 as f32),
+                UniformValue::Vec2f(demo.resolution.0 as f32, demo.resolution.1 as f32),
             ));
         }
 
         program.bind(Some(&uniforms));
 
-        scene.resources.buffer("./quad.abuf").unwrap().bind();
+        demo.resources.buffer("./quad.abuf").unwrap().bind();
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
         let index_tex_coord = program.attrib_location("a_TexCoord").unwrap() as GLuint;
         let stride = (std::mem::size_of::<f32>() * 5) as GLint;

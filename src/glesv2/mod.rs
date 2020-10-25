@@ -20,7 +20,7 @@ pub use self::resource_mapper::ResourceMapper;
 pub use self::shader::Shader;
 pub use self::texture::Texture;
 pub use self::uniform_value::UniformValue;
-use std::ffi::CString;
+use std::ffi::{c_void, CString};
 use std::ops::Deref;
 use std::rc::Rc;
 use types::*;
@@ -39,16 +39,9 @@ impl Deref for RcGl {
     }
 }
 
-impl Default for RcGl {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl RcGl {
-    pub fn new() -> Self {
-        // Static Gles2 struct doesn't need a working loadfn (build.rs)
-        let gl = Self(Rc::new(Gles2::load_with(|_| std::ptr::null())));
+    pub fn new(loadfn: impl FnMut(&'static str) -> *const c_void) -> Self {
+        let gl = Self(Rc::new(Gles2::load_with(loadfn)));
         log::info!("GL ES 2.0 loaded.");
         gl
     }
