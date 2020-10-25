@@ -1,15 +1,15 @@
 #![allow(clippy::all)]
 #[macro_use]
-mod macros;
-mod buffer;
-mod error;
-mod framebuffer;
-mod program;
-mod renderbuffer;
-mod resource_mapper;
-mod shader;
-mod texture;
-mod uniform_value;
+pub mod macros;
+pub mod buffer;
+pub mod error;
+pub mod framebuffer;
+pub mod program;
+pub mod renderbuffer;
+pub mod resource_mapper;
+pub mod shader;
+pub mod texture;
+pub mod uniform_value;
 
 pub use self::buffer::Buffer;
 pub use self::error::*;

@@ -3,7 +3,6 @@ mod particle_system;
 mod render_pass;
 mod terrain;
 
-use anyhow::{Context, Result};
 use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
 pub use glesv2::{
     types::*, Framebuffer, Gles2, RcGl, Renderbuffer, RenderbufferAttachment, ResourceMapper,
@@ -36,7 +35,7 @@ pub struct Demo {
 }
 
 impl Demo {
-    pub fn new(w: i32, h: i32, gl: RcGl) -> Result<Self> {
+    pub fn new(w: i32, h: i32, gl: RcGl) -> Result<Self, glesv2::resource_mapper::Error> {
         gl.viewport(0, 0, w, h);
         gl.blend_func(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
         gl.enable(glesv2::CULL_FACE);
@@ -84,7 +83,7 @@ impl Demo {
             resolution: (w, h),
             projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
             view: [0f32; 16],
-            resources: ResourceMapper::new(gl.clone()).context("Failed to load resources")?,
+            resources: ResourceMapper::new(gl.clone())?,
             gl: gl.clone(),
             rng: XorShiftRng::seed_from_u64(98341),
             noise_texture,
@@ -113,7 +112,7 @@ impl Demo {
         Ok(demo)
     }
 
-    pub fn render(&mut self) -> Result<()> {
+    pub fn render(&mut self) -> Result<(), glesv2::Error> {
         let cam_pos = Point3::new(
             self.sync_get("cam:pos.x") as f32,
             self.sync_get("cam:pos.y") as f32,
@@ -134,7 +133,7 @@ impl Demo {
             .fbo
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
 
-        // Terrain and particle system ----------------------------------------------------------------
+        // Terrain and particle system ------------------------------------------------------------
 
         self.gl.enable(glesv2::DEPTH_TEST);
         self.gl.enable(glesv2::BLEND);
@@ -149,12 +148,12 @@ impl Demo {
         self.gl.disable(glesv2::BLEND);
         self.gl.disable(glesv2::DEPTH_TEST);
 
-        // Bloom pass ---------------------------------------------------------------------------------
+        // Bloom pass -----------------------------------------------------------------------------
 
         self.blur_pass_x.fbo.bind(0);
         self.bloom_pass.render(&self, &[], &[]);
 
-        // X-blur pass --------------------------------------------------------------------------------
+        // X-blur pass ----------------------------------------------------------------------------
 
         self.blur_pass_y.fbo.bind(0);
         self.blur_pass_x.render(
@@ -163,7 +162,7 @@ impl Demo {
             &[("u_BlurDirection", UniformValue::Vec2f(1., 0.))],
         );
 
-        // Y-blur pass --------------------------------------------------------------------------------
+        // Y-blur pass ----------------------------------------------------------------------------
 
         self.post_pass.fbo.bind(0);
         self.blur_pass_y.render(
@@ -172,7 +171,7 @@ impl Demo {
             &[("u_BlurDirection", UniformValue::Vec2f(0., 1.))],
         );
 
-        // Post pass ----------------------------------------------------------------------------------
+        // Post pass ------------------------------------------------------------------------------
 
         // Generate noise
         let noise: Vec<u8> = (0..(self.resolution.0 * self.resolution.1 / NOISE_SCALE.pow(2)))
@@ -209,7 +208,7 @@ impl Demo {
             ],
         );
 
-        glesv2::check(self.gl.clone()).context("OpenGL error")
+        glesv2::check(self.gl.clone())
     }
 
     fn sync_get(&self, _: &str) -> f64 {

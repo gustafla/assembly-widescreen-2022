@@ -10,12 +10,12 @@ use glutin::{
 use simple_logger::SimpleLogger;
 
 fn main() -> Result<()> {
-    // Init logging
+    // Initialize logging
     SimpleLogger::new()
         .init()
         .context("Failed to initialize logger")?;
 
-    // Build a window
+    // Build a window with an OpenGL context
     let size = PhysicalSize::new(1280, 720);
     let event_loop = EventLoop::new();
     let window_builder = WindowBuilder::new()
@@ -26,12 +26,13 @@ fn main() -> Result<()> {
         .with_vsync(true)
         .build_windowed(window_builder, &event_loop)
         .context("Failed to build a window")?;
-
     let windowed_context = unsafe { windowed_context.make_current() }
         .map_err(|e| anyhow!("Failed to make context current: {:?}", e))?;
 
+    // Load OpenGL interface
     let gl = RcGl::new(|s| windowed_context.get_proc_address(s));
 
+    // Load demo content
     let mut demo = Demo::new(size.width, size.height, gl)?;
 
     event_loop.run(move |event, _, control_flow| {
@@ -55,7 +56,7 @@ fn main() -> Result<()> {
             },
             Event::MainEventsCleared => {
                 if let Err(e) = demo.render() {
-                    panic!("Unexpected runtime error! {}", e);
+                    panic!("{}", e);
                 }
 
                 windowed_context
