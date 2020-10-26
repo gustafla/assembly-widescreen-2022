@@ -1,5 +1,6 @@
 mod glesv2;
 mod particle_system;
+mod player;
 mod render_pass;
 mod terrain;
 
@@ -11,14 +12,26 @@ pub use glesv2::{
 use particle_system::{
     ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
 };
+pub use player::Player;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
+use std::path::Path;
 use terrain::Terrain;
+use thiserror::Error;
 
 const NOISE_SCALE: i32 = 8;
 
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error(transparent)]
+    ResourceLoading(#[from] glesv2::resource_mapper::Error),
+    #[error(transparent)]
+    MusicPlayer(#[from] player::Error),
+}
+
 pub struct Demo {
+    player: Player,
     pub resolution: (i32, i32),
     pub projection: [f32; 16],
     pub view: [f32; 16],
@@ -35,7 +48,7 @@ pub struct Demo {
 }
 
 impl Demo {
-    pub fn new(w: i32, h: i32, gl: RcGl) -> Result<Self, glesv2::resource_mapper::Error> {
+    pub fn new(w: i32, h: i32, gl: RcGl, music_path: impl AsRef<Path>) -> Result<Self, Error> {
         gl.viewport(0, 0, w, h);
         gl.blend_func(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
         gl.enable(glesv2::CULL_FACE);
@@ -80,6 +93,7 @@ impl Demo {
         ]);
 
         let demo = Demo {
+            player: Player::new(music_path)?,
             resolution: (w, h),
             projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
             view: [0f32; 16],
@@ -113,6 +127,7 @@ impl Demo {
     }
 
     pub fn render(&mut self) -> Result<(), glesv2::Error> {
+        log::trace!("{}", self.player.time_secs());
         let cam_pos = Point3::new(
             self.sync_get("cam:pos.x") as f32,
             self.sync_get("cam:pos.y") as f32,
@@ -209,6 +224,11 @@ impl Demo {
         );
 
         glesv2::check(self.gl.clone())
+    }
+
+    pub fn start(&self) -> Result<(), Error> {
+        self.player.play()?;
+        Ok(())
     }
 
     fn sync_get(&self, _: &str) -> f64 {

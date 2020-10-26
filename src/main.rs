@@ -33,8 +33,9 @@ fn main() -> Result<()> {
     let gl = RcGl::new(|s| windowed_context.get_proc_address(s));
 
     // Load demo content
-    let mut demo = Demo::new(size.width, size.height, gl)?;
+    let mut demo = Demo::new(size.width, size.height, gl, "music.ogg")?;
 
+    demo.start()?;
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
