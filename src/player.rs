@@ -85,6 +85,8 @@ impl Player {
                 let mut output_written = 0;
 
                 loop {
+                    // Store track position and time of polling the position
+                    // for the Player to be able to tell time to the demo
                     if let Some(last_absgp) = ogg_stream.get_last_absgp() {
                         pos.store(last_absgp, Ordering::Relaxed);
                     }
@@ -98,17 +100,19 @@ impl Player {
                     let packet = &packet_buf[packet_read..];
                     let output = &mut output_buf[output_written..];
 
-                    // Copy audio from previous vorbis packet
+                    // Copy audio from previously decoded vorbis packet
                     if packet.len() >= output.len() {
                         output.copy_from_slice(&packet[..output.len()]);
                         packet_read += output.len();
+                        // Output buffer is full, job done
                         return;
                     } else {
                         (&mut output[..packet.len()]).copy_from_slice(packet);
                         output_written += packet.len();
+                        // Output buffer is not filled yet, continue
                     };
 
-                    // When necessary, decode more
+                    // When necessary, decode a new packet
                     if let Some(new_packet) = ogg_stream.read_dec_packet_itl().unwrap() {
                         packet_buf = new_packet;
                     } else {
@@ -118,6 +122,8 @@ impl Player {
                         }
                     }
                     packet_read = 0;
+
+                    // Loop until output buffer is filled
                 }
             },
             move |e| {
