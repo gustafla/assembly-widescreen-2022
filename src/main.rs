@@ -26,6 +26,8 @@ fn main() -> Result<()> {
     let windowed_context = ContextBuilder::new()
         .with_gl(GlRequest::Specific(Api::OpenGlEs, (2, 0)))
         .with_vsync(true)
+        .with_srgb(true)
+        .with_hardware_acceleration(None)
         .build_windowed(window_builder, &event_loop)
         .context("Failed to build a window")?;
     let windowed_context = unsafe { windowed_context.make_current() }
@@ -41,6 +43,14 @@ fn main() -> Result<()> {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
+        if demo.player.is_at_end() {
+            if cfg!(debug_assertions) {
+                demo.player.pause().unwrap();
+            } else {
+                *control_flow = ControlFlow::Exit;
+            }
+        }
+
         match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -53,13 +63,6 @@ fn main() -> Result<()> {
                     ..
                 } => match keycode {
                     VirtualKeyCode::Escape | VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
-                    VirtualKeyCode::Space => {
-                        if demo.player.is_playing() {
-                            demo.player.pause().unwrap()
-                        } else {
-                            demo.player.play().unwrap()
-                        }
-                    }
                     _ => (),
                 },
                 _ => (),

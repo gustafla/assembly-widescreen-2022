@@ -1,6 +1,6 @@
 use super::{Buffer, Program, RcGl, Shader};
 use std::collections::HashMap;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -40,16 +40,10 @@ impl ResourceMapper {
                 .path();
             match path.extension().map(|s| s.to_str()) {
                 Some(Some("vert")) | Some(Some("frag")) => {
-                    shaders.insert(
-                        path.clone(),
-                        Shader::from_source(gl.clone(), path)?,
-                    );
+                    shaders.insert(path.clone(), Shader::from_source(gl.clone(), path)?);
                 }
                 Some(Some("abuf")) | Some(Some("ibuf")) => {
-                    buffers.insert(
-                        path.clone(),
-                        Buffer::from_file(gl.clone(), path)?,
-                    );
+                    buffers.insert(path.clone(), Buffer::from_file(gl.clone(), path)?);
                 }
                 _ => (),
             }

@@ -3,15 +3,14 @@ use cpal::{
     SampleRate, Stream,
 };
 use lewton::inside_ogg::OggStreamReader;
-use std::convert::TryFrom;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -38,11 +37,12 @@ pub enum Error {
 
 pub struct Player {
     out_stream: Stream,
-    last_pos: Arc<AtomicU64>,
-    nanos_at_pos: Arc<AtomicU64>,
     start_time: Instant,
+    pause_time: Instant,
+    time_paused: Duration,
     sample_rate: u32,
-    is_playing: bool,
+    playing: bool,
+    at_end: Arc<AtomicBool>,
 }
 
 impl Player {
@@ -73,30 +73,16 @@ impl Player {
             .read_dec_packet_itl()?
             .ok_or(Error::NoAudioStreamInFile)?;
         let mut packet_read = 0;
-        let last_pos = Arc::new(AtomicU64::new(0));
-        let nanos_at_pos = Arc::new(AtomicU64::new(0));
+        let at_end = Arc::new(AtomicBool::new(false));
 
         // Stream with cpal
-        let pos = last_pos.clone();
-        let nanos = nanos_at_pos.clone();
-        let start_time = Instant::now();
+        let end = at_end.clone();
         let out_stream = device.build_output_stream(
             &config.into(),
             move |output_buf: &mut [i16], _: &cpal::OutputCallbackInfo| {
                 let mut output_written = 0;
 
                 loop {
-                    // Store track position and time of polling the position
-                    // for the Player to be able to tell time to the demo
-                    if let Some(last_absgp) = ogg_stream.get_last_absgp() {
-                        pos.store(last_absgp, Ordering::Relaxed);
-                    }
-                    nanos.store(
-                        u64::try_from(Instant::now().duration_since(start_time).as_nanos())
-                            .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() }),
-                        Ordering::Relaxed,
-                    );
-
                     // Slice to current positions
                     let packet = &packet_buf[packet_read..];
                     let output = &mut output_buf[output_written..];
@@ -117,7 +103,11 @@ impl Player {
                     if let Some(new_packet) = ogg_stream.read_dec_packet_itl().unwrap() {
                         packet_buf = new_packet;
                     } else {
-                        // Or play silence if at EOS
+                        // Or if at EOS
+                        // Tell asking threads that the track is at end
+                        end.store(true, Ordering::SeqCst);
+
+                        // And play silence
                         for sample in packet_buf.iter_mut() {
                             *sample = 0;
                         }
@@ -134,41 +124,52 @@ impl Player {
 
         out_stream.pause()?;
 
+        let time = Instant::now();
+
         Ok(Self {
             out_stream,
-            last_pos,
-            nanos_at_pos,
-            start_time,
+            start_time: time,
+            pause_time: time,
+            time_paused: Duration::new(0, 0),
             sample_rate,
-            is_playing: false,
+            playing: false,
+            at_end,
         })
     }
 
+    pub fn is_at_end(&self) -> bool {
+        self.at_end.load(Ordering::SeqCst)
+    }
+
     pub fn is_playing(&self) -> bool {
-        self.is_playing
+        self.playing
     }
 
     pub fn play(&mut self) -> Result<(), Error> {
-        self.out_stream.play()?;
-        self.is_playing = true;
+        if !self.is_at_end() {
+            self.playing = true;
+            self.time_paused += self.pause_time.elapsed();
+            self.out_stream.play()?;
+        }
         Ok(())
     }
 
     pub fn pause(&mut self) -> Result<(), Error> {
-        self.out_stream.pause()?;
-        self.is_playing = false;
+        if self.is_playing() {
+            self.playing = false;
+            self.pause_time = Instant::now();
+            self.out_stream.pause()?;
+        }
         Ok(())
     }
 
     pub fn time_secs(&self) -> f64 {
-        let nanos_since_pos = if self.is_playing {
-            u64::try_from(Instant::now().duration_since(self.start_time).as_nanos())
-                .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() })
-                - self.nanos_at_pos.load(Ordering::Relaxed)
+        (if self.is_playing() {
+            self.start_time.elapsed()
         } else {
-            0
-        };
-        self.last_pos.load(Ordering::Relaxed) as f64 / self.sample_rate as f64
-            + nanos_since_pos as f64 / 1_000_000_000f64
+            self.pause_time.duration_since(self.start_time)
+        } - self.time_paused)
+            .as_nanos() as f64
+            / 1_000_000_000f64
     }
 }
