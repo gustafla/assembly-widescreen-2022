@@ -4,6 +4,7 @@ use glutin::{
     dpi::PhysicalSize,
     event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
+    platform::unix::WindowBuilderExtUnix,
     window::WindowBuilder,
     Api, ContextBuilder, GlRequest,
 };
@@ -19,7 +20,8 @@ fn main() -> Result<()> {
     let size = PhysicalSize::new(1280, 720);
     let event_loop = EventLoop::new();
     let window_builder = WindowBuilder::new()
-        .with_title("mehustin")
+        .with_title("Demo")
+        .with_app_id("demo".into())
         .with_inner_size(size);
     let windowed_context = ContextBuilder::new()
         .with_gl(GlRequest::Specific(Api::OpenGlEs, (2, 0)))
