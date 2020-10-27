@@ -42,6 +42,7 @@ pub struct Player {
     nanos_at_pos: Arc<AtomicU64>,
     start_time: Instant,
     sample_rate: u32,
+    is_playing: bool,
 }
 
 impl Player {
@@ -131,30 +132,42 @@ impl Player {
             },
         )?;
 
+        out_stream.pause()?;
+
         Ok(Self {
             out_stream,
             last_pos,
             nanos_at_pos,
             start_time,
             sample_rate,
+            is_playing: false,
         })
     }
 
-    pub fn play(&self) -> Result<(), Error> {
+    pub fn is_playing(&self) -> bool {
+        self.is_playing
+    }
+
+    pub fn play(&mut self) -> Result<(), Error> {
         self.out_stream.play()?;
+        self.is_playing = true;
         Ok(())
     }
 
-    pub fn pause(&self) -> Result<(), Error> {
+    pub fn pause(&mut self) -> Result<(), Error> {
         self.out_stream.pause()?;
+        self.is_playing = false;
         Ok(())
     }
 
     pub fn time_secs(&self) -> f64 {
-        let nanos_since_pos =
+        let nanos_since_pos = if self.is_playing {
             u64::try_from(Instant::now().duration_since(self.start_time).as_nanos())
                 .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() })
-                - self.nanos_at_pos.load(Ordering::Relaxed);
+                - self.nanos_at_pos.load(Ordering::Relaxed)
+        } else {
+            0
+        };
         self.last_pos.load(Ordering::Relaxed) as f64 / self.sample_rate as f64
             + nanos_since_pos as f64 / 1_000_000_000f64
     }

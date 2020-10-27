@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     // Load demo content
     let mut demo = Demo::new(size.width, size.height, gl)?;
 
-    demo.start()?;
+    demo.player.play()?;
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -51,6 +51,13 @@ fn main() -> Result<()> {
                     ..
                 } => match keycode {
                     VirtualKeyCode::Escape | VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
+                    VirtualKeyCode::Space => {
+                        if demo.player.is_playing() {
+                            demo.player.pause().unwrap()
+                        } else {
+                            demo.player.play().unwrap()
+                        }
+                    }
                     _ => (),
                 },
                 _ => (),

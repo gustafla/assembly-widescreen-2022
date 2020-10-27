@@ -30,7 +30,7 @@ pub enum Error {
 }
 
 pub struct Demo {
-    player: Player,
+    pub player: Player,
     pub resolution: (i32, i32),
     pub projection: [f32; 16],
     pub view: [f32; 16],
@@ -225,14 +225,9 @@ impl Demo {
         glesv2::check(self.gl.clone())
     }
 
-    pub fn start(&self) -> Result<(), Error> {
-        self.player.play()?;
-        Ok(())
-    }
-
     fn sync_get(&self, _: &str) -> f64 {
         // TODO Rocket impl
-        0.1
+        self.player.time_secs()
     }
 }
 
