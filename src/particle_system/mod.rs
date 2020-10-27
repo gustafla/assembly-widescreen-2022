@@ -134,7 +134,7 @@ impl ParticleSystem {
     pub fn render(&self, demo: &Demo) {
         let program = demo
             .resources
-            .program("./particle.vert ./flatshade.frag")
+            .program("particle.vert flatshade.frag")
             .unwrap();
 
         program.bind(Some(&[

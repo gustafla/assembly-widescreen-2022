@@ -16,7 +16,6 @@ pub use player::Player;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
-use std::path::Path;
 use terrain::Terrain;
 use thiserror::Error;
 
@@ -48,7 +47,7 @@ pub struct Demo {
 }
 
 impl Demo {
-    pub fn new(w: i32, h: i32, gl: RcGl, music_path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn new(w: i32, h: i32, gl: RcGl) -> Result<Self, Error> {
         gl.viewport(0, 0, w, h);
         gl.blend_func(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
         gl.enable(glesv2::CULL_FACE);
@@ -93,11 +92,11 @@ impl Demo {
         ]);
 
         let demo = Demo {
-            player: Player::new(music_path)?,
+            player: Player::new("resources/music.ogg")?,
             resolution: (w, h),
             projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
             view: [0f32; 16],
-            resources: ResourceMapper::new(gl.clone())?,
+            resources: ResourceMapper::new(gl.clone(), "resources")?,
             gl: gl.clone(),
             rng: XorShiftRng::seed_from_u64(98341),
             noise_texture,
@@ -109,16 +108,16 @@ impl Demo {
                 gl.clone(),
                 w,
                 h,
-                "./bloom.frag",
+                "bloom.frag",
                 Some(vec![(glesv2::DEPTH_ATTACHMENT, {
                     let renderbuffer = Renderbuffer::new(gl.clone());
                     renderbuffer.storage(glesv2::DEPTH_COMPONENT16, w, h);
                     RenderbufferAttachment { renderbuffer }
                 })]),
             ),
-            blur_pass_x: RenderPass::new(gl.clone(), w, h, "./two_pass_gaussian_blur.frag", None),
-            blur_pass_y: RenderPass::new(gl.clone(), w, h, "./two_pass_gaussian_blur.frag", None),
-            post_pass: RenderPass::new(gl, w, h, "./post.frag", None),
+            blur_pass_x: RenderPass::new(gl.clone(), w, h, "two_pass_gaussian_blur.frag", None),
+            blur_pass_y: RenderPass::new(gl.clone(), w, h, "two_pass_gaussian_blur.frag", None),
+            post_pass: RenderPass::new(gl, w, h, "post.frag", None),
         };
 
         log::info!("demo created");
@@ -127,7 +126,7 @@ impl Demo {
     }
 
     pub fn render(&mut self) -> Result<(), glesv2::Error> {
-        log::trace!("{}", self.player.time_secs());
+        log::info!("{}", self.player.time_secs());
         let cam_pos = Point3::new(
             self.sync_get("cam:pos.x") as f32,
             self.sync_get("cam:pos.y") as f32,

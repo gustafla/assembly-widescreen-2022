@@ -85,12 +85,9 @@ impl Player {
                 let mut output_written = 0;
 
                 loop {
-                    pos.store(
-                        ogg_stream
-                            .get_last_absgp()
-                            .expect("No ogg position available, cannot sync"),
-                        Ordering::Relaxed,
-                    );
+                    if let Some(last_absgp) = ogg_stream.get_last_absgp() {
+                        pos.store(last_absgp, Ordering::Relaxed);
+                    }
                     millis.store(
                         u64::try_from(Instant::now().duration_since(start_time).as_millis())
                             .expect("Music track too long"),

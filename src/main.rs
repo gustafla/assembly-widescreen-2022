@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     let gl = RcGl::new(|s| windowed_context.get_proc_address(s));
 
     // Load demo content
-    let mut demo = Demo::new(size.width, size.height, gl, "music.ogg")?;
+    let mut demo = Demo::new(size.width, size.height, gl)?;
 
     demo.start()?;
     event_loop.run(move |event, _, control_flow| {

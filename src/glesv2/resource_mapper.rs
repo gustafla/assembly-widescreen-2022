@@ -1,6 +1,6 @@
 use super::{Buffer, Program, RcGl, Shader};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -16,20 +16,22 @@ pub enum Error {
 }
 
 pub struct ResourceMapper {
+    datapath: PathBuf,
     #[allow(dead_code)]
-    shaders: HashMap<String, Shader>,
+    shaders: HashMap<PathBuf, Shader>,
     programs: HashMap<String, Program>,
-    buffers: HashMap<String, Buffer>,
+    buffers: HashMap<PathBuf, Buffer>,
 }
 
 impl ResourceMapper {
-    pub fn new(gl: RcGl) -> Result<Self, Error> {
+    pub fn new(gl: RcGl, datapath: impl AsRef<Path>) -> Result<Self, Error> {
         log::trace!("Loading resources");
 
         let mut shaders = HashMap::new();
         let mut buffers = HashMap::new();
 
-        let datapath = PathBuf::from("./");
+        let datapath = datapath.as_ref().to_path_buf();
+
         for item in
             std::fs::read_dir(&datapath).map_err(|e| Error::FileAccess(datapath.clone(), e))?
         {
@@ -39,13 +41,13 @@ impl ResourceMapper {
             match path.extension().map(|s| s.to_str()) {
                 Some(Some("vert")) | Some(Some("frag")) => {
                     shaders.insert(
-                        path.display().to_string(),
+                        path.clone(),
                         Shader::from_source(gl.clone(), path)?,
                     );
                 }
                 Some(Some("abuf")) | Some(Some("ibuf")) => {
                     buffers.insert(
-                        path.display().to_string(),
+                        path.clone(),
                         Buffer::from_file(gl.clone(), path)?,
                     );
                 }
@@ -67,7 +69,7 @@ impl ResourceMapper {
                     desc.split_ascii_whitespace()
                         .map(|p| {
                             shaders
-                                .get(p)
+                                .get(&datapath.join(p))
                                 .expect(&format!("Shader {} doesn't exist.", p))
                                 .handle()
                         })
@@ -83,6 +85,7 @@ impl ResourceMapper {
         }
 
         Ok(ResourceMapper {
+            datapath,
             shaders,
             programs,
             buffers,
@@ -90,15 +93,15 @@ impl ResourceMapper {
     }
 
     #[allow(dead_code)]
-    fn shader(&self, path: &str) -> Option<&Shader> {
-        self.shaders.get(path)
+    fn shader(&self, path: impl AsRef<Path>) -> Option<&Shader> {
+        self.shaders.get(&self.datapath.join(path))
     }
 
-    pub fn program(&self, shader_paths: &str) -> Option<&Program> {
-        self.programs.get(shader_paths)
+    pub fn program(&self, desc: &str) -> Option<&Program> {
+        self.programs.get(desc)
     }
 
-    pub fn buffer(&self, path: &str) -> Option<&Buffer> {
-        self.buffers.get(path)
+    pub fn buffer(&self, path: impl AsRef<Path>) -> Option<&Buffer> {
+        self.buffers.get(&self.datapath.join(path))
     }
 }

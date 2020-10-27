@@ -69,7 +69,7 @@ impl Terrain {
     pub fn render(&self, demo: &Demo, lightpos: Vec<f32>) {
         let program = demo
             .resources
-            .program("./gouraud.vert ./flatshade.frag")
+            .program("gouraud.vert flatshade.frag")
             .unwrap();
 
         program.bind(Some(&[

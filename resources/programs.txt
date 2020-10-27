@@ -1,5 +1,5 @@
-./shader.vert ./bloom.frag
-./shader.vert ./two_pass_gaussian_blur.frag
-./shader.vert ./post.frag
-./particle.vert ./flatshade.frag
-./gouraud.vert ./flatshade.frag
+shader.vert bloom.frag
+shader.vert two_pass_gaussian_blur.frag
+shader.vert post.frag
+particle.vert flatshade.frag
+gouraud.vert flatshade.frag

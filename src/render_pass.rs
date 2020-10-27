@@ -44,7 +44,7 @@ impl RenderPass {
         Self {
             gl,
             fbo,
-            shader_path: format!("./shader.vert {}", frag_path),
+            shader_path: format!("shader.vert {}", frag_path),
         }
     }
 
@@ -82,7 +82,7 @@ impl RenderPass {
 
         program.bind(Some(&uniforms));
 
-        demo.resources.buffer("./quad.abuf").unwrap().bind();
+        demo.resources.buffer("quad.abuf").unwrap().bind();
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
         let index_tex_coord = program.attrib_location("a_TexCoord").unwrap() as GLuint;
         let stride = (std::mem::size_of::<f32>() * 5) as GLint;
