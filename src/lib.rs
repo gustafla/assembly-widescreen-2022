@@ -230,9 +230,9 @@ impl Demo {
         glesv2::check(self.gl.clone())
     }
 
-    fn sync_get(&self, _: &str) -> f64 {
+    fn sync_get(&mut self, _: &str) -> f64 {
         // TODO Rocket impl
-        self.player.time_secs()
+        0.1
     }
 }
 

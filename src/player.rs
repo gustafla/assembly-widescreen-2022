@@ -8,7 +8,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, RwLock,
 };
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -36,11 +36,11 @@ pub enum Error {
 }
 
 pub struct Player {
+    ogg_stream: Arc<RwLock<OggStreamReader<BufReader<File>>>>,
     out_stream: Stream,
-    start_time: Instant,
-    pause_time: Instant,
-    time_paused: Duration,
     sample_rate: u32,
+    last_absgp: Option<u64>,
+    time_absgp: Instant,
     playing: bool,
     at_end: Arc<AtomicBool>,
 }
@@ -48,11 +48,14 @@ pub struct Player {
 impl Player {
     pub fn new(ogg_path: impl AsRef<Path>) -> Result<Self, Error> {
         log::info!("Loading {}", ogg_path.as_ref().display());
+
+        // Read ogg file headers
         let ogg_file = File::open(ogg_path)?;
         let ogg_reader = BufReader::new(ogg_file);
         let mut ogg_stream = OggStreamReader::new(ogg_reader)?;
         let sample_rate = ogg_stream.ident_hdr.audio_sample_rate;
 
+        // Initialize cpal output device
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -73,9 +76,13 @@ impl Player {
             .read_dec_packet_itl()?
             .ok_or(Error::NoAudioStreamInFile)?;
         let mut packet_read = 0;
+        let last_absgp = ogg_stream.get_last_absgp();
+        let time_absgp = Instant::now();
+        let ogg_stream = Arc::new(RwLock::new(ogg_stream));
         let at_end = Arc::new(AtomicBool::new(false));
 
         // Stream with cpal
+        let ogg = ogg_stream.clone();
         let end = at_end.clone();
         let out_stream = device.build_output_stream(
             &config.into(),
@@ -100,7 +107,7 @@ impl Player {
                     };
 
                     // When necessary, decode a new packet
-                    if let Some(new_packet) = ogg_stream.read_dec_packet_itl().unwrap() {
+                    if let Some(new_packet) = ogg.write().unwrap().read_dec_packet_itl().unwrap() {
                         packet_buf = new_packet;
                     } else {
                         // Or if at EOS
@@ -124,14 +131,12 @@ impl Player {
 
         out_stream.pause()?;
 
-        let time = Instant::now();
-
         Ok(Self {
+            ogg_stream,
             out_stream,
-            start_time: time,
-            pause_time: time,
-            time_paused: Duration::new(0, 0),
             sample_rate,
+            last_absgp,
+            time_absgp,
             playing: false,
             at_end,
         })
@@ -146,30 +151,42 @@ impl Player {
     }
 
     pub fn play(&mut self) -> Result<(), Error> {
-        if !self.is_at_end() {
-            self.playing = true;
-            self.time_paused += self.pause_time.elapsed();
-            self.out_stream.play()?;
-        }
+        self.playing = true;
+        self.out_stream.play()?;
         Ok(())
     }
 
     pub fn pause(&mut self) -> Result<(), Error> {
-        if self.is_playing() {
-            self.playing = false;
-            self.pause_time = Instant::now();
-            self.out_stream.pause()?;
-        }
+        self.playing = false;
+        self.out_stream.pause()?;
         Ok(())
     }
 
-    pub fn time_secs(&self) -> f64 {
-        (if self.is_playing() {
-            self.start_time.elapsed()
+    pub fn time_secs(&mut self) -> f64 {
+        // Checking and creating new Instants too often will cause frequent jitter and unnecessary
+        // lock acquiring, limit to once per second
+        if self.time_absgp.elapsed() > Duration::new(1, 0) {
+            // Check vorbis stream's approx position in samples
+            let absgp = self.ogg_stream.read().unwrap().get_last_absgp();
+            // If it's a new reading, store, and take note when it was taken
+            if absgp != self.last_absgp {
+                self.last_absgp = absgp;
+                self.time_absgp = Instant::now();
+            }
+        }
+
+        (if let Some(absgp) = self.last_absgp {
+            // Samples per samples per second makes seconds
+            absgp as f64 / self.sample_rate as f64
         } else {
-            self.pause_time.duration_since(self.start_time)
-        } - self.time_paused)
-            .as_nanos() as f64
-            / 1_000_000_000f64
+            // Some default if vorbis position is unknown
+            0f64
+        }) + if self.is_playing() {
+            // Add precision by adding time elapsed since last update from vorbis stream
+            self.time_absgp.elapsed().as_nanos() as f64 / 1_000_000_000f64
+        } else {
+            // But don't add anything if paused, time shouldn't run when paused
+            0f64
+        }
     }
 }
