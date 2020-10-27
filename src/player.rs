@@ -39,7 +39,7 @@ pub enum Error {
 pub struct Player {
     out_stream: Stream,
     last_pos: Arc<AtomicU64>,
-    millis_at_pos: Arc<AtomicU64>,
+    nanos_at_pos: Arc<AtomicU64>,
     start_time: Instant,
     sample_rate: u32,
 }
@@ -73,11 +73,11 @@ impl Player {
             .ok_or(Error::NoAudioStreamInFile)?;
         let mut packet_read = 0;
         let last_pos = Arc::new(AtomicU64::new(0));
-        let millis_at_pos = Arc::new(AtomicU64::new(0));
+        let nanos_at_pos = Arc::new(AtomicU64::new(0));
 
         // Stream with cpal
         let pos = last_pos.clone();
-        let millis = millis_at_pos.clone();
+        let nanos = nanos_at_pos.clone();
         let start_time = Instant::now();
         let out_stream = device.build_output_stream(
             &config.into(),
@@ -88,9 +88,9 @@ impl Player {
                     if let Some(last_absgp) = ogg_stream.get_last_absgp() {
                         pos.store(last_absgp, Ordering::Relaxed);
                     }
-                    millis.store(
-                        u64::try_from(Instant::now().duration_since(start_time).as_millis())
-                            .expect("Music track too long"),
+                    nanos.store(
+                        u64::try_from(Instant::now().duration_since(start_time).as_nanos())
+                            .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() }),
                         Ordering::Relaxed,
                     );
 
@@ -128,7 +128,7 @@ impl Player {
         Ok(Self {
             out_stream,
             last_pos,
-            millis_at_pos,
+            nanos_at_pos,
             start_time,
             sample_rate,
         })
@@ -145,12 +145,11 @@ impl Player {
     }
 
     pub fn time_secs(&self) -> f64 {
-        let millis_since_pos =
-            u64::try_from(Instant::now().duration_since(self.start_time).as_millis())
-                .expect("Music track too long")
-                - self.millis_at_pos.load(Ordering::Relaxed);
-        dbg!(millis_since_pos);
+        let nanos_since_pos =
+            u64::try_from(Instant::now().duration_since(self.start_time).as_nanos())
+                .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() })
+                - self.nanos_at_pos.load(Ordering::Relaxed);
         self.last_pos.load(Ordering::Relaxed) as f64 / self.sample_rate as f64
-            + millis_since_pos as f64 / 1000f64
+            + nanos_since_pos as f64 / 1_000_000_000f64
     }
 }
