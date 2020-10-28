@@ -3,12 +3,13 @@ use cpal::{
     SampleRate, Stream,
 };
 use lewton::inside_ogg::OggStreamReader;
+use parking_lot::Mutex;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, RwLock,
+    mpsc, Arc,
 };
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -36,11 +37,13 @@ pub enum Error {
 }
 
 pub struct Player {
-    ogg_stream: Arc<RwLock<OggStreamReader<BufReader<File>>>>,
+    ogg_stream: Arc<Mutex<OggStreamReader<BufReader<File>>>>,
     out_stream: Stream,
-    sample_rate: u32,
-    last_absgp: Option<u64>,
-    time_absgp: Instant,
+    sample_rate: u64,
+    start_time: Instant,
+    pause_time: Instant,
+    time_offset: Duration,
+    error_sync_rx: mpsc::Receiver<()>,
     playing: bool,
     at_end: Arc<AtomicBool>,
 }
@@ -76,67 +79,80 @@ impl Player {
             .read_dec_packet_itl()?
             .ok_or(Error::NoAudioStreamInFile)?;
         let mut packet_read = 0;
-        let last_absgp = ogg_stream.get_last_absgp();
-        let time_absgp = Instant::now();
-        let ogg_stream = Arc::new(RwLock::new(ogg_stream));
+        let ogg_stream = Arc::new(Mutex::new(ogg_stream));
         let at_end = Arc::new(AtomicBool::new(false));
+        let (error_sync_tx, error_sync_rx) = mpsc::channel();
 
         // Stream with cpal
-        let ogg = ogg_stream.clone();
-        let end = at_end.clone();
-        let out_stream = device.build_output_stream(
-            &config.into(),
-            move |output_buf: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                let mut output_written = 0;
+        let out_stream = {
+            let ogg_stream = ogg_stream.clone();
+            let at_end = at_end.clone();
+            let mut errors = 0;
+            device.build_output_stream(
+                &config.into(),
+                move |output_buf: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                    let mut output_written = 0;
 
-                loop {
-                    // Slice to current positions
-                    let packet = &packet_buf[packet_read..];
-                    let output = &mut output_buf[output_written..];
+                    loop {
+                        // Slice to current positions
+                        let packet = &packet_buf[packet_read..];
+                        let output = &mut output_buf[output_written..];
 
-                    // Copy audio from previously decoded vorbis packet
-                    if packet.len() >= output.len() {
-                        output.copy_from_slice(&packet[..output.len()]);
-                        packet_read += output.len();
-                        // Output buffer is full, job done
-                        return;
-                    } else {
-                        (&mut output[..packet.len()]).copy_from_slice(packet);
-                        output_written += packet.len();
-                        // Output buffer is not filled yet, continue
-                    };
+                        // Copy audio from previously decoded vorbis packet
+                        if packet.len() >= output.len() {
+                            output.copy_from_slice(&packet[..output.len()]);
+                            packet_read += output.len();
+                            // Output buffer is full, job done
+                            return;
+                        } else {
+                            (&mut output[..packet.len()]).copy_from_slice(packet);
+                            output_written += packet.len();
+                            // Output buffer is not filled yet, continue
+                        };
 
-                    // When necessary, decode a new packet
-                    if let Some(new_packet) = ogg.write().unwrap().read_dec_packet_itl().unwrap() {
-                        packet_buf = new_packet;
-                    } else {
-                        // Or if at EOS
-                        // Tell asking threads that the track is at end
-                        end.store(true, Ordering::SeqCst);
+                        // When necessary, decode a new packet
+                        if let Some(new_packet) = ogg_stream.lock().read_dec_packet_itl().unwrap() {
+                            // Swap buffer
+                            packet_buf = new_packet;
+                        } else {
+                            // Or if at EOS
+                            // Tell asking threads that the track is at end
+                            at_end.store(true, Ordering::SeqCst);
 
-                        // And play silence
-                        for sample in packet_buf.iter_mut() {
-                            *sample = 0;
+                            // And play silence
+                            for sample in packet_buf.iter_mut() {
+                                *sample = 0;
+                            }
                         }
-                    }
-                    packet_read = 0;
+                        packet_read = 0;
 
-                    // Loop until output buffer is filled
-                }
-            },
-            move |e| {
-                panic!("cpal error {}", e);
-            },
-        )?;
+                        // Loop until output buffer is filled
+                    }
+                },
+                move |e| {
+                    log::error!("Audio playback error: {}", e);
+                    errors += 1;
+                    if errors > 100 {
+                        panic!("Frequent audio playback errors");
+                    }
+                    log::info!("Trying to resync");
+                    error_sync_tx.send(()).unwrap();
+                },
+            )?
+        };
 
         out_stream.pause()?;
+
+        let time = Instant::now();
 
         Ok(Self {
             ogg_stream,
             out_stream,
-            sample_rate,
-            last_absgp,
-            time_absgp,
+            sample_rate: u64::from(sample_rate),
+            start_time: time,
+            pause_time: time,
+            time_offset: Duration::new(0, 0),
+            error_sync_rx,
             playing: false,
             at_end,
         })
@@ -151,42 +167,43 @@ impl Player {
     }
 
     pub fn play(&mut self) -> Result<(), Error> {
-        self.playing = true;
-        self.out_stream.play()?;
+        if !self.is_at_end() && !self.is_playing() {
+            self.playing = true;
+            if let Some(absgp) = self.ogg_stream.lock().get_last_absgp() {
+                self.time_offset = Duration::from_nanos((absgp * 1_000_000_000) / self.sample_rate);
+            } else {
+                self.time_offset += self.pause_time.duration_since(self.start_time);
+            }
+            self.start_time = Instant::now();
+            self.out_stream.play()?;
+        }
         Ok(())
     }
 
     pub fn pause(&mut self) -> Result<(), Error> {
-        self.playing = false;
-        self.out_stream.pause()?;
+        if self.is_playing() {
+            self.playing = false;
+            self.pause_time = Instant::now();
+            self.out_stream.pause()?;
+        }
         Ok(())
     }
 
     pub fn time_secs(&mut self) -> f64 {
-        // Checking and creating new Instants too often will cause frequent jitter and unnecessary
-        // lock acquiring, limit to once per second
-        if self.time_absgp.elapsed() > Duration::new(1, 0) {
-            // Check vorbis stream's approx position in samples
-            let absgp = self.ogg_stream.read().unwrap().get_last_absgp();
-            // If it's a new reading, store, and take note when it was taken
-            if absgp != self.last_absgp {
-                self.last_absgp = absgp;
-                self.time_absgp = Instant::now();
+        // If playback errors (underruns?) have happened, try to sync with the stream position
+        if self.error_sync_rx.try_recv().is_ok() {
+            if let Some(absgp) = self.ogg_stream.lock().get_last_absgp() {
+                self.time_offset = Duration::from_nanos((absgp * 1_000_000_000) / self.sample_rate);
+                self.start_time = Instant::now();
             }
         }
 
-        (if let Some(absgp) = self.last_absgp {
-            // Samples per samples per second makes seconds
-            absgp as f64 / self.sample_rate as f64
+        (if self.is_playing() {
+            self.start_time.elapsed()
         } else {
-            // Some default if vorbis position is unknown
-            0f64
-        }) + if self.is_playing() {
-            // Add precision by adding time elapsed since last update from vorbis stream
-            self.time_absgp.elapsed().as_nanos() as f64 / 1_000_000_000f64
-        } else {
-            // But don't add anything if paused, time shouldn't run when paused
-            0f64
-        }
+            self.pause_time.duration_since(self.start_time)
+        } + self.time_offset)
+            .as_nanos() as f64
+            / 1_000_000_000f64
     }
 }

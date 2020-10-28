@@ -44,7 +44,6 @@ pub struct Demo {
     blur_pass_x: RenderPass,
     blur_pass_y: RenderPass,
     post_pass: RenderPass,
-    last_time: f64,
 }
 
 impl Demo {
@@ -119,7 +118,6 @@ impl Demo {
             blur_pass_x: RenderPass::new(gl.clone(), w, h, "two_pass_gaussian_blur.frag", None),
             blur_pass_y: RenderPass::new(gl.clone(), w, h, "two_pass_gaussian_blur.frag", None),
             post_pass: RenderPass::new(gl, w, h, "post.frag", None),
-            last_time: 0f64,
         };
 
         log::info!("demo created");
@@ -129,8 +127,7 @@ impl Demo {
 
     pub fn render(&mut self) -> Result<(), glesv2::Error> {
         let time = self.player.time_secs();
-        log::info!("{} ({} delta)", time, time - self.last_time);
-        self.last_time = time;
+        log::info!("{}", time);
 
         let cam_pos = Point3::new(
             self.sync_get("cam:pos.x") as f32,

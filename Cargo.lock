@@ -541,6 +541,7 @@ dependencies = [
  "lewton",
  "log",
  "num_cpus",
+ "parking_lot 0.11.0",
  "rand 0.7.3",
  "rand_xorshift 0.2.0",
  "simple_logger",

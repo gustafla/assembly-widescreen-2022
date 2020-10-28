@@ -16,6 +16,7 @@ glutin = "0.25.1"
 thiserror = "1.0.21"
 lewton = "0.10.1"
 cpal = { git = "https://github.com/RustAudio/cpal" }
+parking_lot = "0.11.0"
 
 [build-dependencies]
 gl_generator = "0.14.0"
