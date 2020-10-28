@@ -464,7 +464,7 @@ dependencies = [
 [[package]]
 name = "cpal"
 version = "0.12.1"
-source = "git+https://github.com/RustAudio/cpal#f8775b1e7bb9b1ad9798b449202c7f53703220d9"
+source = "git+https://github.com/RustAudio/cpal#81a7414d0b2a8b83ed8e885869dc0b779f4361c0"
 dependencies = [
  "alsa",
  "core-foundation-sys 0.6.2",
@@ -1002,9 +1002,9 @@ checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
 name = "memchr"
-version = "2.3.3"
+version = "2.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
+checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
 
 [[package]]
 name = "memmap"

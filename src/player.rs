@@ -18,7 +18,7 @@ use thiserror::Error;
 pub enum Error {
     #[error(transparent)]
     FileAccess(#[from] std::io::Error),
-    #[error(transparent)]
+    #[error("Failed to decode ogg vorbis file")]
     Decode(#[from] lewton::VorbisError),
     #[error("No audio output devices")]
     NoAudioOutputDevices,
@@ -28,11 +28,11 @@ pub enum Error {
     NoSupportForRequiredConfiguration,
     #[error("Ogg file doesn't contain audio")]
     NoAudioStreamInFile,
-    #[error(transparent)]
+    #[error("Failed to build audio output stream")]
     BuildStream(#[from] cpal::BuildStreamError),
-    #[error(transparent)]
+    #[error("Failed to start audio output stream")]
     PlayStream(#[from] cpal::PlayStreamError),
-    #[error(transparent)]
+    #[error("Failed to pause audio output stream")]
     PauseStream(#[from] cpal::PauseStreamError),
 }
 
@@ -170,7 +170,7 @@ impl Player {
         if !self.is_at_end() && !self.is_playing() {
             self.playing = true;
             if let Some(absgp) = self.ogg_stream.lock().get_last_absgp() {
-                self.time_offset = Duration::from_nanos((absgp * 1_000_000_000) / self.sample_rate);
+                self.time_offset = self.absgp_to_duration(absgp);
             } else {
                 self.time_offset += self.pause_time.duration_since(self.start_time);
             }
@@ -192,9 +192,13 @@ impl Player {
     pub fn time_secs(&mut self) -> f64 {
         // If playback errors (underruns?) have happened, try to sync with the stream position
         if self.error_sync_rx.try_recv().is_ok() {
-            if let Some(absgp) = self.ogg_stream.lock().get_last_absgp() {
-                self.time_offset = Duration::from_nanos((absgp * 1_000_000_000) / self.sample_rate);
-                self.start_time = Instant::now();
+            loop {
+                if let Some(absgp) = self.ogg_stream.lock().get_last_absgp() {
+                    self.time_offset = self.absgp_to_duration(absgp);
+                    self.start_time = Instant::now();
+                    break;
+                }
+                std::thread::sleep(Duration::new(0, 100_000_000));
             }
         }
 
@@ -205,5 +209,12 @@ impl Player {
         } + self.time_offset)
             .as_nanos() as f64
             / 1_000_000_000f64
+    }
+
+    fn absgp_to_duration(&self, absgp: u64) -> Duration {
+        Duration::new(
+            absgp / self.sample_rate,
+            (((absgp % self.sample_rate) * 1_000_000_000) / self.sample_rate) as u32,
+        )
     }
 }
