@@ -1,3 +1,5 @@
+#[cfg(debug_assertions)]
+mod fps_counter;
 mod glesv2;
 mod particle_system;
 mod player;
@@ -5,6 +7,8 @@ mod render_pass;
 mod terrain;
 
 use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
+#[cfg(debug_assertions)]
+use fps_counter::FpsCounter;
 pub use glesv2::{
     types::*, Framebuffer, Gles2, RcGl, Renderbuffer, RenderbufferAttachment, ResourceMapper,
     Texture, UniformValue,
@@ -30,6 +34,8 @@ pub enum Error {
 }
 
 pub struct Demo {
+    #[cfg(debug_assertions)]
+    fps_counter: FpsCounter,
     pub player: Player,
     pub resolution: (i32, i32),
     pub projection: [f32; 16],
@@ -92,6 +98,8 @@ impl Demo {
         ]);
 
         let demo = Demo {
+            #[cfg(debug_assertions)]
+            fps_counter: FpsCounter::new(),
             player: Player::new("resources/music.ogg")?,
             resolution: (w, h),
             projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
@@ -126,8 +134,10 @@ impl Demo {
     }
 
     pub fn render(&mut self) -> Result<(), glesv2::Error> {
-        let time = self.player.time_secs();
-        log::info!("{}", time);
+        #[cfg(debug_assertions)]
+        if let Some(fps) = self.fps_counter.tick() {
+            log::info!("{} FPS", fps);
+        }
 
         let cam_pos = Point3::new(
             self.sync_get("cam:pos.x") as f32,
