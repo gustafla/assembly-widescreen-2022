@@ -7,16 +7,16 @@ edition = "2018"
 [dependencies]
 log = { version = "0.4.11", features = ["release_max_level_info"] }
 simple_logger = { version = "1.11.0", default-features = false }
-rand = "0.7.3"
-rand_xorshift = "0.2.0"
+rand = "0.8.0"
+rand_xorshift = "0.3.0"
 cgmath = { version = "0.17.0", default-features = false }
 num_cpus = "1.13.0"
-anyhow = "1.0.33"
-glutin = "0.25.1"
-thiserror = "1.0.21"
+anyhow = "1.0.36"
+glutin = "0.26.0"
+thiserror = "1.0.22"
 lewton = "0.10.1"
 cpal = { git = "https://github.com/RustAudio/cpal" }
-parking_lot = "0.11.0"
+parking_lot = "0.11.1"
 
 [build-dependencies]
 gl_generator = "0.14.0"

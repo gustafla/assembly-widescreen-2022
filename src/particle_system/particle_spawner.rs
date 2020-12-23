@@ -55,21 +55,22 @@ impl ParticleSpawner {
             ParticleSpawnerKind::Box(pos1, pos2) => (0..n)
                 .map(|_| {
                     Vector3::new(
-                        self.rng.gen_range(pos1.0, pos2.0),
-                        self.rng.gen_range(pos1.1, pos2.1),
-                        self.rng.gen_range(pos1.2, pos2.2),
+                        // TODO rand::distributions::uniform::Uniform
+                        self.rng.gen_range(pos1.0..pos2.0),
+                        self.rng.gen_range(pos1.1..pos2.1),
+                        self.rng.gen_range(pos1.2..pos2.2),
                     ) + self.position
                 })
                 .collect(),
             ParticleSpawnerKind::Sphere(int_r, ext_r) => (0..n)
                 .map(|_| {
                     Vector3::new(
-                        self.rng.gen_range(-1., 1.),
-                        self.rng.gen_range(-1., 1.),
-                        self.rng.gen_range(-1., 1.),
+                        self.rng.gen_range(-1. ..1.),
+                        self.rng.gen_range(-1. ..1.),
+                        self.rng.gen_range(-1. ..1.),
                     )
                     .normalize()
-                        * self.rng.gen_range(int_r, ext_r)
+                        * self.rng.gen_range(int_r..ext_r)
                         + self.position
                 })
                 .collect(),
