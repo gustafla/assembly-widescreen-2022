@@ -144,7 +144,7 @@ impl Demo {
             self.sync_get("cam:pos.y") as f32,
             self.sync_get("cam:pos.z") as f32,
         );
-        self.view = *Matrix4::look_at(
+        self.view = *Matrix4::look_at_lh(
             cam_pos,
             Point3::new(
                 self.sync_get("cam:target.x") as f32,
