@@ -4,6 +4,7 @@ mod glesv2;
 mod particle_system;
 mod player;
 mod render_pass;
+mod sync;
 mod terrain;
 
 use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
@@ -20,6 +21,7 @@ pub use player::Player;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
+pub use sync::Sync;
 use terrain::Terrain;
 use thiserror::Error;
 
@@ -29,14 +31,11 @@ const NOISE_SCALE: i32 = 8;
 pub enum Error {
     #[error(transparent)]
     ResourceLoading(#[from] glesv2::resource_mapper::Error),
-    #[error(transparent)]
-    MusicPlayer(#[from] player::Error),
 }
 
 pub struct Demo {
     #[cfg(debug_assertions)]
     fps_counter: FpsCounter,
-    pub player: Player,
     pub resolution: (i32, i32),
     pub projection: [f32; 16],
     pub view: [f32; 16],
@@ -100,7 +99,6 @@ impl Demo {
         let demo = Demo {
             #[cfg(debug_assertions)]
             fps_counter: FpsCounter::new(),
-            player: Player::new("resources/music.ogg")?,
             resolution: (w, h),
             projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
             view: [0f32; 16],
@@ -133,23 +131,23 @@ impl Demo {
         Ok(demo)
     }
 
-    pub fn render(&mut self) -> Result<(), glesv2::Error> {
+    pub fn render(&mut self, sync: &mut Sync) -> Result<(), glesv2::Error> {
         #[cfg(debug_assertions)]
         if let Some(fps) = self.fps_counter.tick() {
             log::info!("{} FPS", fps);
         }
 
         let cam_pos = Point3::new(
-            self.sync_get("cam:pos.x") as f32,
-            self.sync_get("cam:pos.y") as f32,
-            self.sync_get("cam:pos.z") as f32,
+            sync.get("cam:pos.x"),
+            sync.get("cam:pos.y"),
+            sync.get("cam:pos.z"),
         );
         self.view = *Matrix4::look_at_lh(
             cam_pos,
             Point3::new(
-                self.sync_get("cam:target.x") as f32,
-                self.sync_get("cam:target.y") as f32,
-                self.sync_get("cam:target.z") as f32,
+                sync.get("cam:target.x"),
+                sync.get("cam:target.y"),
+                sync.get("cam:target.z"),
             ), // center
             Vector3::unit_y(),
         )
@@ -164,7 +162,7 @@ impl Demo {
         self.gl.enable(glesv2::DEPTH_TEST);
         self.gl.enable(glesv2::BLEND);
 
-        let sim_time = self.sync_get("sim_time") as f32;
+        let sim_time = sync.get("sim_time");
         let lightpos =
             self.particle_system
                 .prepare(cam_pos.to_homogeneous().truncate(), sim_time, 128);
@@ -216,7 +214,7 @@ impl Demo {
             noise.as_slice(),
         );
 
-        let noise_amount = UniformValue::Float(self.sync_get("noise_amount") as f32);
+        let noise_amount = UniformValue::Float(sync.get("noise_amount"));
 
         Framebuffer::bind_default(self.gl.clone(), 0);
         self.post_pass.render(
@@ -235,11 +233,6 @@ impl Demo {
         );
 
         glesv2::check(self.gl.clone())
-    }
-
-    fn sync_get(&mut self, _: &str) -> f64 {
-        // TODO Rocket impl
-        0.1
     }
 }
 

@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use demo::{Demo, RcGl};
+use demo::{Demo, Player, RcGl, Sync};
 use glutin::{
     dpi::PhysicalSize,
     event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -36,20 +36,28 @@ fn main() -> Result<()> {
     // Load OpenGL interface
     let gl = RcGl::new(|s| windowed_context.get_proc_address(s));
 
+    // Load music
+    let mut player = Player::new("resources/music.ogg").context("Failed to load music")?;
+
+    // Initialize rocket
+    let mut sync = Sync::new();
+
     // Load demo content
     let mut demo = Demo::new(size.width, size.height, gl)?;
 
-    demo.player.play()?;
+    player.play()?;
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
-        if demo.player.is_at_end() {
+        if player.is_at_end() {
             if cfg!(debug_assertions) {
-                demo.player.pause().unwrap();
+                player.pause().unwrap();
             } else {
                 *control_flow = ControlFlow::Exit;
             }
         }
+
+        sync.update(&mut player);
 
         match event {
             Event::WindowEvent { event, .. } => match event {
@@ -68,7 +76,7 @@ fn main() -> Result<()> {
                 _ => (),
             },
             Event::MainEventsCleared => {
-                if let Err(e) = demo.render() {
+                if let Err(e) = demo.render(&mut sync) {
                     panic!("{}", e);
                 }
 
