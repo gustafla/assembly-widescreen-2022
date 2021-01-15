@@ -5,7 +5,7 @@ use cpal::{
 use lewton::inside_ogg::OggStreamReader;
 use parking_lot::Mutex;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read, Seek};
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -37,9 +37,10 @@ pub enum Error {
 }
 
 pub struct Player {
-    ogg_stream: Arc<Mutex<OggStreamReader<BufReader<File>>>>,
+    playback_position: Arc<Mutex<usize>>,
     out_stream: Stream,
-    sample_rate: u64,
+    sample_rate: usize,
+    channels: usize,
     start_time: Instant,
     pause_time: Instant,
     time_offset: Duration,
@@ -49,14 +50,38 @@ pub struct Player {
 }
 
 impl Player {
+    fn decode_ogg(reader: impl Read + Seek) -> Result<(Vec<i16>, usize, usize), Error> {
+        let mut ogg_stream_reader = OggStreamReader::new(reader)?;
+
+        // Because lewton doesn't have time seek at the time of writing,
+        // I'm gonna waste memory with full uncompressed audio
+        let mut audio_data = Vec::new();
+        loop {
+            match ogg_stream_reader.read_dec_packet_itl() {
+                Ok(Some(packet)) => audio_data.extend_from_slice(&packet),
+                Ok(None) => {
+                    break;
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
+
+        Ok((
+            audio_data,
+            ogg_stream_reader.ident_hdr.audio_sample_rate as usize,
+            ogg_stream_reader.ident_hdr.audio_channels as usize,
+        ))
+    }
+
     pub fn new(ogg_path: impl AsRef<Path>) -> Result<Self, Error> {
         log::info!("Loading {}", ogg_path.as_ref().display());
 
-        // Read ogg file headers
+        // Read and decode ogg file
         let ogg_file = File::open(ogg_path)?;
         let ogg_reader = BufReader::new(ogg_file);
-        let mut ogg_stream = OggStreamReader::new(ogg_reader)?;
-        let sample_rate = ogg_stream.ident_hdr.audio_sample_rate;
+        let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader)?;
 
         // Initialize cpal output device
         let host = cpal::default_host();
@@ -66,67 +91,42 @@ impl Player {
         let mut supported_configs_range = device.supported_output_configs()?;
         let config = supported_configs_range
             .find(|c| {
-                c.channels() == ogg_stream.ident_hdr.audio_channels.into()
-                    && c.min_sample_rate().0 <= sample_rate
-                    && c.max_sample_rate().0 >= sample_rate
+                c.channels() as usize == channels
+                    && c.min_sample_rate().0 <= sample_rate as u32
+                    && c.max_sample_rate().0 >= sample_rate as u32
                     && c.sample_format() == cpal::SampleFormat::I16
             })
             .ok_or(Error::NoSupportForRequiredConfiguration)?
-            .with_sample_rate(SampleRate(ogg_stream.ident_hdr.audio_sample_rate));
+            .with_sample_rate(SampleRate(sample_rate as u32));
 
-        // Initialize vorbis streaming
-        let mut packet_buf = ogg_stream
-            .read_dec_packet_itl()?
-            .ok_or(Error::NoAudioStreamInFile)?;
-        let mut packet_read = 0;
-        let ogg_stream = Arc::new(Mutex::new(ogg_stream));
+        let playback_position = Arc::new(Mutex::new(0));
         let at_end = Arc::new(AtomicBool::new(false));
         let (error_sync_tx, error_sync_rx) = mpsc::channel();
 
         // Stream with cpal
         let out_stream = {
-            let ogg_stream = ogg_stream.clone();
             let at_end = at_end.clone();
+            let playback_position = playback_position.clone();
             let mut errors = 0;
             device.build_output_stream(
                 &config.into(),
                 move |output_buf: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                    let mut output_written = 0;
+                    // Lock position mutex during critical section
+                    let mut playback_position = playback_position.lock();
 
-                    loop {
-                        // Slice to current positions
-                        let packet = &packet_buf[packet_read..];
-                        let output = &mut output_buf[output_written..];
+                    // TODO Callback buffer fill, notify at_end
+                    let audio_data = &audio_data[*playback_position..];
 
-                        // Copy audio from previously decoded vorbis packet
-                        if packet.len() >= output.len() {
-                            output.copy_from_slice(&packet[..output.len()]);
-                            packet_read += output.len();
-                            // Output buffer is full, job done
-                            return;
-                        } else {
-                            (&mut output[..packet.len()]).copy_from_slice(packet);
-                            output_written += packet.len();
-                            // Output buffer is not filled yet, continue
-                        };
-
-                        // When necessary, decode a new packet
-                        if let Some(new_packet) = ogg_stream.lock().read_dec_packet_itl().unwrap() {
-                            // Swap buffer
-                            packet_buf = new_packet;
-                        } else {
-                            // Or if at EOS
-                            // Tell asking threads that the track is at end
-                            at_end.store(true, Ordering::SeqCst);
-
-                            // And play silence
-                            for sample in packet_buf.iter_mut() {
-                                *sample = 0;
-                            }
-                        }
-                        packet_read = 0;
-
-                        // Loop until output buffer is filled
+                    if audio_data.len() >= output_buf.len() {
+                        output_buf.copy_from_slice(&audio_data[..output_buf.len()]);
+                        *playback_position += output_buf.len();
+                    } else {
+                        output_buf[..audio_data.len()].copy_from_slice(&audio_data);
+                        output_buf[audio_data.len()..]
+                            .iter_mut()
+                            .for_each(|value| *value = 0);
+                        *playback_position += audio_data.len();
+                        at_end.store(true, Ordering::SeqCst);
                     }
                 },
                 move |e| {
@@ -146,9 +146,10 @@ impl Player {
         let time = Instant::now();
 
         Ok(Self {
-            ogg_stream,
+            playback_position,
             out_stream,
-            sample_rate: u64::from(sample_rate),
+            sample_rate,
+            channels,
             start_time: time,
             pause_time: time,
             time_offset: Duration::new(0, 0),
@@ -169,11 +170,7 @@ impl Player {
     pub fn play(&mut self) -> Result<(), Error> {
         if !self.is_at_end() && !self.is_playing() {
             self.playing = true;
-            if let Some(absgp) = self.ogg_stream.lock().get_last_absgp() {
-                self.time_offset = self.absgp_to_duration(absgp);
-            } else {
-                self.time_offset += self.pause_time.duration_since(self.start_time);
-            }
+            self.time_offset = self.pos_to_duration(*self.playback_position.lock());
             self.start_time = Instant::now();
             self.out_stream.play()?;
         }
@@ -189,17 +186,13 @@ impl Player {
         Ok(())
     }
 
-    pub fn time_secs(&mut self) -> f32 {
-        // If playback errors (underruns?) have happened, try to sync with the stream position
+    pub fn time_secs(&mut self) -> f64 {
+        // If playback errors (underruns?) have happened, sync with the stream position
         if self.error_sync_rx.try_recv().is_ok() {
-            loop {
-                if let Some(absgp) = self.ogg_stream.lock().get_last_absgp() {
-                    self.time_offset = self.absgp_to_duration(absgp);
-                    self.start_time = Instant::now();
-                    break;
-                }
-                std::thread::sleep(Duration::new(0, 100_000_000));
-            }
+            self.time_offset = self.pos_to_duration(*self.playback_position.lock());
+            let time = Instant::now();
+            self.start_time = time;
+            self.pause_time = time;
         }
 
         (if self.is_playing() {
@@ -207,20 +200,26 @@ impl Player {
         } else {
             self.pause_time.duration_since(self.start_time)
         } + self.time_offset)
-            .as_nanos() as f32
-            / 1_000_000_000f32
+            .as_nanos() as f64
+            / 1_000_000_000f64
     }
 
-    pub fn seek(&mut self, secs: f32) -> Result<(), Error> {
-        let mut absgp = (secs * self.sample_rate as f32) as u64;
-        self.ogg_stream.lock().seek_absgp_pg(absgp)?;
-        Ok(())
+    pub fn seek(&mut self, secs: f64) {
+        let sample_rate_channels = (self.sample_rate * self.channels) as f64;
+        let mut pos = (secs * sample_rate_channels) as usize;
+        pos -= pos % self.channels; // Align to channel
+        *self.playback_position.lock() = pos;
+        self.time_offset = self.pos_to_duration(pos);
+        let time = Instant::now();
+        self.start_time = time;
+        self.pause_time = time;
     }
 
-    fn absgp_to_duration(&self, absgp: u64) -> Duration {
+    fn pos_to_duration(&self, pos: usize) -> Duration {
+        let sample_rate_channels = self.sample_rate * self.channels;
         Duration::new(
-            absgp / self.sample_rate,
-            (((absgp % self.sample_rate) * 1_000_000_000) / self.sample_rate) as u32,
+            (pos / sample_rate_channels) as u64,
+            (((pos % sample_rate_channels) * 1_000_000_000) / sample_rate_channels) as u32,
         )
     }
 }

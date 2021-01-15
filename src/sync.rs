@@ -3,9 +3,9 @@ use crate::Player;
 const TRACK_FILE: &str = "resources/tracks.bin";
 
 pub struct Sync {
-    row: f32,
-    beats_per_sec: f32,
-    rows_per_beat: f32,
+    row: f64,
+    beats_per_sec: f64,
+    rows_per_beat: f64,
     #[cfg(debug_assertions)]
     rocket: rust_rocket::Client,
     #[cfg(not(debug_assertions))]
@@ -24,7 +24,7 @@ fn connect() -> rust_rocket::Client {
 }
 
 impl Sync {
-    pub fn new(bpm: f32, rows_per_beat: f32) -> Self {
+    pub fn new(bpm: f64, rows_per_beat: f64) -> Self {
         #[cfg(debug_assertions)]
         let rocket = connect();
         #[cfg(not(debug_assertions))]
@@ -43,7 +43,7 @@ impl Sync {
     pub fn get(&mut self, track: &str) -> f32 {
         loop {
             if let Ok(track) = self.rocket.get_track_mut(track) {
-                return track.get_value(self.row);
+                return track.get_value(self.row as f32);
             }
             self.reconnect();
         }
@@ -54,7 +54,7 @@ impl Sync {
         self.rocket
             .get_track(track)
             .unwrap_or_else(|| panic!("Sync track {} is not present. This is a bug, sorry.", track))
-            .get_value(self.row)
+            .get_value(self.row as f32)
     }
 
     pub fn update(&mut self, player: &mut Player) {
@@ -69,7 +69,7 @@ impl Sync {
                     if let Some(event) = result {
                         match event {
                             Event::SetRow(row) => {
-                                player.seek(self.row_to_secs(row as f32)).unwrap();
+                                player.seek(self.row_to_secs(row as f64));
                             }
                             Event::Pause(state) => {
                                 if state {
@@ -90,11 +90,13 @@ impl Sync {
                 }
             }
 
-            loop {
-                if self.rocket.set_row(self.row as u32).is_ok() {
-                    break;
+            if player.is_playing() {
+                loop {
+                    if self.rocket.set_row(self.row as u32).is_ok() {
+                        break;
+                    }
+                    self.reconnect();
                 }
-                self.reconnect();
             }
         }
     }
@@ -113,13 +115,14 @@ impl Sync {
         log::info!("Tracks saved to {}", TRACK_FILE);
     }
 
-    fn secs_to_row(&self, secs: f32) -> f32 {
-        secs * self.beats_per_sec * self.rows_per_beat
-    }
-
-    fn row_to_secs(&self, row: f32) -> f32 {
+    #[cfg(debug_assertions)]
+    fn row_to_secs(&self, row: f64) -> f64 {
         let beat = row / self.rows_per_beat;
         beat / self.beats_per_sec
+    }
+
+    fn secs_to_row(&self, secs: f64) -> f64 {
+        secs * self.beats_per_sec * self.rows_per_beat
     }
 }
 
