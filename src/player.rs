@@ -211,6 +211,12 @@ impl Player {
             / 1_000_000_000f32
     }
 
+    pub fn seek(&mut self, secs: f32) -> Result<(), Error> {
+        let mut absgp = (secs * self.sample_rate as f32) as u64;
+        self.ogg_stream.lock().seek_absgp_pg(absgp)?;
+        Ok(())
+    }
+
     fn absgp_to_duration(&self, absgp: u64) -> Duration {
         Duration::new(
             absgp / self.sample_rate,

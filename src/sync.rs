@@ -4,10 +4,8 @@ const TRACK_FILE: &str = "resources/tracks.bin";
 
 pub struct Sync {
     row: f32,
-    // Beats Per Minute (music beat)
-    bpm: f32,
-    // Rows Per Beat (rocket row)
-    rpb: f32,
+    beats_per_sec: f32,
+    rows_per_beat: f32,
     #[cfg(debug_assertions)]
     rocket: rust_rocket::Client,
     #[cfg(not(debug_assertions))]
@@ -26,7 +24,7 @@ fn connect() -> rust_rocket::Client {
 }
 
 impl Sync {
-    pub fn new(bpm: f32, rpb: f32) -> Self {
+    pub fn new(bpm: f32, rows_per_beat: f32) -> Self {
         #[cfg(debug_assertions)]
         let rocket = connect();
         #[cfg(not(debug_assertions))]
@@ -35,8 +33,8 @@ impl Sync {
 
         Self {
             row: 0.,
-            bpm,
-            rpb,
+            beats_per_sec: bpm / 60.,
+            rows_per_beat,
             rocket,
         }
     }
@@ -71,7 +69,7 @@ impl Sync {
                     if let Some(event) = result {
                         match event {
                             Event::SetRow(row) => {
-                                log::warn!("Seeking unimpl. Row: {}", row);
+                                player.seek(self.row_to_secs(row as f32)).unwrap();
                             }
                             Event::Pause(state) => {
                                 if state {
@@ -116,8 +114,12 @@ impl Sync {
     }
 
     fn secs_to_row(&self, secs: f32) -> f32 {
-        let beats_per_sec = self.bpm / 60.;
-        secs * beats_per_sec * self.rpb
+        secs * self.beats_per_sec * self.rows_per_beat
+    }
+
+    fn row_to_secs(&self, row: f32) -> f32 {
+        let beat = row / self.rows_per_beat;
+        beat / self.beats_per_sec
     }
 }
 
