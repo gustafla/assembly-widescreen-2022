@@ -60,7 +60,7 @@ impl Sync {
     }
 
     pub fn update(&mut self, player: &mut Player) {
-        self.row = self.secs_to_row(player.time_secs() as f32);
+        self.row = self.secs_to_row(player.time_secs());
 
         #[cfg(debug_assertions)]
         {

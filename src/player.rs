@@ -189,7 +189,7 @@ impl Player {
         Ok(())
     }
 
-    pub fn time_secs(&mut self) -> f64 {
+    pub fn time_secs(&mut self) -> f32 {
         // If playback errors (underruns?) have happened, try to sync with the stream position
         if self.error_sync_rx.try_recv().is_ok() {
             loop {
@@ -207,8 +207,8 @@ impl Player {
         } else {
             self.pause_time.duration_since(self.start_time)
         } + self.time_offset)
-            .as_nanos() as f64
-            / 1_000_000_000f64
+            .as_nanos() as f32
+            / 1_000_000_000f32
     }
 
     fn absgp_to_duration(&self, absgp: u64) -> Duration {
