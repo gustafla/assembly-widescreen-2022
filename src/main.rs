@@ -40,12 +40,14 @@ fn main() -> Result<()> {
     let mut player = Player::new("resources/music.ogg").context("Failed to load music")?;
 
     // Initialize rocket
-    let mut sync = Sync::new();
+    let mut sync = Sync::new(120., 8.);
 
     // Load demo content
     let mut demo = Demo::new(size.width, size.height, gl)?;
 
+    #[cfg(not(debug_assertions))]
     player.play()?;
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
