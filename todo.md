@@ -1,4 +1,4 @@
-[ ] Write a frontend with `rocket_client`, winit, lewton and libpulse
+[ ] Write a frontend with `rocket_client`, winit, lewton and cpal
 [ ] Investigate wgpu and gfx-hal
 [x] Particle effect & physics system
   - [x] Spawning boxes
