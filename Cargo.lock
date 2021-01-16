@@ -1510,8 +1510,8 @@ checksum = "cabe4fa914dec5870285fa7f71f602645da47c486e68486d2b4ceb4a343e90ac"
 
 [[package]]
 name = "rust-rocket"
-version = "0.5.0"
-source = "git+https://github.com/gustafla/rust-rocket?branch=serde#3204b79579ae344eddea9ae16e5dc8ea30c7b82d"
+version = "0.5.1"
+source = "git+https://github.com/gustafla/rust-rocket#4bbeb880665e32efef49ab17f200f61d72cf0632"
 dependencies = [
  "bincode",
  "byteorder",
