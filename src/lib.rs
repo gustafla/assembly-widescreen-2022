@@ -126,7 +126,7 @@ impl Demo {
             post_pass: RenderPass::new(gl, w, h, "post.frag", None),
         };
 
-        log::info!("demo created");
+        log::trace!("demo created");
 
         Ok(demo)
     }
@@ -238,6 +238,6 @@ impl Demo {
 
 impl Drop for Demo {
     fn drop(&mut self) {
-        log::info!("demo dropped");
+        log::trace!("demo dropped");
     }
 }

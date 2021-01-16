@@ -26,10 +26,15 @@ fn connect() -> rust_rocket::Client {
 impl Sync {
     pub fn new(bpm: f64, rows_per_beat: f64) -> Self {
         #[cfg(debug_assertions)]
-        let rocket = connect();
+        let rocket = {
+            log::info!("Connecting to rocket tracker");
+            connect()
+        };
         #[cfg(not(debug_assertions))]
-        let rocket = rust_rocket::Player::new(TRACK_FILE)
-            .unwrap_or_else(|e| panic!("{}: {}", TRACK_FILE, e));
+        let rocket = {
+            log::info!("Loading {}", TRACK_FILE);
+            rust_rocket::Player::new(TRACK_FILE).unwrap_or_else(|e| panic!("{}: {}", TRACK_FILE, e))
+        };
 
         Self {
             row: 0.,
