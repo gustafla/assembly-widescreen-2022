@@ -1,21 +1,21 @@
 use crate::Player;
 
-const TRACK_FILE: &str = "resources/tracks.bin";
+const TRACKS_FILE: &str = "resources/tracks.bin";
 
 pub struct Sync {
     row: f64,
     beats_per_sec: f64,
     rows_per_beat: f64,
     #[cfg(debug_assertions)]
-    rocket: rust_rocket::Client,
+    rocket: rust_rocket::RocketClient,
     #[cfg(not(debug_assertions))]
-    rocket: rust_rocket::Player,
+    rocket: rust_rocket::RocketPlayer,
 }
 
 #[cfg(debug_assertions)]
-fn connect() -> rust_rocket::Client {
+fn connect() -> rust_rocket::RocketClient {
     loop {
-        if let Ok(rocket) = rust_rocket::Client::new() {
+        if let Ok(rocket) = rust_rocket::RocketClient::new() {
             return rocket;
         }
         log::info!("Cannot connect to Rocket, retrying in a sec...");
@@ -32,8 +32,10 @@ impl Sync {
         };
         #[cfg(not(debug_assertions))]
         let rocket = {
-            log::info!("Loading {}", TRACK_FILE);
-            rust_rocket::Player::new(TRACK_FILE).unwrap_or_else(|e| panic!("{}: {}", TRACK_FILE, e))
+            log::info!("Loading {}", TRACKS_FILE);
+            let file = std::fs::File::open(TRACKS_FILE).expect("Cannot open track file");
+            let tracks = bincode::deserialize_from(file).expect("Failed to deserialize tracks");
+            rust_rocket::RocketPlayer::new(tracks)
         };
 
         Self {
@@ -114,10 +116,15 @@ impl Sync {
 
     #[cfg(debug_assertions)]
     fn save_tracks(&mut self) {
-        self.rocket
-            .save_tracks(TRACK_FILE)
-            .unwrap_or_else(|e| panic!("{}: {}", TRACK_FILE, e));
-        log::info!("Tracks saved to {}", TRACK_FILE);
+        log::info!("Saving {}", TRACKS_FILE);
+        let tracks = self.rocket.save_tracks();
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(TRACKS_FILE)
+            .expect("Cannot open track file");
+        bincode::serialize_into(file, &tracks).expect("Cannot serialize tracks");
     }
 
     #[cfg(debug_assertions)]
