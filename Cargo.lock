@@ -1512,7 +1512,8 @@ checksum = "cabe4fa914dec5870285fa7f71f602645da47c486e68486d2b4ceb4a343e90ac"
 [[package]]
 name = "rust-rocket"
 version = "0.7.1"
-source = "git+https://github.com/Darksecond/rust-rocket#f130bd89e86891c3a022efa205a4666bc2ecd164"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbd186de09164d3817e2273f7f967797c1849ac63611c03afb433bfe058f7b5c"
 dependencies = [
  "byteorder",
  "serde",
