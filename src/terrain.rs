@@ -1,6 +1,6 @@
 use crate::glesv2::{self, types::*, Buffer, RcGl, UniformValue};
 use crate::Demo;
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 pub struct Terrain {
     gl: RcGl,
@@ -23,14 +23,14 @@ impl Terrain {
             for z in 0i32..zsize as i32 {
                 let x = (x - xsize as i32 / 2) as f32;
                 let z = -(z - zsize as i32 / 2) as f32;
-                geometry.push(Vector3::new(x, height_map(x, z), z)); // Position
+                geometry.push(Vec3::new(x, height_map(x, z), z)); // Position
 
-                let pos1 = Vector3::new(x, height_map(x, z - 1.), z - 1.);
-                let pos2 = Vector3::new(x - 1., height_map(x - 1., z), z);
+                let pos1 = Vec3::new(x, height_map(x, z - 1.), z - 1.);
+                let pos2 = Vec3::new(x - 1., height_map(x - 1., z), z);
                 let pos3 = geometry.last().unwrap();
 
                 let u = pos2 - pos1;
-                let v = pos3 - pos1;
+                let v = *pos3 - pos1;
 
                 geometry.push(u.cross(v).normalize()); // Normal
             }
@@ -75,11 +75,11 @@ impl Terrain {
         program.bind(Some(&[
             (
                 program.uniform_location("u_Projection").unwrap(),
-                UniformValue::Matrix4fv(1, demo.projection.as_ptr()),
+                UniformValue::Matrix4fv(1, demo.projection.as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                UniformValue::Matrix4fv(1, demo.view.as_ptr()),
+                UniformValue::Matrix4fv(1, demo.view.as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_LightPosition").unwrap(),

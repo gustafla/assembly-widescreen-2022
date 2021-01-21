@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 
@@ -18,7 +18,7 @@ pub enum ParticleSpawnerMethod {
 }
 
 pub struct ParticleSpawner {
-    position: Vector3<f32>,
+    position: Vec3,
     kind: ParticleSpawnerKind,
     method: ParticleSpawnerMethod,
     rng: XorShiftRng,
@@ -27,11 +27,7 @@ pub struct ParticleSpawner {
 }
 
 impl ParticleSpawner {
-    pub fn new(
-        position: Vector3<f32>,
-        kind: ParticleSpawnerKind,
-        method: ParticleSpawnerMethod,
-    ) -> Self {
+    pub fn new(position: Vec3, kind: ParticleSpawnerKind, method: ParticleSpawnerMethod) -> Self {
         ParticleSpawner {
             position,
             kind,
@@ -49,12 +45,12 @@ impl ParticleSpawner {
         }
     }
 
-    fn spawn(&mut self, n: usize) -> Vec<Vector3<f32>> {
+    fn spawn(&mut self, n: usize) -> Vec<Vec3> {
         match self.kind {
-            ParticleSpawnerKind::Point(x, y, z) => vec![Vector3::new(x, y, z) + self.position; n],
+            ParticleSpawnerKind::Point(x, y, z) => vec![Vec3::new(x, y, z) + self.position; n],
             ParticleSpawnerKind::Box(pos1, pos2) => (0..n)
                 .map(|_| {
-                    Vector3::new(
+                    Vec3::new(
                         // TODO rand::distributions::uniform::Uniform
                         self.rng.gen_range(pos1.0..pos2.0),
                         self.rng.gen_range(pos1.1..pos2.1),
@@ -64,7 +60,7 @@ impl ParticleSpawner {
                 .collect(),
             ParticleSpawnerKind::Sphere(int_r, ext_r) => (0..n)
                 .map(|_| {
-                    Vector3::new(
+                    Vec3::new(
                         self.rng.gen_range(-1. ..1.),
                         self.rng.gen_range(-1. ..1.),
                         self.rng.gen_range(-1. ..1.),
@@ -98,7 +94,7 @@ impl ParticleSpawner {
 }
 
 impl std::iter::Iterator for ParticleSpawner {
-    type Item = Vec<Vector3<f32>>;
+    type Item = Vec<Vec3>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let result = match self.method {

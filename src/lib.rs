@@ -7,9 +7,9 @@ mod render_pass;
 mod sync;
 mod terrain;
 
-use cgmath::{Angle, Deg, Euler, InnerSpace, Matrix4, Point3, Quaternion, Rad, Vector2, Vector3};
 #[cfg(debug_assertions)]
 use fps_counter::FpsCounter;
+use glam::{Mat4, Quat, Vec2, Vec3};
 pub use glesv2::{
     types::*, Framebuffer, Gles2, RcGl, Renderbuffer, RenderbufferAttachment, ResourceMapper,
     Texture, UniformValue,
@@ -37,8 +37,8 @@ pub struct Demo {
     #[cfg(debug_assertions)]
     fps_counter: FpsCounter,
     pub resolution: (i32, i32),
-    pub projection: [f32; 16],
-    pub view: [f32; 16],
+    pub projection: Mat4,
+    pub view: Mat4,
     pub resources: ResourceMapper,
     pub gl: RcGl,
     rng: XorShiftRng,
@@ -61,20 +61,17 @@ impl Demo {
         let particle_system = ParticleSystem::new(
             gl.clone(),
             ParticleSpawner::new(
-                Vector3::new(0., 2., 0.),
+                Vec3::new(0., 2., 0.),
                 ParticleSpawnerKind::Box((-5., 0., -5.), (5., 5., 5.)),
                 ParticleSpawnerMethod::Once(100000),
             ),
             30.,
             60,
             |pos, time| {
-                Vector3::unit_y() * f32::sin(pos.x / 4. + time) * 0.6
-                    + (Quaternion::from(Euler {
-                        x: Rad(0f32),
-                        y: Angle::atan2(pos.x, pos.z),
-                        z: Rad(0f32),
-                    }) * Vector3::unit_x()
-                        / Vector2::new(pos.x, pos.z).magnitude()
+                Vec3::unit_y() * f32::sin(pos.x / 4. + time) * 0.6
+                    + (Quat::from_axis_angle(Vec3::unit_y(), f32::atan2(pos.x, pos.z))
+                        * Vec3::unit_x()
+                        / Vec2::new(pos.x, pos.z).length()
                         * (pos.y + 2.))
                         * (5. - time).max(0.)
             },
@@ -100,8 +97,13 @@ impl Demo {
             #[cfg(debug_assertions)]
             fps_counter: FpsCounter::new(),
             resolution: (w, h),
-            projection: *cgmath::perspective(Deg(60f32), w as f32 / h as f32, 0.1, 1000.).as_ref(),
-            view: [0f32; 16],
+            projection: Mat4::perspective_rh_gl(
+                60. * (std::f32::consts::PI / 180.),
+                w as f32 / h as f32,
+                0.1,
+                1000.,
+            ),
+            view: Mat4::zero(),
             resources: ResourceMapper::new(gl.clone(), "resources")?,
             gl: gl.clone(),
             rng: XorShiftRng::seed_from_u64(98341),
@@ -137,21 +139,20 @@ impl Demo {
             log::info!("{} FPS", fps);
         }
 
-        let cam_pos = Point3::new(
+        let cam_pos = Vec3::new(
             sync.get("cam:pos.x"),
             sync.get("cam:pos.y"),
             sync.get("cam:pos.z"),
         );
-        self.view = *Matrix4::look_at_rh(
+        self.view = Mat4::look_at_rh(
             cam_pos,
-            Point3::new(
+            Vec3::new(
                 sync.get("cam:target.x"),
                 sync.get("cam:target.y"),
                 sync.get("cam:target.z"),
             ), // center
-            Vector3::unit_y(),
-        )
-        .as_ref();
+            Vec3::unit_y(),
+        );
 
         self.bloom_pass
             .fbo
@@ -163,9 +164,7 @@ impl Demo {
         self.gl.enable(glesv2::BLEND);
 
         let sim_time = sync.get("sim_time");
-        let lightpos =
-            self.particle_system
-                .prepare(cam_pos.to_homogeneous().truncate(), sim_time, 128);
+        let lightpos = self.particle_system.prepare(cam_pos, sim_time, 128);
         self.terrain.render(&self, lightpos);
         self.particle_system.render(&self);
 

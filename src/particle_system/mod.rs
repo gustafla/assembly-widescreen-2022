@@ -4,14 +4,14 @@ use crate::{
     glesv2::{self, types::*, RcGl, UniformValue},
     Demo,
 };
-use cgmath::{MetricSpace, Vector3, VectorSpace};
+use glam::Vec3;
 pub use particle_spawner::*;
 use std::thread;
 
 pub struct ParticleSystem {
     gl: RcGl,
-    position_frames: Vec<Vec<Vec<Vector3<f32>>>>, // group(frame(coords, n = particles))
-    interpolated: Vec<Vector3<f32>>,
+    position_frames: Vec<Vec<Vec<Vec3>>>, // group(frame(coords, n = particles))
+    interpolated: Vec<Vec3>,
     time_step: f32,
 }
 
@@ -21,7 +21,7 @@ impl ParticleSystem {
         spawner: ParticleSpawner,
         duration: f32,
         steps: usize,
-        force_field: fn(Vector3<f32>, f32) -> Vector3<f32>, // fn(pos, time) -> force
+        force_field: fn(Vec3, f32) -> Vec3, // fn(pos, time) -> force
     ) -> ParticleSystem {
         let time_step = duration / steps as f32;
 
@@ -45,7 +45,7 @@ impl ParticleSystem {
                     // Spawn particles
                     if let Some(v) = spawner.next() {
                         positions.extend(&v);
-                        velocities.extend(vec![Vector3::new(0., 0., 0.); v.len()]);
+                        velocities.extend(vec![Vec3::new(0., 0., 0.); v.len()]);
                         masses.extend(vec![1f32; v.len()]);
                     }
 
@@ -93,7 +93,7 @@ impl ParticleSystem {
         }
     }
 
-    pub fn prepare(&mut self, campos: Vector3<f32>, time: f32, lights: usize) -> Vec<f32> {
+    pub fn prepare(&mut self, campos: Vec3, time: f32, lights: usize) -> Vec<f32> {
         // Clear last results
         self.interpolated.clear();
 
@@ -122,8 +122,8 @@ impl ParticleSystem {
         if self.gl.get_booleanv(glesv2::DEPTH_TEST) && self.gl.get_booleanv(glesv2::BLEND) {
             // Sort particles because of alpha blending + depth testing = difficult
             self.interpolated.sort_unstable_by(|a, b| {
-                b.distance2(campos)
-                    .partial_cmp(&a.distance2(campos))
+                b.distance(campos) // TODO sort by distance squared
+                    .partial_cmp(&a.distance(campos))
                     .unwrap()
             });
         }
@@ -144,11 +144,11 @@ impl ParticleSystem {
             ),
             (
                 program.uniform_location("u_Projection").unwrap(),
-                UniformValue::Matrix4fv(1, demo.projection.as_ptr()),
+                UniformValue::Matrix4fv(1, demo.projection.as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                UniformValue::Matrix4fv(1, demo.view.as_ptr()),
+                UniformValue::Matrix4fv(1, demo.view.as_ref().as_ptr()),
             ),
         ]));
 
