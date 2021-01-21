@@ -142,7 +142,7 @@ impl Demo {
             sync.get("cam:pos.y"),
             sync.get("cam:pos.z"),
         );
-        self.view = *Matrix4::look_at_lh(
+        self.view = *Matrix4::look_at_rh(
             cam_pos,
             Point3::new(
                 sync.get("cam:target.x"),
