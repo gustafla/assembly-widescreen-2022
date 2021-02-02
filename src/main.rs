@@ -1,3 +1,5 @@
+mod logger;
+
 use anyhow::{anyhow, Context, Result};
 use demo::{Demo, Player, RcGl, Sync};
 use glutin::{
@@ -8,13 +10,12 @@ use glutin::{
     window::WindowBuilder,
     Api, ContextBuilder, GlRequest,
 };
-use simple_logger::SimpleLogger;
+
 
 fn main() -> Result<()> {
     // Initialize logging
-    SimpleLogger::new()
-        .init()
-        .context("Failed to initialize logger")?;
+    log::set_logger(&logger::Logger).unwrap();
+    log::set_max_level(log::LevelFilter::max());
 
     // Build a window with an OpenGL context
     let size = PhysicalSize::new(1280, 720);
