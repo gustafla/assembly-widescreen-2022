@@ -6,7 +6,7 @@ impl log::Log for Logger {
     }
 
     fn log(&self, record: &log::Record) {
-        eprintln!("{:<8} {:<16} {}", record.level(), record.target(), record.args());
+        eprintln!("{:<8} {:<32} {}", record.level(), record.target(), record.args());
     }
 
     fn flush(&self) {}
