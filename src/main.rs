@@ -11,7 +11,6 @@ use glutin::{
     Api, ContextBuilder, GlRequest,
 };
 
-
 fn main() -> Result<()> {
     // Initialize logging
     log::set_logger(&logger::Logger).unwrap();

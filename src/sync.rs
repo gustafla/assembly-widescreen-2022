@@ -1,11 +1,14 @@
 use crate::Player;
+use std::collections::VecDeque;
 
 const TRACKS_FILE: &str = "resources/tracks.bin";
+const FFT_LOWPASS_LEN: usize = 8;
 
 pub struct Sync {
     row: f64,
     beats_per_sec: f64,
     rows_per_beat: f64,
+    fft: VecDeque<Vec<num_complex::Complex<f32>>>,
     #[cfg(debug_assertions)]
     rocket: rust_rocket::RocketClient,
     #[cfg(not(debug_assertions))]
@@ -42,6 +45,7 @@ impl Sync {
             row: 0.,
             beats_per_sec: bpm / 60.,
             rows_per_beat,
+            fft: VecDeque::with_capacity(FFT_LOWPASS_LEN),
             rocket,
         }
     }
@@ -64,8 +68,18 @@ impl Sync {
             .get_value(self.row as f32)
     }
 
+    pub fn get_fft(&self, at: f32) -> f32 {
+        let i = (at.min(1.).max(0.) * (self.fft.len() - 1) as f32) as usize;
+        self.fft.iter().map(|frame| frame[i].norm()).sum::<f32>() / self.fft.len() as f32
+    }
+
     pub fn update(&mut self, player: &mut Player) {
-        self.row = self.secs_to_row(player.time_secs());
+        let secs = player.time_secs();
+        self.row = self.secs_to_row(secs);
+        if self.fft.len() >= FFT_LOWPASS_LEN {
+            self.fft.pop_front();
+        }
+        self.fft.push_back(player.fft(secs));
 
         #[cfg(debug_assertions)]
         {

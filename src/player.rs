@@ -36,7 +36,10 @@ pub enum Error {
     PauseStream(#[from] cpal::PauseStreamError),
 }
 
+const FFT_SIZE: usize = 4096;
+
 pub struct Player {
+    audio_data: Arc<Vec<i16>>,
     playback_position: Arc<Mutex<usize>>,
     out_stream: Stream,
     sample_rate: usize,
@@ -47,10 +50,12 @@ pub struct Player {
     error_sync_rx: mpsc::Receiver<()>,
     playing: bool,
     at_end: Arc<AtomicBool>,
+    fft: Arc<dyn rustfft::Fft<f32>>,
+    fft_scratch: Vec<num_complex::Complex<f32>>,
 }
 
 impl Player {
-    fn decode_ogg(reader: impl Read + Seek) -> Result<(Vec<i16>, usize, usize), Error> {
+    fn decode_ogg(reader: impl Read + Seek) -> Result<(Arc<Vec<i16>>, usize, usize), Error> {
         let mut ogg_stream_reader = OggStreamReader::new(reader)?;
 
         // Because lewton doesn't have time seek at the time of writing,
@@ -69,7 +74,7 @@ impl Player {
         }
 
         Ok((
-            audio_data,
+            Arc::new(audio_data),
             ogg_stream_reader.ident_hdr.audio_sample_rate as usize,
             ogg_stream_reader.ident_hdr.audio_channels as usize,
         ))
@@ -82,6 +87,11 @@ impl Player {
         let ogg_file = File::open(ogg_path)?;
         let ogg_reader = BufReader::new(ogg_file);
         let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader)?;
+
+        // Initialize FFT
+        let mut fft_planner = rustfft::FftPlanner::new();
+        let fft = fft_planner.plan_fft_forward(FFT_SIZE);
+        let fft_scratch = vec![num_complex::Complex::new(0., 0.); fft.get_inplace_scratch_len()];
 
         // Initialize cpal output device
         let host = cpal::default_host();
@@ -105,6 +115,7 @@ impl Player {
 
         // Stream with cpal
         let out_stream = {
+            let audio_data = audio_data.clone();
             let at_end = at_end.clone();
             let playback_position = playback_position.clone();
             let mut errors = 0;
@@ -146,6 +157,7 @@ impl Player {
         let time = Instant::now();
 
         Ok(Self {
+            audio_data,
             playback_position,
             out_stream,
             sample_rate,
@@ -156,6 +168,8 @@ impl Player {
             error_sync_rx,
             playing: false,
             at_end,
+            fft,
+            fft_scratch,
         })
     }
 
@@ -213,6 +227,49 @@ impl Player {
         let time = Instant::now();
         self.start_time = time;
         self.pause_time = time;
+    }
+
+    pub fn fft(&mut self, secs: f64) -> Vec<num_complex::Complex<f32>> {
+        // Compute the position
+        let mut pos = (secs * self.sample_rate as f64 * self.channels as f64) as usize;
+
+        // Limit to audio data range
+        pos = pos
+            .min(self.audio_data.len() - FFT_SIZE * self.channels - 1)
+            .max(0);
+
+        // Align to channel
+        pos -= pos % self.channels;
+
+        // Take the audio data slice and convert to complex number vec
+        let mut fft_buffer: Vec<_> = self.audio_data[pos..][..FFT_SIZE * self.channels]
+            .chunks(self.channels)
+            .map(|all_channels_sample| {
+                // All channels average
+                //num_complex::Complex::new(
+                //    all_channels_sample
+                //        .iter()
+                //        .map(|&s| s as f32 / i16::MAX as f32)
+                //        .sum::<f32>()
+                //        / self.channels as f32,
+                //    0.,
+                //)
+
+                // First channel mono
+                num_complex::Complex::new(all_channels_sample[0] as f32 / i16::MAX as f32, 0.)
+            })
+            .collect();
+
+        // Compute FFT
+        self.fft
+            .process_with_scratch(&mut fft_buffer, &mut self.fft_scratch);
+
+        // Normalize
+        for output in &mut fft_buffer {
+            *output /= (FFT_SIZE as f32).sqrt();
+        }
+
+        fft_buffer
     }
 
     fn pos_to_duration(&self, pos: usize) -> Duration {
