@@ -5,8 +5,7 @@ varying vec2 v_TexCoord;
 
 uniform float u_NoiseAmount;
 uniform float u_NoiseScale;
-uniform float u_FftLow;
-uniform float u_FftHigh;
+uniform float u_FftBass;
 uniform sampler2D u_InputSampler0; // Bloom
 uniform sampler2D u_InputSampler1; // Render
 uniform sampler2D u_InputSampler2; // Noise
@@ -14,11 +13,7 @@ uniform vec2 u_Resolution;
 
 vec3 fftbar() {
     if (v_TexCoord.x < 0.05) {
-        if (u_FftLow > v_TexCoord.y) {
-            return vec3(1.);
-        }
-    } else if (v_TexCoord.x > 0.95) {
-        if (u_FftHigh > v_TexCoord.y) {
+        if (u_FftBass > v_TexCoord.y) {
             return vec3(1.);
         }
     }

@@ -216,8 +216,6 @@ impl Demo {
         let noise_amount = UniformValue::Float(sync.get("noise_amount"));
 
         Framebuffer::bind_default(self.gl.clone(), 0);
-        let ffthi = sync.get("ffthi");
-        let fftlo = sync.get("fftlo");
         self.post_pass.render(
             &self,
             &[
@@ -230,8 +228,7 @@ impl Demo {
             &[
                 ("u_NoiseAmount", noise_amount),
                 ("u_NoiseScale", UniformValue::Float(NOISE_SCALE as f32)),
-                ("u_FftLow", UniformValue::Float(sync.get_fft(fftlo))),
-                ("u_FftHigh", UniformValue::Float(sync.get_fft(ffthi))),
+                ("u_FftBass", UniformValue::Float(sync.get_fft(50..250))),
             ],
         );
 

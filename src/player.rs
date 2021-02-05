@@ -6,6 +6,7 @@ use lewton::inside_ogg::OggStreamReader;
 use parking_lot::Mutex;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek};
+use std::ops::Range;
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -36,7 +37,32 @@ pub enum Error {
     PauseStream(#[from] cpal::PauseStreamError),
 }
 
-const FFT_SIZE: usize = 4096;
+const FFT_SIZE: usize = 1024;
+
+pub struct FftOutput {
+    bins: Vec<num_complex::Complex<f32>>,
+    freq_per_bin: f32,
+}
+
+impl FftOutput {
+    pub fn average_from_freq_range(&self, freqs: Range<usize>) -> f32 {
+        // Frequency range to index range
+        let range = self.clamp((freqs.start as f32 / self.freq_per_bin).round() as usize)
+            ..self.clamp((freqs.end as f32 / self.freq_per_bin).round() as usize);
+        let range_len = range.end - range.start;
+
+        // Average of the FFT bins values
+        self.bins[range]
+            .iter()
+            .map(|complex| complex.norm())
+            .sum::<f32>()
+            / range_len as f32
+    }
+
+    fn clamp(&self, i: usize) -> usize {
+        i.min(self.bins.len() - 1).max(0)
+    }
+}
 
 pub struct Player {
     audio_data: Arc<Vec<i16>>,
@@ -229,7 +255,7 @@ impl Player {
         self.pause_time = time;
     }
 
-    pub fn fft(&mut self, secs: f64) -> Vec<num_complex::Complex<f32>> {
+    pub fn fft(&mut self, secs: f64) -> FftOutput {
         // Compute the position
         let mut pos = (secs * self.sample_rate as f64 * self.channels as f64) as usize;
 
@@ -271,12 +297,17 @@ impl Player {
             *output /= (FFT_SIZE as f32).sqrt();
         }
 
-        fft_buffer
+        FftOutput {
+            bins: fft_buffer,
+            freq_per_bin: (self.sample_rate as f32 / 2.) / FFT_SIZE as f32,
+        }
     }
 
     fn fft_window(n: usize) -> f32 {
         // Hann
-        ((std::f32::consts::PI * n as f32) / FFT_SIZE as f32).sin().powi(2)
+        ((std::f32::consts::PI * n as f32) / FFT_SIZE as f32)
+            .sin()
+            .powi(2)
     }
 
     fn pos_to_duration(&self, pos: usize) -> Duration {
@@ -295,7 +326,7 @@ mod tests {
     #[test]
     fn window_works() {
         assert!((Player::fft_window(0) - 0.).abs() <= f32::EPSILON);
-        assert!((Player::fft_window(FFT_SIZE/2) - 1.).abs() <= f32::EPSILON);
+        assert!((Player::fft_window(FFT_SIZE / 2) - 1.).abs() <= f32::EPSILON);
         assert!((Player::fft_window(FFT_SIZE) - 0.).abs() <= f32::EPSILON);
     }
 }
