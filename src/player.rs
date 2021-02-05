@@ -241,10 +241,11 @@ impl Player {
         // Align to channel
         pos -= pos % self.channels;
 
-        // Take the audio data slice and convert to complex number vec
+        // Take the audio data slice and convert to windowed complex number Vec
         let mut fft_buffer: Vec<_> = self.audio_data[pos..][..FFT_SIZE * self.channels]
             .chunks(self.channels)
-            .map(|all_channels_sample| {
+            .enumerate()
+            .map(|(n, all_channels_sample)| {
                 // All channels average
                 //num_complex::Complex::new(
                 //    all_channels_sample
@@ -256,7 +257,8 @@ impl Player {
                 //)
 
                 // First channel mono
-                num_complex::Complex::new(all_channels_sample[0] as f32 / i16::MAX as f32, 0.)
+                let normalized = all_channels_sample[0] as f32 / i16::MAX as f32;
+                num_complex::Complex::new(Self::fft_window(n) * normalized, 0.)
             })
             .collect();
 
@@ -272,11 +274,28 @@ impl Player {
         fft_buffer
     }
 
+    fn fft_window(n: usize) -> f32 {
+        // Hann
+        ((std::f32::consts::PI * n as f32) / FFT_SIZE as f32).sin().powi(2)
+    }
+
     fn pos_to_duration(&self, pos: usize) -> Duration {
         let sample_rate_channels = self.sample_rate * self.channels;
         Duration::new(
             (pos / sample_rate_channels) as u64,
             (((pos % sample_rate_channels) * 1_000_000_000) / sample_rate_channels) as u32,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn window_works() {
+        assert!((Player::fft_window(0) - 0.).abs() <= f32::EPSILON);
+        assert!((Player::fft_window(FFT_SIZE/2) - 1.).abs() <= f32::EPSILON);
+        assert!((Player::fft_window(FFT_SIZE) - 0.).abs() <= f32::EPSILON);
     }
 }
