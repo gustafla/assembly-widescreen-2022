@@ -1,5 +1,4 @@
 use crate::Player;
-use std::ops::Range;
 
 const TRACKS_FILE: &str = "resources/tracks.bin";
 
@@ -7,7 +6,7 @@ pub struct Sync {
     row: f64,
     beats_per_sec: f64,
     rows_per_beat: f64,
-    fft: Option<crate::player::FftOutput>,
+    beat: f32,
     #[cfg(debug_assertions)]
     rocket: rust_rocket::RocketClient,
     #[cfg(not(debug_assertions))]
@@ -44,7 +43,7 @@ impl Sync {
             row: 0.,
             beats_per_sec: bpm / 60.,
             rows_per_beat,
-            fft: None,
+            beat: 0.,
             rocket,
         }
     }
@@ -67,18 +66,15 @@ impl Sync {
             .get_value(self.row as f32)
     }
 
-    pub fn get_fft(&self, freqs: Range<usize>) -> f32 {
-        if let Some(fft) = &self.fft {
-            fft.average_from_freq_range(freqs)
-        } else {
-            0.
-        }
+    pub fn get_beat(&self) -> f32 {
+        self.beat
     }
 
     pub fn update(&mut self, player: &mut Player) {
         let secs = player.time_secs();
         self.row = self.secs_to_row(secs);
-        self.fft = Some(player.fft(secs));
+        // Absolute energy in low freq range is a pretty good musical beat value
+        self.beat = player.fft(secs).average_from_freq_range(35..250);
 
         #[cfg(debug_assertions)]
         {

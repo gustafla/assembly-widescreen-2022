@@ -228,7 +228,7 @@ impl Demo {
             &[
                 ("u_NoiseAmount", noise_amount),
                 ("u_NoiseScale", UniformValue::Float(NOISE_SCALE as f32)),
-                ("u_FftBass", UniformValue::Float(sync.get_fft(50..250))),
+                ("u_Beat", UniformValue::Float(sync.get_beat())),
             ],
         );
 

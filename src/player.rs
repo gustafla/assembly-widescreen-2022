@@ -46,6 +46,10 @@ pub struct FftOutput {
 
 impl FftOutput {
     pub fn average_from_freq_range(&self, freqs: Range<usize>) -> f32 {
+        if freqs.end <= freqs.start {
+            return 0.;
+        }
+
         // Frequency range to index range
         let range = self.clamp((freqs.start as f32 / self.freq_per_bin).round() as usize)
             ..self.clamp((freqs.end as f32 / self.freq_per_bin).round() as usize);
@@ -272,16 +276,6 @@ impl Player {
             .chunks(self.channels)
             .enumerate()
             .map(|(n, all_channels_sample)| {
-                // All channels average
-                //num_complex::Complex::new(
-                //    all_channels_sample
-                //        .iter()
-                //        .map(|&s| s as f32 / i16::MAX as f32)
-                //        .sum::<f32>()
-                //        / self.channels as f32,
-                //    0.,
-                //)
-
                 // First channel mono
                 let normalized = all_channels_sample[0] as f32 / i16::MAX as f32;
                 num_complex::Complex::new(Self::fft_window(n) * normalized, 0.)
