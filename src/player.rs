@@ -90,6 +90,7 @@ impl Player {
 
         // Because lewton doesn't have time seek at the time of writing,
         // I'm gonna waste memory with full uncompressed audio
+        // This also makes FFT pretty straightforward
         let mut audio_data = Vec::new();
         loop {
             match ogg_stream_reader.read_dec_packet_itl() {
@@ -212,7 +213,7 @@ impl Player {
     }
 
     pub fn play(&mut self) -> Result<(), Error> {
-        if !self.is_at_end() && !self.is_playing() {
+        if !self.is_playing() {
             self.playing = true;
             self.time_offset = self.pos_to_duration(*self.playback_position.lock());
             self.start_time = Instant::now();
@@ -231,6 +232,12 @@ impl Player {
     }
 
     pub fn time_secs(&mut self) -> f64 {
+        // Naive approach, just tell where the output stream actually is
+        // This is required to avoid telling time over the length of the music track
+        if self.is_at_end() {
+            return self.pos_to_duration(self.audio_data.len()).as_secs_f64();
+        }
+
         // If playback errors (underruns?) have happened, sync with the stream position
         if self.error_sync_rx.try_recv().is_ok() {
             self.time_offset = self.pos_to_duration(*self.playback_position.lock());
@@ -239,6 +246,7 @@ impl Player {
             self.pause_time = time;
         }
 
+        // Otherwise resort to Rust's timers for smoother frames
         (if self.is_playing() {
             self.start_time.elapsed()
         } else {
@@ -249,14 +257,26 @@ impl Player {
     }
 
     pub fn seek(&mut self, secs: f64) {
+        // Calculate new playback position
         let sample_rate_channels = (self.sample_rate * self.channels) as f64;
         let mut pos = (secs * sample_rate_channels) as usize;
-        pos -= pos % self.channels; // Align to channel
+
+        // Align to channel
+        pos -= pos % self.channels;
+
+        // Limit position to avoid buffer over-read panic
+        pos = pos.min(self.audio_data.len());
+
+        // Set new position and update timing etc
         *self.playback_position.lock() = pos;
         self.time_offset = self.pos_to_duration(pos);
         let time = Instant::now();
         self.start_time = time;
         self.pause_time = time;
+
+        // The stream might no longer be at the end
+        self.at_end
+            .store(pos == self.audio_data.len(), Ordering::SeqCst);
     }
 
     pub fn fft(&mut self, secs: f64) -> FftOutput {

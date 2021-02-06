@@ -51,12 +51,9 @@ fn main() -> Result<()> {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
+        #[cfg(not(debug_assertions))]
         if player.is_at_end() {
-            if cfg!(debug_assertions) {
-                player.pause().unwrap();
-            } else {
-                *control_flow = ControlFlow::Exit;
-            }
+            *control_flow = ControlFlow::Exit;
         }
 
         sync.update(&mut player);
