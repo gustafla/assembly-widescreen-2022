@@ -6,7 +6,6 @@ use lewton::inside_ogg::OggStreamReader;
 use parking_lot::Mutex;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek};
-use std::ops::Range;
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -38,35 +37,6 @@ pub enum Error {
 }
 
 const FFT_SIZE: usize = 1024;
-
-pub struct FftOutput {
-    bins: Vec<num_complex::Complex<f32>>,
-    freq_per_bin: f32,
-}
-
-impl FftOutput {
-    pub fn average_from_freq_range(&self, freqs: Range<usize>) -> f32 {
-        if freqs.end <= freqs.start {
-            return 0.;
-        }
-
-        // Frequency range to index range
-        let range = self.clamp((freqs.start as f32 / self.freq_per_bin).round() as usize)
-            ..self.clamp((freqs.end as f32 / self.freq_per_bin).round() as usize);
-        let range_len = range.end - range.start;
-
-        // Average of the FFT bins values
-        self.bins[range]
-            .iter()
-            .map(|complex| complex.norm())
-            .sum::<f32>()
-            / range_len as f32
-    }
-
-    fn clamp(&self, i: usize) -> usize {
-        i.min(self.bins.len() - 1).max(0)
-    }
-}
 
 pub struct Player {
     audio_data: Arc<Vec<i16>>,
@@ -279,9 +249,18 @@ impl Player {
             .store(pos == self.audio_data.len(), Ordering::SeqCst);
     }
 
-    pub fn fft(&mut self, secs: f64) -> FftOutput {
+    fn pos_to_duration(&self, pos: usize) -> Duration {
+        let sample_rate_channels = self.sample_rate * self.channels;
+        Duration::new(
+            (pos / sample_rate_channels) as u64,
+            (((pos % sample_rate_channels) * 1_000_000_000) / sample_rate_channels) as u32,
+        )
+    }
+
+    /// Compute average Power Spectral Density of bass (30-300Hz)
+    pub fn bass_psd(&mut self, at_secs: f64) -> f32 {
         // Compute the position
-        let mut pos = (secs * self.sample_rate as f64 * self.channels as f64) as usize;
+        let mut pos = (at_secs * self.sample_rate as f64 * self.channels as f64) as usize;
 
         // Limit to audio data range
         pos = pos
@@ -292,13 +271,21 @@ impl Player {
         pos -= pos % self.channels;
 
         // Take the audio data slice and convert to windowed complex number Vec
+        let fft_size_f32 = FFT_SIZE as f32;
         let mut fft_buffer: Vec<_> = self.audio_data[pos..][..FFT_SIZE * self.channels]
             .chunks(self.channels)
             .enumerate()
             .map(|(n, all_channels_sample)| {
                 // First channel mono
-                let normalized = all_channels_sample[0] as f32 / i16::MAX as f32;
-                num_complex::Complex::new(Self::fft_window(n) * normalized, 0.)
+                let sample_f32 = all_channels_sample[0] as f32 / i16::MAX as f32;
+                num_complex::Complex::new(
+                    // Hann window function
+                    ((std::f32::consts::PI * n as f32) / fft_size_f32)
+                        .sin()
+                        .powi(2)
+                        * sample_f32,
+                    0.,
+                )
             })
             .collect();
 
@@ -306,41 +293,16 @@ impl Player {
         self.fft
             .process_with_scratch(&mut fft_buffer, &mut self.fft_scratch);
 
-        // Normalize
-        for output in &mut fft_buffer {
-            *output /= (FFT_SIZE as f32).sqrt();
-        }
-
-        FftOutput {
-            bins: fft_buffer,
-            freq_per_bin: (self.sample_rate as f32 / 2.) / FFT_SIZE as f32,
-        }
-    }
-
-    fn fft_window(n: usize) -> f32 {
-        // Hann
-        ((std::f32::consts::PI * n as f32) / FFT_SIZE as f32)
-            .sin()
-            .powi(2)
-    }
-
-    fn pos_to_duration(&self, pos: usize) -> Duration {
-        let sample_rate_channels = self.sample_rate * self.channels;
-        Duration::new(
-            (pos / sample_rate_channels) as u64,
-            (((pos % sample_rate_channels) * 1_000_000_000) / sample_rate_channels) as u32,
-        )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn window_works() {
-        assert!((Player::fft_window(0) - 0.).abs() <= f32::EPSILON);
-        assert!((Player::fft_window(FFT_SIZE / 2) - 1.).abs() <= f32::EPSILON);
-        assert!((Player::fft_window(FFT_SIZE) - 0.).abs() <= f32::EPSILON);
+        // Compute average of bass bins
+        let freq_per_bin = (self.sample_rate as f32 / 2.) / fft_size_f32;
+        let start = (30. / freq_per_bin).floor() as usize;
+        let end = (300. / freq_per_bin).ceil() as usize;
+        let normalization_scale = 1. / fft_size_f32.sqrt();
+        fft_buffer[start..end]
+            .iter()
+            // Normalize (see https://docs.rs/rustfft/5.0.1/rustfft/#normalization)
+            .map(|complex| (complex * normalization_scale).norm())
+            .sum::<f32>()
+            / (end - start) as f32
     }
 }

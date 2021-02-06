@@ -74,7 +74,7 @@ impl Sync {
         let secs = player.time_secs();
         self.row = self.secs_to_row(secs);
         // Absolute energy in low freq range is a pretty good musical beat value
-        self.beat = player.fft(secs).average_from_freq_range(35..250);
+        self.beat = player.bass_psd(secs);
 
         #[cfg(debug_assertions)]
         {
