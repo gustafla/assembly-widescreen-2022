@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     let mut demo = Demo::new(size.width, size.height, gl)?;
 
     #[cfg(not(debug_assertions))]
-    player.play()?;
+    player.play();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;

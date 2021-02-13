@@ -1,15 +1,18 @@
-use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
-    SampleRate, Stream,
-};
 use lewton::inside_ogg::OggStreamReader;
 use parking_lot::Mutex;
+use pulse::{
+    def::BufferAttr,
+    sample::{Format, Spec},
+    stream::Direction,
+};
+use pulse_simple::Simple;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek};
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc,
+    Arc,
 };
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -20,36 +23,25 @@ pub enum Error {
     FileAccess(#[from] std::io::Error),
     #[error("Failed to decode ogg vorbis file")]
     Decode(#[from] lewton::VorbisError),
-    #[error("No audio output devices")]
-    NoAudioOutputDevices,
-    #[error("Failed to query audio device")]
-    QueryAudioOutputSupport(#[from] cpal::SupportedStreamConfigsError),
-    #[error("Default audio device doesn't support required configuration")]
-    NoSupportForRequiredConfiguration,
-    #[error("Ogg file doesn't contain audio")]
-    NoAudioStreamInFile,
-    #[error("Failed to build audio output stream")]
-    BuildStream(#[from] cpal::BuildStreamError),
-    #[error("Failed to start audio output stream")]
-    PlayStream(#[from] cpal::PlayStreamError),
-    #[error("Failed to pause audio output stream")]
-    PauseStream(#[from] cpal::PauseStreamError),
+    #[error("PulseAudio error: {0}")]
+    PulseAudio(#[from] pulse::error::PAErr),
 }
 
+// Playback buffering/latency size in samples
+// Assuming 44100Hz stereo, 256 samples is about a frame of latency
+const BUF_SIZE: usize = 256;
+// FFT size in samples per channel, eg fft from stereo track reads double this number of i16s
 const FFT_SIZE: usize = 1024;
 
 pub struct Player {
     audio_data: Arc<Vec<i16>>,
     playback_position: Arc<Mutex<usize>>,
-    out_stream: Stream,
     sample_rate: usize,
     channels: usize,
     start_time: Instant,
     pause_time: Instant,
     time_offset: Duration,
-    error_sync_rx: mpsc::Receiver<()>,
-    playing: bool,
-    at_end: Arc<AtomicBool>,
+    playing: Arc<AtomicBool>,
     fft: Arc<dyn rustfft::Fft<f32>>,
     fft_scratch: Vec<num_complex::Complex<f32>>,
 }
@@ -94,111 +86,94 @@ impl Player {
         let fft = fft_planner.plan_fft_forward(FFT_SIZE);
         let fft_scratch = vec![num_complex::Complex::new(0., 0.); fft.get_inplace_scratch_len()];
 
-        // Initialize cpal output device
-        let host = cpal::default_host();
-        let device = host
-            .default_output_device()
-            .ok_or(Error::NoAudioOutputDevices)?;
-        let mut supported_configs_range = device.supported_output_configs()?;
-        let config = supported_configs_range
-            .find(|c| {
-                c.channels() as usize == channels
-                    && c.min_sample_rate().0 <= sample_rate as u32
-                    && c.max_sample_rate().0 >= sample_rate as u32
-                    && c.sample_format() == cpal::SampleFormat::I16
-            })
-            .ok_or(Error::NoSupportForRequiredConfiguration)?
-            .with_sample_rate(SampleRate(sample_rate as u32));
+        // Initialize libpulse_simple
+        let spec = Spec {
+            format: Format::S16NE, // Signed 16-bit in native endian
+            channels: channels.try_into().unwrap(),
+            rate: sample_rate.try_into().unwrap(),
+        };
+        let buffer_attr = BufferAttr {
+            maxlength: std::u32::MAX,
+            tlength: (BUF_SIZE * std::mem::size_of::<i16>()).try_into().unwrap(),
+            prebuf: std::u32::MAX,
+            minreq: std::u32::MAX,
+            fragsize: std::u32::MAX,
+        };
+        let simple = Simple::new(
+            None,   // Default server
+            "demo", // Application name
+            Direction::Playback,
+            None,    // Default device
+            "Music", // Description
+            &spec,   // Sample format
+            None,    // Default channel map
+            Some(&buffer_attr),
+        )?;
 
         let playback_position = Arc::new(Mutex::new(0));
-        let at_end = Arc::new(AtomicBool::new(false));
-        let (error_sync_tx, error_sync_rx) = mpsc::channel();
+        let playing = Arc::new(AtomicBool::new(false));
 
-        // Stream with cpal
-        let out_stream = {
+        // Start a thread for music streaming (from RAM to pulse)
+        {
             let audio_data = audio_data.clone();
-            let at_end = at_end.clone();
             let playback_position = playback_position.clone();
-            let mut errors = 0;
-            device.build_output_stream(
-                &config.into(),
-                move |output_buf: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                    // Lock position mutex during critical section
-                    let mut playback_position = playback_position.lock();
-
-                    // TODO Callback buffer fill, notify at_end
-                    let audio_data = &audio_data[*playback_position..];
-
-                    if audio_data.len() >= output_buf.len() {
-                        output_buf.copy_from_slice(&audio_data[..output_buf.len()]);
-                        *playback_position += output_buf.len();
-                    } else {
-                        output_buf[..audio_data.len()].copy_from_slice(&audio_data);
-                        output_buf[audio_data.len()..]
-                            .iter_mut()
-                            .for_each(|value| *value = 0);
-                        *playback_position += audio_data.len();
-                        at_end.store(true, Ordering::SeqCst);
+            let playing = playing.clone();
+            std::thread::spawn(move || loop {
+                {
+                    if playing.load(Ordering::SeqCst) {
+                        let mut playback_position = playback_position.lock();
+                        let samples = BUF_SIZE.min(audio_data.len() - *playback_position);
+                        if samples > 0 {
+                            let bytes = samples * std::mem::size_of::<i16>();
+                            unsafe {
+                                let ptr = audio_data.as_ptr().add(*playback_position);
+                                let buf_slice = std::slice::from_raw_parts(ptr as *const u8, bytes);
+                                simple.write(buf_slice).unwrap();
+                            }
+                            *playback_position += samples;
+                            continue;
+                        }
                     }
-                },
-                move |e| {
-                    log::error!("Audio playback error: {}", e);
-                    errors += 1;
-                    if errors > 100 {
-                        panic!("Frequent audio playback errors");
-                    }
-                    log::info!("Trying to resync");
-                    error_sync_tx.send(()).unwrap();
-                },
-            )?
-        };
 
-        out_stream.pause()?;
+                    // When nothing to play, sleep for about a frame (assuming 60FPS)
+                    std::thread::sleep(Duration::new(0, 1_000_000_000 / 60));
+                }
+            });
+        }
 
         let time = Instant::now();
 
         Ok(Self {
             audio_data,
             playback_position,
-            out_stream,
             sample_rate,
             channels,
             start_time: time,
             pause_time: time,
             time_offset: Duration::new(0, 0),
-            error_sync_rx,
-            playing: false,
-            at_end,
+            playing,
             fft,
             fft_scratch,
         })
     }
 
     pub fn is_at_end(&self) -> bool {
-        self.at_end.load(Ordering::SeqCst)
+        *self.playback_position.lock() == self.audio_data.len()
     }
 
     pub fn is_playing(&self) -> bool {
-        self.playing
+        self.playing.load(Ordering::SeqCst)
     }
 
-    pub fn play(&mut self) -> Result<(), Error> {
-        if !self.is_playing() {
-            self.playing = true;
-            self.time_offset = self.pos_to_duration(*self.playback_position.lock());
-            self.start_time = Instant::now();
-            self.out_stream.play()?;
-        }
-        Ok(())
+    pub fn play(&mut self) {
+        self.time_offset = self.pos_to_duration(*self.playback_position.lock());
+        self.start_time = Instant::now();
+        self.playing.store(true, Ordering::SeqCst);
     }
 
-    pub fn pause(&mut self) -> Result<(), Error> {
-        if self.is_playing() {
-            self.playing = false;
-            self.pause_time = Instant::now();
-            self.out_stream.pause()?;
-        }
-        Ok(())
+    pub fn pause(&mut self) {
+        self.pause_time = Instant::now();
+        self.playing.store(false, Ordering::SeqCst);
     }
 
     pub fn time_secs(&mut self) -> f64 {
@@ -206,14 +181,6 @@ impl Player {
         // This is required to avoid telling time over the length of the music track
         if self.is_at_end() {
             return self.pos_to_duration(self.audio_data.len()).as_secs_f64();
-        }
-
-        // If playback errors (underruns?) have happened, sync with the stream position
-        if self.error_sync_rx.try_recv().is_ok() {
-            self.time_offset = self.pos_to_duration(*self.playback_position.lock());
-            let time = Instant::now();
-            self.start_time = time;
-            self.pause_time = time;
         }
 
         // Otherwise resort to Rust's timers for smoother frames
@@ -243,10 +210,6 @@ impl Player {
         let time = Instant::now();
         self.start_time = time;
         self.pause_time = time;
-
-        // The stream might no longer be at the end
-        self.at_end
-            .store(pos == self.audio_data.len(), Ordering::SeqCst);
     }
 
     fn pos_to_duration(&self, pos: usize) -> Duration {

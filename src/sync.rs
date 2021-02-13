@@ -89,9 +89,9 @@ impl Sync {
                             }
                             Event::Pause(state) => {
                                 if state {
-                                    player.pause().unwrap();
+                                    player.pause();
                                 } else {
-                                    player.play().unwrap();
+                                    player.play();
                                 }
                             }
                             Event::SaveTracks => {
