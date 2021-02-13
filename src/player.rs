@@ -42,6 +42,7 @@ pub struct Player {
     pause_time: Instant,
     time_offset: Duration,
     playing: Arc<AtomicBool>,
+    at_end: Arc<AtomicBool>,
     fft: Arc<dyn rustfft::Fft<f32>>,
     fft_scratch: Vec<num_complex::Complex<f32>>,
 }
@@ -112,12 +113,14 @@ impl Player {
 
         let playback_position = Arc::new(Mutex::new(0));
         let playing = Arc::new(AtomicBool::new(false));
+        let at_end = Arc::new(AtomicBool::new(false));
 
         // Start a thread for music streaming (from RAM to pulse)
         {
             let audio_data = audio_data.clone();
             let playback_position = playback_position.clone();
             let playing = playing.clone();
+            let at_end = at_end.clone();
             std::thread::spawn(move || loop {
                 {
                     if playing.load(Ordering::SeqCst) {
@@ -132,6 +135,8 @@ impl Player {
                             }
                             *playback_position += samples;
                             continue;
+                        } else {
+                            at_end.store(true, Ordering::SeqCst);
                         }
                     }
 
@@ -152,13 +157,14 @@ impl Player {
             pause_time: time,
             time_offset: Duration::new(0, 0),
             playing,
+            at_end,
             fft,
             fft_scratch,
         })
     }
 
     pub fn is_at_end(&self) -> bool {
-        *self.playback_position.lock() == self.audio_data.len()
+        self.at_end.load(Ordering::SeqCst)
     }
 
     pub fn is_playing(&self) -> bool {
@@ -210,6 +216,7 @@ impl Player {
         let time = Instant::now();
         self.start_time = time;
         self.pause_time = time;
+        self.at_end.store(false, Ordering::SeqCst);
     }
 
     fn pos_to_duration(&self, pos: usize) -> Duration {
