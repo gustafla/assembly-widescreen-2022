@@ -187,20 +187,17 @@ impl Player {
     }
 
     pub fn time_secs(&mut self) -> f64 {
-        // Naive approach, just tell where the output stream actually is
-        // This is required to avoid telling time over the length of the music track
-        if self.is_at_end() {
-            return self.pos_to_duration(self.audio_data.len()).as_secs_f64();
-        }
+        let len_secs = self.audio_data.len() as f64 / (self.sample_rate * self.channels) as f64;
 
-        // Otherwise resort to Rust's timers for smoother frames
-        (if self.is_playing() {
+        let timer_secs = (if self.is_playing() {
             self.start_time.elapsed()
         } else {
             self.pause_time.duration_since(self.start_time)
         } + self.time_offset)
             .as_nanos() as f64
-            / 1_000_000_000f64
+            / 1_000_000_000f64;
+
+        timer_secs.min(len_secs)
     }
 
     pub fn seek(&mut self, secs: f64) {
