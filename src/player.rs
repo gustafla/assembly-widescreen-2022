@@ -1,20 +1,22 @@
 use lewton::inside_ogg::OggStreamReader;
-use parking_lot::Mutex;
 use pulse::{
     def::BufferAttr,
     sample::{Format, Spec},
     stream::Direction,
 };
 use pulse_simple::Simple;
-use std::convert::TryInto;
-use std::fs::File;
-use std::io::{BufReader, Read, Seek};
-use std::path::Path;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    convert::TryInto,
+    fs::File,
+    io::{BufReader, Read, Seek},
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    },
+    thread::JoinHandle,
+    time::{Duration, Instant},
 };
-use std::time::{Duration, Instant};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -35,14 +37,14 @@ const FFT_SIZE: usize = 1024;
 
 pub struct Player {
     audio_data: Arc<Vec<i16>>,
-    playback_position: Arc<Mutex<usize>>,
     sample_rate: usize,
     channels: usize,
+    playback_position: Arc<AtomicUsize>,
+    playing: Arc<AtomicBool>,
+    playback_thread: JoinHandle<()>,
     start_time: Instant,
     pause_time: Instant,
     time_offset: Duration,
-    playing: Arc<AtomicBool>,
-    at_end: Arc<AtomicBool>,
     fft: Arc<dyn rustfft::Fft<f32>>,
     fft_scratch: Vec<num_complex::Complex<f32>>,
 }
@@ -82,11 +84,6 @@ impl Player {
         let ogg_reader = BufReader::new(ogg_file);
         let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader)?;
 
-        // Initialize FFT
-        let mut fft_planner = rustfft::FftPlanner::new();
-        let fft = fft_planner.plan_fft_forward(FFT_SIZE);
-        let fft_scratch = vec![num_complex::Complex::new(0., 0.); fft.get_inplace_scratch_len()];
-
         // Initialize libpulse_simple
         let spec = Spec {
             format: Format::S16NE, // Signed 16-bit in native endian
@@ -95,6 +92,7 @@ impl Player {
         };
         let buffer_attr = BufferAttr {
             maxlength: std::u32::MAX,
+            // Set target length to get lower latency
             tlength: (BUF_SIZE * std::mem::size_of::<i16>()).try_into().unwrap(),
             prebuf: std::u32::MAX,
             minreq: std::u32::MAX,
@@ -111,60 +109,65 @@ impl Player {
             Some(&buffer_attr),
         )?;
 
-        let playback_position = Arc::new(Mutex::new(0));
+        let playback_position = Arc::new(AtomicUsize::new(0));
         let playing = Arc::new(AtomicBool::new(false));
-        let at_end = Arc::new(AtomicBool::new(false));
 
         // Start a thread for music streaming (from RAM to pulse)
-        {
+        let playback_thread = {
             let audio_data = audio_data.clone();
             let playback_position = playback_position.clone();
             let playing = playing.clone();
-            let at_end = at_end.clone();
             std::thread::spawn(move || loop {
                 {
                     if playing.load(Ordering::SeqCst) {
-                        let mut playback_position = playback_position.lock();
-                        let samples = BUF_SIZE.min(audio_data.len() - *playback_position);
+                        // Load position and advance to next audio slice
+                        // Might overflow in theory but not in realistic use
+                        let pos = playback_position.fetch_add(BUF_SIZE, Ordering::SeqCst);
+                        // How many samples can actually still be read
+                        let samples = BUF_SIZE.min(audio_data.len() - pos.min(audio_data.len()));
+                        // If any, let's play them
                         if samples > 0 {
                             let bytes = samples * std::mem::size_of::<i16>();
                             unsafe {
-                                let ptr = audio_data.as_ptr().add(*playback_position);
+                                let ptr = audio_data.as_ptr().add(pos);
                                 let buf_slice = std::slice::from_raw_parts(ptr as *const u8, bytes);
-                                simple.write(buf_slice).unwrap();
+                                // Write samples in native endian as we told Pulse so
+                                simple.write(buf_slice).unwrap(); // This call blocks
                             }
-                            *playback_position += samples;
                             continue;
-                        } else {
-                            at_end.store(true, Ordering::SeqCst);
                         }
                     }
 
-                    // When nothing to play, sleep for about a frame (assuming 60FPS)
-                    std::thread::sleep(Duration::new(0, 1_000_000_000 / 60));
+                    // When nothing to play, park
+                    std::thread::park();
                 }
-            });
-        }
+            })
+        };
+
+        // Initialize FFT
+        let mut fft_planner = rustfft::FftPlanner::new();
+        let fft = fft_planner.plan_fft_forward(FFT_SIZE);
+        let fft_scratch = vec![num_complex::Complex::new(0., 0.); fft.get_inplace_scratch_len()];
 
         let time = Instant::now();
 
         Ok(Self {
             audio_data,
-            playback_position,
             sample_rate,
             channels,
+            playback_position,
+            playing,
+            playback_thread,
             start_time: time,
             pause_time: time,
             time_offset: Duration::new(0, 0),
-            playing,
-            at_end,
             fft,
             fft_scratch,
         })
     }
 
     pub fn is_at_end(&self) -> bool {
-        self.at_end.load(Ordering::SeqCst)
+        self.playback_position.load(Ordering::SeqCst) >= self.audio_data.len()
     }
 
     pub fn is_playing(&self) -> bool {
@@ -172,9 +175,10 @@ impl Player {
     }
 
     pub fn play(&mut self) {
-        self.time_offset = self.pos_to_duration(*self.playback_position.lock());
+        self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::SeqCst));
         self.start_time = Instant::now();
         self.playing.store(true, Ordering::SeqCst);
+        self.playback_thread.thread().unpark();
     }
 
     pub fn pause(&mut self) {
@@ -211,12 +215,12 @@ impl Player {
         pos = pos.min(self.audio_data.len());
 
         // Set new position and update timing etc
-        *self.playback_position.lock() = pos;
+        self.playback_position.store(pos, Ordering::SeqCst);
+        self.playback_thread.thread().unpark();
         self.time_offset = self.pos_to_duration(pos);
         let time = Instant::now();
         self.start_time = time;
         self.pause_time = time;
-        self.at_end.store(false, Ordering::SeqCst);
     }
 
     fn pos_to_duration(&self, pos: usize) -> Duration {
