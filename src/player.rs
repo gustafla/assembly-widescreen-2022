@@ -39,6 +39,7 @@ pub struct Player {
     audio_data: Arc<Vec<i16>>,
     sample_rate: usize,
     channels: usize,
+    len_secs: f64,
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
     playback_thread: JoinHandle<()>,
@@ -83,6 +84,7 @@ impl Player {
         let ogg_file = File::open(ogg_path)?;
         let ogg_reader = BufReader::new(ogg_file);
         let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader)?;
+        let len_secs = audio_data.len() as f64 / (sample_rate * channels) as f64;
 
         // Initialize libpulse_simple
         let spec = Spec {
@@ -155,6 +157,7 @@ impl Player {
             audio_data,
             sample_rate,
             channels,
+            len_secs,
             playback_position,
             playing,
             playback_thread,
@@ -166,8 +169,8 @@ impl Player {
         })
     }
 
-    pub fn is_at_end(&self) -> bool {
-        self.playback_position.load(Ordering::SeqCst) >= self.audio_data.len()
+    pub fn len_secs(&self) -> f64 {
+        self.len_secs
     }
 
     pub fn is_playing(&self) -> bool {
@@ -187,8 +190,6 @@ impl Player {
     }
 
     pub fn time_secs(&mut self) -> f64 {
-        let len_secs = self.audio_data.len() as f64 / (self.sample_rate * self.channels) as f64;
-
         let timer_secs = (if self.is_playing() {
             self.start_time.elapsed()
         } else {
@@ -197,7 +198,7 @@ impl Player {
             .as_nanos() as f64
             / 1_000_000_000f64;
 
-        timer_secs.min(len_secs)
+        timer_secs.min(self.len_secs)
     }
 
     pub fn seek(&mut self, secs: f64) {

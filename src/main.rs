@@ -52,7 +52,7 @@ fn main() -> Result<()> {
         *control_flow = ControlFlow::Poll;
 
         #[cfg(not(debug_assertions))]
-        if player.is_at_end() {
+        if player.time_secs() >= player.len_secs() {
             *control_flow = ControlFlow::Exit;
         }
 
