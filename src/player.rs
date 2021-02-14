@@ -39,7 +39,8 @@ pub struct Player {
     audio_data: Arc<Vec<i16>>,
     sample_rate: usize,
     channels: usize,
-    len_secs: f64,
+    sample_rate_channels: f32,
+    len_secs: f32,
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
     playback_thread: JoinHandle<()>,
@@ -84,7 +85,8 @@ impl Player {
         let ogg_file = File::open(ogg_path)?;
         let ogg_reader = BufReader::new(ogg_file);
         let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader)?;
-        let len_secs = audio_data.len() as f64 / (sample_rate * channels) as f64;
+        let sample_rate_channels = (sample_rate * channels) as f32;
+        let len_secs = audio_data.len() as f32 / sample_rate_channels;
 
         // Initialize libpulse_simple
         let spec = Spec {
@@ -157,6 +159,7 @@ impl Player {
             audio_data,
             sample_rate,
             channels,
+            sample_rate_channels,
             len_secs,
             playback_position,
             playing,
@@ -169,7 +172,7 @@ impl Player {
         })
     }
 
-    pub fn len_secs(&self) -> f64 {
+    pub fn len_secs(&self) -> f32 {
         self.len_secs
     }
 
@@ -189,22 +192,21 @@ impl Player {
         self.playing.store(false, Ordering::SeqCst);
     }
 
-    pub fn time_secs(&mut self) -> f64 {
+    pub fn time_secs(&mut self) -> f32 {
         let timer_secs = (if self.is_playing() {
             self.start_time.elapsed()
         } else {
             self.pause_time.duration_since(self.start_time)
         } + self.time_offset)
-            .as_nanos() as f64
-            / 1_000_000_000f64;
+            .as_micros() as f32
+            / 1_000_000f32;
 
         timer_secs.min(self.len_secs)
     }
 
-    pub fn seek(&mut self, secs: f64) {
+    pub fn seek(&mut self, secs: f32) {
         // Calculate new playback position
-        let sample_rate_channels = (self.sample_rate * self.channels) as f64;
-        let mut pos = (secs * sample_rate_channels) as usize;
+        let mut pos = (secs * self.sample_rate_channels) as usize;
 
         // Align to channel
         pos -= pos % self.channels;
@@ -230,9 +232,9 @@ impl Player {
     }
 
     /// Compute average Power Spectral Density of bass (30-300Hz)
-    pub fn bass_psd(&mut self, at_secs: f64) -> f32 {
+    pub fn bass_psd(&mut self, at_secs: f32) -> f32 {
         // Compute the position
-        let mut pos = (at_secs * self.sample_rate as f64 * self.channels as f64) as usize;
+        let mut pos = (at_secs * self.sample_rate_channels) as usize;
 
         // Limit to audio data range
         pos = pos

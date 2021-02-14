@@ -1,5 +1,3 @@
-#[cfg(debug_assertions)]
-mod frame_counter;
 mod glesv2;
 mod particle_system;
 mod player;
@@ -7,8 +5,6 @@ mod render_pass;
 mod sync;
 mod terrain;
 
-#[cfg(debug_assertions)]
-use frame_counter::FrameCounter;
 use glam::{Mat4, Quat, Vec2, Vec3};
 pub use glesv2::{
     types::*, Framebuffer, Gles2, RcGl, Renderbuffer, RenderbufferAttachment, ResourceMapper,
@@ -34,8 +30,6 @@ pub enum Error {
 }
 
 pub struct Demo {
-    #[cfg(debug_assertions)]
-    frame_counter: FrameCounter,
     pub resolution: (i32, i32),
     pub projection: Mat4,
     pub view: Mat4,
@@ -94,8 +88,6 @@ impl Demo {
         ]);
 
         let demo = Demo {
-            #[cfg(debug_assertions)]
-            frame_counter: FrameCounter::new(),
             resolution: (w, h),
             projection: Mat4::perspective_rh_gl(
                 60. * (std::f32::consts::PI / 180.),
@@ -134,9 +126,6 @@ impl Demo {
     }
 
     pub fn render(&mut self, sync: &mut Sync) -> Result<(), glesv2::Error> {
-        #[cfg(debug_assertions)]
-        self.frame_counter.tick();
-
         let cam_pos = Vec3::new(
             sync.get("cam:pos.x"),
             sync.get("cam:pos.y"),

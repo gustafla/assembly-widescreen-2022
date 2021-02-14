@@ -48,42 +48,33 @@ fn main() -> Result<()> {
     #[cfg(not(debug_assertions))]
     player.play();
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-
-        #[cfg(not(debug_assertions))]
-        if player.time_secs() >= player.len_secs() {
-            *control_flow = ControlFlow::Exit;
-        }
-
-        sync.update(&mut player);
-
-        match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            virtual_keycode: Some(keycode),
-                            ..
-                        },
-                    ..
-                } => match keycode {
-                    VirtualKeyCode::Escape | VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
-                    _ => (),
-                },
+    event_loop.run(move |event, _, control_flow| match event {
+        Event::WindowEvent { event, .. } => match event {
+            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        virtual_keycode: Some(keycode),
+                        ..
+                    },
+                ..
+            } => match keycode {
+                VirtualKeyCode::Escape | VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
                 _ => (),
             },
-            Event::MainEventsCleared => {
-                if let Err(e) = demo.render(&mut sync) {
-                    panic!("{}", e);
-                }
-
-                windowed_context
-                    .swap_buffers()
-                    .expect("Failed to swap buffers");
-            }
             _ => (),
+        },
+        Event::MainEventsCleared => {
+            *control_flow = sync.update(&mut player);
+
+            if let Err(e) = demo.render(&mut sync) {
+                panic!("{}", e);
+            }
+
+            windowed_context
+                .swap_buffers()
+                .expect("Failed to swap buffers");
         }
+        _ => (),
     });
 }

@@ -1,16 +1,24 @@
+#[cfg(debug_assertions)]
+mod frame_counter;
+#[cfg(debug_assertions)]
+use frame_counter::FrameCounter;
+
 use crate::Player;
+use glutin::event_loop::ControlFlow;
 
 const TRACKS_FILE: &str = "resources/tracks.bin";
 
 pub struct Sync {
-    row: f64,
-    beats_per_sec: f64,
-    rows_per_beat: f64,
+    row: f32,
+    beats_per_sec: f32,
+    rows_per_beat: f32,
     beat: f32,
     #[cfg(debug_assertions)]
     rocket: rust_rocket::RocketClient,
     #[cfg(not(debug_assertions))]
     rocket: rust_rocket::RocketPlayer,
+    #[cfg(debug_assertions)]
+    frame_counter: FrameCounter,
 }
 
 #[cfg(debug_assertions)]
@@ -25,7 +33,7 @@ fn connect() -> rust_rocket::RocketClient {
 }
 
 impl Sync {
-    pub fn new(bpm: f64, rows_per_beat: f64) -> Self {
+    pub fn new(bpm: f32, rows_per_beat: f32) -> Self {
         #[cfg(debug_assertions)]
         let rocket = {
             log::info!("Connecting to rocket tracker");
@@ -45,6 +53,8 @@ impl Sync {
             rows_per_beat,
             beat: 0.,
             rocket,
+            #[cfg(debug_assertions)]
+            frame_counter: FrameCounter::new(),
         }
     }
 
@@ -70,8 +80,19 @@ impl Sync {
         self.beat
     }
 
-    pub fn update(&mut self, player: &mut Player) {
+    /// Call once per frame
+    pub fn update(&mut self, player: &mut Player) -> ControlFlow {
+        #[cfg(debug_assertions)]
+        self.frame_counter.tick();
+
+        // This frame's time to render at
         let secs = player.time_secs();
+        // In Release builds, signal exit when the demo has played to the end of music
+        #[cfg(not(debug_assertions))]
+        if secs >= player.len_secs() {
+            return ControlFlow::Exit;
+        }
+
         self.row = self.secs_to_row(secs);
         // Absolute energy in low freq range is a pretty good musical beat value
         self.beat = player.bass_psd(secs);
@@ -85,7 +106,7 @@ impl Sync {
                     if let Some(event) = result {
                         match event {
                             Event::SetRow(row) => {
-                                player.seek(self.row_to_secs(row as f64));
+                                player.seek(self.row_to_secs(row as f32));
                             }
                             Event::Pause(state) => {
                                 if state {
@@ -115,6 +136,8 @@ impl Sync {
                 }
             }
         }
+
+        ControlFlow::Poll
     }
 
     #[cfg(debug_assertions)]
@@ -137,12 +160,12 @@ impl Sync {
     }
 
     #[cfg(debug_assertions)]
-    fn row_to_secs(&self, row: f64) -> f64 {
+    fn row_to_secs(&self, row: f32) -> f32 {
         let beat = row / self.rows_per_beat;
         beat / self.beats_per_sec
     }
 
-    fn secs_to_row(&self, secs: f64) -> f64 {
+    fn secs_to_row(&self, secs: f32) -> f32 {
         secs * self.beats_per_sec * self.rows_per_beat
     }
 }
