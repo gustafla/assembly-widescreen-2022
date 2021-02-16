@@ -45,6 +45,7 @@ fn main() -> Result<()> {
     // Load demo content
     let mut demo = Demo::new(size.width, size.height, gl)?;
 
+    // If release build, start the music
     #[cfg(not(debug_assertions))]
     player.play();
 
@@ -65,12 +66,15 @@ fn main() -> Result<()> {
             _ => (),
         },
         Event::MainEventsCleared => {
+            // Update sync, timing and audio related frame parameters
             *control_flow = sync.update(&mut player);
 
+            // Render the frame
             if let Err(e) = demo.render(&mut sync) {
                 panic!("{}", e);
             }
 
+            // Display the frame
             windowed_context
                 .swap_buffers()
                 .expect("Failed to swap buffers");
