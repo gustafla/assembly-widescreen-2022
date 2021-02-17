@@ -79,7 +79,7 @@ impl Player {
         ))
     }
 
-    pub fn new(ogg_path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn new(ogg_path: impl AsRef<Path>, title: &str) -> Result<Self, Error> {
         log::info!("Loading {}", ogg_path.as_ref().display());
 
         // Read and decode ogg file
@@ -104,8 +104,8 @@ impl Player {
             fragsize: std::u32::MAX,
         };
         let simple = Simple::new(
-            None,   // Default server
-            "demo", // Application name
+            None,  // Default server
+            title, // Application name
             Direction::Playback,
             None,    // Default device
             "Music", // Description

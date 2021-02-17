@@ -80,63 +80,80 @@ impl Sync {
         self.beat
     }
 
+    #[cfg(debug_assertions)]
+    fn poll_events(&mut self, player: &mut Player) -> bool {
+        use rust_rocket::client::Event;
+
+        // Keep track whether this frame had seek events
+        // to avoid changing the tracker's position when the user is changing it manually
+        let mut seeking = false;
+
+        loop {
+            if let Ok(result) = self.rocket.poll_events() {
+                if let Some(event) = result {
+                    match event {
+                        Event::SetRow(row) => {
+                            player.seek(self.row_to_secs(row as f32));
+                            seeking = true;
+                        }
+                        Event::Pause(state) => {
+                            if state {
+                                player.pause();
+                            } else {
+                                player.play();
+                            }
+                        }
+                        Event::SaveTracks => {
+                            self.save_tracks();
+                        }
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                self.reconnect();
+            }
+        }
+
+        seeking
+    }
+
     /// Call once per frame
     pub fn update(&mut self, player: &mut Player) -> ControlFlow {
         #[cfg(debug_assertions)]
         self.frame_counter.tick();
 
+        // Poll rocket events
+        #[cfg(debug_assertions)]
+        let seeking = self.poll_events(player);
+
         // This frame's time to render at
         let secs = player.time_secs();
+
         // In Release builds, signal exit when the demo has played to the end of music
         #[cfg(not(debug_assertions))]
         if secs >= player.len_secs() {
             return ControlFlow::Exit;
         }
 
+        // Set frame's row for Rocket track gets
         self.row = self.secs_to_row(secs);
-        // Absolute energy in low freq range is a pretty good musical beat value
-        self.beat = player.bass_psd(secs);
 
+        // Update rocket tracker's position when necessary
         #[cfg(debug_assertions)]
-        {
-            use rust_rocket::client::Event;
-
+        if player.is_playing() && !seeking {
             loop {
-                if let Ok(result) = self.rocket.poll_events() {
-                    if let Some(event) = result {
-                        match event {
-                            Event::SetRow(row) => {
-                                player.seek(self.row_to_secs(row as f32));
-                            }
-                            Event::Pause(state) => {
-                                if state {
-                                    player.pause();
-                                } else {
-                                    player.play();
-                                }
-                            }
-                            Event::SaveTracks => {
-                                self.save_tracks();
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                } else {
-                    self.reconnect();
+                if self.rocket.set_row(self.row as u32).is_ok() {
+                    break;
                 }
-            }
-
-            if player.is_playing() {
-                loop {
-                    if self.rocket.set_row(self.row as u32).is_ok() {
-                        break;
-                    }
-                    self.reconnect();
-                }
+                self.reconnect();
             }
         }
 
+        // Absolute energy in low freq range is a pretty good musical beat value
+        self.beat = player.bass_psd(secs);
+
+        // Signal winit's event loop that we want to keep rendering
         ControlFlow::Poll
     }
 

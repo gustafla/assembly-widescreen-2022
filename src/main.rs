@@ -17,12 +17,15 @@ fn main() -> Result<()> {
     log::set_max_level(log::LevelFilter::max());
 
     // Build a window with an OpenGL context
+    let title = "Demo";
     let size = PhysicalSize::new(1280, 720);
     let event_loop = EventLoop::new();
     let window_builder = WindowBuilder::new()
-        .with_title("Demo")
+        .with_title(title)
         .with_app_id("demo".into())
-        .with_inner_size(size);
+        .with_inner_size(size)
+        .with_resizable(false)
+        .with_decorations(false);
     let windowed_context = ContextBuilder::new()
         .with_gl(GlRequest::Specific(Api::OpenGlEs, (2, 0)))
         .with_vsync(true)
@@ -37,7 +40,7 @@ fn main() -> Result<()> {
     let gl = RcGl::new(|s| windowed_context.get_proc_address(s));
 
     // Load music
-    let mut player = Player::new("resources/music.ogg").context("Failed to load music")?;
+    let mut player = Player::new("resources/music.ogg", title).context("Failed to load music")?;
 
     // Initialize rocket
     let mut sync = Sync::new(120., 8.);
