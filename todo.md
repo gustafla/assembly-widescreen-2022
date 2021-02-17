@@ -1,5 +1,5 @@
-[ ] Write a frontend with `rocket_client`, winit, lewton and cpal
-[ ] Investigate wgpu and gfx-hal
+[X] Write a frontend with `rocket_client`, winit, lewton and cpal
+  - [ ] Add fullscreen mode CLI configuration
 [x] Particle effect & physics system
   - [x] Spawning boxes
     - [ ] Spherical
@@ -16,6 +16,9 @@
     - [x] Positions
     - [x] Normals
   - [ ] Sprites/logos?
+  - [ ] Cityscape
+[ ] Shadow mapping
+[ ] Volumetric clouds?
 [ ] Sync, camera & choreography
 [x] Implement post processing
   - [x] Vignette
@@ -26,4 +29,4 @@
 [x] Add proper logging
 [x] Switch back to idiomatic namespace style
 [x] Use Error::\*;
-[ ] Use thiserror or anyhow
+[ ] Use thiserror and anyhow for all unwraps
