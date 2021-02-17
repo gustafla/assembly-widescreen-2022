@@ -5,6 +5,7 @@ use pulse::{
     stream::Direction,
 };
 use pulse_simple::Simple;
+use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{
     convert::TryInto,
     fs::File,
@@ -47,8 +48,8 @@ pub struct Player {
     start_time: Instant,
     pause_time: Instant,
     time_offset: Duration,
-    fft: Arc<dyn rustfft::Fft<f32>>,
-    fft_scratch: Vec<num_complex::Complex<f32>>,
+    fft: Arc<dyn Fft<f32>>,
+    fft_scratch: Vec<Complex<f32>>,
 }
 
 impl Player {
@@ -149,9 +150,9 @@ impl Player {
         };
 
         // Initialize FFT
-        let mut fft_planner = rustfft::FftPlanner::new();
+        let mut fft_planner = FftPlanner::new();
         let fft = fft_planner.plan_fft_forward(FFT_SIZE);
-        let fft_scratch = vec![num_complex::Complex::new(0., 0.); fft.get_inplace_scratch_len()];
+        let fft_scratch = vec![Complex::new(0., 0.); fft.get_inplace_scratch_len()];
 
         let time = Instant::now();
 
@@ -252,7 +253,7 @@ impl Player {
             .map(|(n, all_channels_sample)| {
                 // First channel mono
                 let sample_f32 = all_channels_sample[0] as f32 / i16::MAX as f32;
-                num_complex::Complex::new(
+                Complex::new(
                     // Hann window function
                     ((std::f32::consts::PI * n as f32) / fft_size_f32)
                         .sin()

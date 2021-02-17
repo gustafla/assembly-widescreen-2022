@@ -279,7 +279,6 @@ dependencies = [
  "libpulse-binding",
  "libpulse-simple-binding",
  "log",
- "num-complex",
  "num_cpus",
  "rand",
  "rand_xorshift",
