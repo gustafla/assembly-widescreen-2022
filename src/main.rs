@@ -1,62 +1,70 @@
 mod logger;
 
 use anyhow::{anyhow, Context, Result};
-use argh::FromArgs;
 use demo::{Demo, Player, RcGl, Sync};
 use glutin::{
     dpi::PhysicalSize,
     event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    platform::unix::WindowBuilderExtUnix,
-    window::WindowBuilder,
+    platform::unix::{EventLoopWindowTargetExtUnix, WindowBuilderExtUnix},
+    window::{Fullscreen, WindowBuilder},
     Api, ContextBuilder, GlRequest,
 };
-use thiserror::Error;
+use std::convert::TryInto;
 
-#[derive(Debug)]
-struct MonitorMode {
-    monitor: usize,
-    mode: Option<usize>,
+#[derive(Debug, Default)]
+struct FullscreenOptions {
+    monitor: Option<usize>,
+    mode: usize,
 }
 
-#[derive(Error, Debug)]
-enum MonitorModeError {
-    #[error(transparent)]
-    ParseInt(#[from] std::num::ParseIntError),
-    #[error("Incorrent monitor and mode syntax")]
-    Syntax,
+impl FullscreenOptions {
+    fn configure<T>(self, event_loop: &EventLoop<T>) -> Result<Fullscreen> {
+        let monitor = match self.monitor {
+            Some(monitor_id) => Some(
+                event_loop
+                    .available_monitors()
+                    .nth(monitor_id)
+                    .context("Requested monitor does not exist")?,
+            ),
+            None => None,
+        };
+
+        // Use borderless fullscreen on Wayland
+        if event_loop.is_wayland() {
+            return Ok(Fullscreen::Borderless(monitor));
+        }
+
+        // Use exclusive fullscreen on other platforms
+        Ok(Fullscreen::Exclusive(
+            monitor
+                .unwrap_or_else(|| {
+                    event_loop.primary_monitor().unwrap_or_else(|| {
+                        log::info!("Can't determine primary monitor, using first");
+                        event_loop
+                            .available_monitors()
+                            .next()
+                            .expect("Can't enumerate monitors")
+                    })
+                })
+                .video_modes()
+                .nth(self.mode)
+                .context("Requested video mode does not exist")?,
+        ))
+    }
 }
 
-impl std::str::FromStr for MonitorMode {
-    type Err = MonitorModeError;
+impl std::str::FromStr for FullscreenOptions {
+    type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut split = s.splitn(2, ',');
 
-        let monitor = split
-            .next()
-            .ok_or(MonitorModeError::Syntax)
-            .map(|s| s.parse())??;
-
-        Ok(MonitorMode {
-            monitor,
-            mode: split.next().map(|s| s.parse()).transpose()?,
+        Ok(Self {
+            monitor: split.next().map(|s| s.parse()).transpose()?,
+            mode: split.next().map(|s| s.parse().unwrap_or(0)).unwrap_or(0),
         })
     }
-}
-
-/// A demo by Mehu
-#[derive(FromArgs)]
-struct CliArgs {
-    /// list available monitors and their video modes
-    #[argh(switch)]
-    list_monitors: bool,
-    /// run in exclusive fullscreen mode (defaulting to primary monitor's first mode)
-    #[argh(switch)]
-    fullscreen: bool,
-    /// monitor (and optionally video mode separated by a comma) to use in fullscreen
-    #[argh(option)]
-    monitor: Option<MonitorMode>,
 }
 
 fn print_monitors<T>(event_loop: EventLoop<T>) {
@@ -82,24 +90,38 @@ fn main() -> Result<()> {
 
     // Initialize window stuff
     let title = "Demo";
-    let mut size = PhysicalSize::new(1280, 720);
+    let default_size = PhysicalSize::new(1280, 720);
     let event_loop = EventLoop::new();
 
     // Process CLI
-    let args: CliArgs = argh::from_env();
-    if args.list_monitors {
+    let mut pargs = pico_args::Arguments::from_env();
+
+    if pargs.contains("--list-monitors") {
         print_monitors(event_loop);
         return Ok(());
     }
-    if args.fullscreen {
-        println!("{:?}", args.monitor);
-    }
+
+    // Parse fullscreen options with fallback
+    let fullscreen: Option<FullscreenOptions> = pargs
+        .opt_value_from_str("--fullscreen")
+        .unwrap_or_else(|_| Some(Default::default()));
+
+    // Fullscreen options to winit configuration
+    let fullscreen = match fullscreen {
+        Some(fullscreen_opt) => Some(fullscreen_opt.configure(&event_loop)?),
+        None => None,
+    };
 
     // Build a window with an OpenGL context
     let window_builder = WindowBuilder::new()
         .with_title(title)
         .with_app_id("demo".into())
-        .with_inner_size(size)
+        .with_inner_size(match &fullscreen {
+            Some(Fullscreen::Borderless(Some(monitor))) => monitor.size(),
+            Some(Fullscreen::Exclusive(video_mode)) => video_mode.size(),
+            _ => default_size,
+        })
+        .with_fullscreen(fullscreen.clone())
         .with_resizable(false)
         .with_decorations(false);
     let windowed_context = ContextBuilder::new()
@@ -109,6 +131,15 @@ fn main() -> Result<()> {
         .with_hardware_acceleration(None)
         .build_windowed(window_builder, &event_loop)
         .context("Failed to build a window")?;
+
+    // Correct borderless fullscreen inner size
+    if let Some(Fullscreen::Borderless(None)) = fullscreen {
+        if let Some(monitor) = windowed_context.window().current_monitor() {
+            windowed_context.window().set_inner_size(monitor.size());
+        }
+    }
+
+    // Make OpenGL context current
     let windowed_context = unsafe { windowed_context.make_current() }
         .map_err(|e| anyhow!("Failed to make context current: {:?}", e))?;
 
@@ -122,7 +153,12 @@ fn main() -> Result<()> {
     let mut sync = Sync::new(120., 8.);
 
     // Load demo content
-    let mut demo = Demo::new(size.width, size.height, gl)?;
+    let size = windowed_context.window().inner_size();
+    let mut demo = Demo::new(
+        size.width.try_into().unwrap(),
+        size.height.try_into().unwrap(),
+        gl,
+    )?;
 
     // If release build, start the music
     #[cfg(not(debug_assertions))]

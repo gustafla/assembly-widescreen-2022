@@ -19,7 +19,7 @@ glam = "0.12.0"
 rustfft = "5.0.1"
 pulse_simple = { package = "libpulse-simple-binding", version = "2.23.0" }
 pulse = { package = "libpulse-binding", version = "2.23.0" }
-argh = "0.1.4"
+pico-args = "0.4.0"
 
 [build-dependencies]
 gl_generator = "0.14.0"
