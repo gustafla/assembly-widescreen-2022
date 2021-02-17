@@ -1,6 +1,7 @@
 mod logger;
 
 use anyhow::{anyhow, Context, Result};
+use argh::FromArgs;
 use demo::{Demo, Player, RcGl, Sync};
 use glutin::{
     dpi::PhysicalSize,
@@ -11,15 +12,51 @@ use glutin::{
     Api, ContextBuilder, GlRequest,
 };
 
+/// A demo by Mehu
+#[derive(FromArgs)]
+struct CliArgs {
+    /// list available monitors and their video modes
+    #[argh(switch)]
+    list_monitors: bool,
+    /// run in exclusive fullscreen mode
+    #[argh(switch)]
+    fullscreen: bool,
+}
+
+fn list_monitors<T>(event_loop: EventLoop<T>) {
+    for (i, monitor) in event_loop.available_monitors().enumerate() {
+        println!("Monitor {}:", i);
+        for (j, video_mode) in monitor.video_modes().enumerate() {
+            println!(
+                "\tMode {}: {}x{} {}-bit {}Hz",
+                j,
+                video_mode.size().width,
+                video_mode.size().height,
+                video_mode.bit_depth(),
+                video_mode.refresh_rate()
+            );
+        }
+    }
+}
+
 fn main() -> Result<()> {
     // Initialize logging
     log::set_logger(&logger::Logger).unwrap();
     log::set_max_level(log::LevelFilter::max());
 
-    // Build a window with an OpenGL context
+    // Initialize window stuff
     let title = "Demo";
     let size = PhysicalSize::new(1280, 720);
     let event_loop = EventLoop::new();
+
+    // Process CLI
+    let args: CliArgs = argh::from_env();
+    if args.list_monitors {
+        list_monitors(event_loop);
+        return Ok(());
+    }
+
+    // Build a window with an OpenGL context
     let window_builder = WindowBuilder::new()
         .with_title(title)
         .with_app_id("demo".into())
