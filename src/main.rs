@@ -11,6 +11,39 @@ use glutin::{
     window::WindowBuilder,
     Api, ContextBuilder, GlRequest,
 };
+use thiserror::Error;
+
+#[derive(Debug)]
+struct MonitorMode {
+    monitor: usize,
+    mode: Option<usize>,
+}
+
+#[derive(Error, Debug)]
+enum MonitorModeError {
+    #[error(transparent)]
+    ParseInt(#[from] std::num::ParseIntError),
+    #[error("Incorrent monitor and mode syntax")]
+    Syntax,
+}
+
+impl std::str::FromStr for MonitorMode {
+    type Err = MonitorModeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut split = s.splitn(2, ',');
+
+        let monitor = split
+            .next()
+            .ok_or(MonitorModeError::Syntax)
+            .map(|s| s.parse())??;
+
+        Ok(MonitorMode {
+            monitor,
+            mode: split.next().map(|s| s.parse()).transpose()?,
+        })
+    }
+}
 
 /// A demo by Mehu
 #[derive(FromArgs)]
@@ -18,12 +51,15 @@ struct CliArgs {
     /// list available monitors and their video modes
     #[argh(switch)]
     list_monitors: bool,
-    /// run in exclusive fullscreen mode
+    /// run in exclusive fullscreen mode (defaulting to primary monitor's first mode)
     #[argh(switch)]
     fullscreen: bool,
+    /// monitor (and optionally video mode separated by a comma) to use in fullscreen
+    #[argh(option)]
+    monitor: Option<MonitorMode>,
 }
 
-fn list_monitors<T>(event_loop: EventLoop<T>) {
+fn print_monitors<T>(event_loop: EventLoop<T>) {
     for (i, monitor) in event_loop.available_monitors().enumerate() {
         println!("Monitor {}:", i);
         for (j, video_mode) in monitor.video_modes().enumerate() {
@@ -46,14 +82,17 @@ fn main() -> Result<()> {
 
     // Initialize window stuff
     let title = "Demo";
-    let size = PhysicalSize::new(1280, 720);
+    let mut size = PhysicalSize::new(1280, 720);
     let event_loop = EventLoop::new();
 
     // Process CLI
     let args: CliArgs = argh::from_env();
     if args.list_monitors {
-        list_monitors(event_loop);
+        print_monitors(event_loop);
         return Ok(());
+    }
+    if args.fullscreen {
+        println!("{:?}", args.monitor);
     }
 
     // Build a window with an OpenGL context
