@@ -132,8 +132,18 @@ impl Demo {
                     RenderbufferAttachment { renderbuffer }
                 })]),
             ),
-            blur_pass_x: RenderPass::new(gl.clone(), resolution, "two_pass_gaussian_blur.frag", None),
-            blur_pass_y: RenderPass::new(gl.clone(), resolution, "two_pass_gaussian_blur.frag", None),
+            blur_pass_x: RenderPass::new(
+                gl.clone(),
+                resolution,
+                "two_pass_gaussian_blur.frag",
+                None,
+            ),
+            blur_pass_y: RenderPass::new(
+                gl.clone(),
+                resolution,
+                "two_pass_gaussian_blur.frag",
+                None,
+            ),
             post_pass: RenderPass::new(gl, resolution, "post.frag", None),
         };
 
@@ -189,7 +199,7 @@ impl Demo {
         // Bloom pass -----------------------------------------------------------------------------
 
         self.blur_pass_x.fbo.bind(0);
-        self.bloom_pass.render(&self, &[], &[]);
+        self.bloom_pass.render(&self, &[], &[], None);
 
         // X-blur pass ----------------------------------------------------------------------------
 
@@ -198,6 +208,7 @@ impl Demo {
             &self,
             &[],
             &[("u_BlurDirection", UniformValue::Vec2f(1., 0.))],
+            None,
         );
 
         // Y-blur pass ----------------------------------------------------------------------------
@@ -207,6 +218,7 @@ impl Demo {
             &self,
             &[],
             &[("u_BlurDirection", UniformValue::Vec2f(0., 1.))],
+            None,
         );
 
         // Post pass ------------------------------------------------------------------------------
@@ -232,13 +244,8 @@ impl Demo {
         let noise_amount = UniformValue::Float(sync.get("noise_amount"));
 
         // Render to screen
-        Framebuffer::bind_default(self.gl.clone(), 0);
-        self.gl.viewport(
-            0,
-            0,
-            i32::try_from(to_size.width).unwrap(),
-            i32::try_from(to_size.height).unwrap(),
-        );
+        self.gl.clear_color(0., 0., 0., 1.);
+        Framebuffer::bind_default(self.gl.clone(), glesv2::COLOR_BUFFER_BIT);
         self.post_pass.render(
             &self,
             &[
@@ -253,6 +260,7 @@ impl Demo {
                 ("u_NoiseScale", UniformValue::Float(NOISE_SCALE as f32)),
                 ("u_Beat", UniformValue::Float(sync.get_beat())),
             ],
+            Some(to_size),
         );
 
         glesv2::check(self.gl.clone())
