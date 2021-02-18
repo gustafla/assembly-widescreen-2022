@@ -1,5 +1,6 @@
 [X] Write a frontend with `rocket_client`, winit, lewton and cpal
-  - [ ] Add fullscreen mode CLI configuration
+  - [X] Add fullscreen mode CLI configuration
+  - [ ] Add internal resolution scaling and fixed resolution support
 [x] Particle effect & physics system
   - [x] Spawning boxes
     - [ ] Spherical
