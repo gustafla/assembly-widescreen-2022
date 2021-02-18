@@ -7,7 +7,7 @@ use pulse::{
 use pulse_simple::Simple;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{
-    convert::TryInto,
+    convert::TryFrom,
     fs::File,
     io::{BufReader, Read, Seek},
     path::Path,
@@ -92,13 +92,13 @@ impl Player {
         // Initialize libpulse_simple
         let spec = Spec {
             format: Format::S16NE, // Signed 16-bit in native endian
-            channels: channels.try_into().unwrap(),
-            rate: sample_rate.try_into().unwrap(),
+            channels: u8::try_from(channels).unwrap(),
+            rate: u32::try_from(sample_rate).unwrap(),
         };
         let buffer_attr = BufferAttr {
             maxlength: std::u32::MAX,
             // Set target length to get lower latency
-            tlength: (BUF_SIZE * std::mem::size_of::<i16>()).try_into().unwrap(),
+            tlength: u32::try_from(BUF_SIZE * std::mem::size_of::<i16>()).unwrap(),
             prebuf: std::u32::MAX,
             minreq: std::u32::MAX,
             fragsize: std::u32::MAX,
