@@ -10,6 +10,7 @@ pub use glesv2::{
     types::*, Framebuffer, Gles2, RcGl, Renderbuffer, RenderbufferAttachment, ResourceMapper,
     Texture, UniformValue,
 };
+use glutin::dpi::PhysicalSize;
 use particle_system::{
     ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
 };
@@ -17,11 +18,12 @@ pub use player::Player;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
+use std::convert::TryFrom;
 pub use sync::Sync;
 use terrain::Terrain;
 use thiserror::Error;
 
-const NOISE_SCALE: i32 = 8;
+const NOISE_SCALE: u32 = 8;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -29,25 +31,93 @@ pub enum Error {
     ResourceLoading(#[from] glesv2::resource_mapper::Error),
 }
 
-pub struct Demo {
-    pub resolution: (i32, i32),
-    pub projection: Mat4,
-    pub view: Mat4,
-    pub resources: ResourceMapper,
-    pub gl: RcGl,
-    rng: XorShiftRng,
+struct DemoResizables {
+    resolution: PhysicalSize<u32>,
+    projection: Mat4,
     noise_texture: Texture,
-    particle_system: ParticleSystem,
-    terrain: Terrain,
     bloom_pass: RenderPass,
     blur_pass_x: RenderPass,
     blur_pass_y: RenderPass,
     post_pass: RenderPass,
 }
 
+impl DemoResizables {
+    fn new(gl: RcGl, size: PhysicalSize<u32>) -> Self {
+        Self {
+            resolution: size,
+            noise_texture: {
+                let noise_texture = Texture::new(gl.clone(), glesv2::TEXTURE_2D);
+                noise_texture.image::<u8>(
+                    0,
+                    glesv2::LUMINANCE,
+                    i32::try_from(size.width / NOISE_SCALE).unwrap(),
+                    i32::try_from(size.height / NOISE_SCALE).unwrap(),
+                    glesv2::UNSIGNED_BYTE,
+                    None,
+                );
+                noise_texture.parameters(&[
+                    (glesv2::TEXTURE_MIN_FILTER, glesv2::NEAREST),
+                    (glesv2::TEXTURE_MAG_FILTER, glesv2::NEAREST),
+                    (glesv2::TEXTURE_WRAP_S, glesv2::REPEAT),
+                    (glesv2::TEXTURE_WRAP_T, glesv2::REPEAT),
+                ]);
+                noise_texture
+            },
+            projection: Mat4::perspective_rh_gl(
+                60. * (std::f32::consts::PI / 180.),
+                size.width as f32 / size.height as f32,
+                0.1,
+                1000.,
+            ),
+            bloom_pass: RenderPass::new(
+                gl.clone(),
+                size,
+                "bloom.frag",
+                Some(vec![(glesv2::DEPTH_ATTACHMENT, {
+                    let renderbuffer = Renderbuffer::new(gl.clone());
+                    renderbuffer.storage(
+                        glesv2::DEPTH_COMPONENT16,
+                        i32::try_from(size.width).unwrap(),
+                        i32::try_from(size.height).unwrap(),
+                    );
+                    RenderbufferAttachment { renderbuffer }
+                })]),
+            ),
+            blur_pass_x: RenderPass::new(gl.clone(), size, "two_pass_gaussian_blur.frag", None),
+            blur_pass_y: RenderPass::new(gl.clone(), size, "two_pass_gaussian_blur.frag", None),
+            post_pass: RenderPass::new(gl, size, "post.frag", None),
+        }
+    }
+}
+
+pub struct Demo {
+    view: Mat4,
+    resources: ResourceMapper,
+    gl: RcGl,
+    rng: XorShiftRng,
+    particle_system: ParticleSystem,
+    terrain: Terrain,
+    resizables: DemoResizables,
+}
+
 impl Demo {
-    pub fn new(w: i32, h: i32, gl: RcGl) -> Result<Self, Error> {
-        gl.viewport(0, 0, w, h);
+    pub fn resolution(&self) -> PhysicalSize<u32> {
+        self.resizables.resolution
+    }
+
+    pub fn view(&self) -> Mat4 {
+        self.view
+    }
+
+    pub fn projection(&self) -> Mat4 {
+        self.resizables.projection
+    }
+
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        self.resizables = DemoResizables::new(self.gl.clone(), size);
+    }
+
+    pub fn new(resolution: PhysicalSize<u32>, gl: RcGl) -> Result<Self, Error> {
         gl.blend_func(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
         gl.enable(glesv2::CULL_FACE);
         gl.depth_func(glesv2::LESS);
@@ -71,53 +141,16 @@ impl Demo {
             },
         );
 
-        let noise_texture = Texture::new(gl.clone(), glesv2::TEXTURE_2D);
-        noise_texture.image::<u8>(
-            0,
-            glesv2::LUMINANCE,
-            w / NOISE_SCALE,
-            h / NOISE_SCALE,
-            glesv2::UNSIGNED_BYTE,
-            None,
-        );
-        noise_texture.parameters(&[
-            (glesv2::TEXTURE_MIN_FILTER, glesv2::NEAREST),
-            (glesv2::TEXTURE_MAG_FILTER, glesv2::NEAREST),
-            (glesv2::TEXTURE_WRAP_S, glesv2::REPEAT),
-            (glesv2::TEXTURE_WRAP_T, glesv2::REPEAT),
-        ]);
-
         let demo = Demo {
-            resolution: (w, h),
-            projection: Mat4::perspective_rh_gl(
-                60. * (std::f32::consts::PI / 180.),
-                w as f32 / h as f32,
-                0.1,
-                1000.,
-            ),
             view: Mat4::zero(),
             resources: ResourceMapper::new(gl.clone(), "resources")?,
             gl: gl.clone(),
             rng: XorShiftRng::seed_from_u64(98341),
-            noise_texture,
             particle_system,
             terrain: Terrain::new(gl.clone(), 200, 200, |x, z| {
                 (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.
             }),
-            bloom_pass: RenderPass::new(
-                gl.clone(),
-                w,
-                h,
-                "bloom.frag",
-                Some(vec![(glesv2::DEPTH_ATTACHMENT, {
-                    let renderbuffer = Renderbuffer::new(gl.clone());
-                    renderbuffer.storage(glesv2::DEPTH_COMPONENT16, w, h);
-                    RenderbufferAttachment { renderbuffer }
-                })]),
-            ),
-            blur_pass_x: RenderPass::new(gl.clone(), w, h, "two_pass_gaussian_blur.frag", None),
-            blur_pass_y: RenderPass::new(gl.clone(), w, h, "two_pass_gaussian_blur.frag", None),
-            post_pass: RenderPass::new(gl, w, h, "post.frag", None),
+            resizables: DemoResizables::new(gl, resolution),
         };
 
         log::trace!("demo created");
@@ -126,6 +159,13 @@ impl Demo {
     }
 
     pub fn render(&mut self, sync: &mut Sync) -> Result<(), glesv2::Error> {
+        self.gl.viewport(
+            0,
+            0,
+            i32::try_from(self.resolution().width).unwrap(),
+            i32::try_from(self.resolution().height).unwrap(),
+        );
+
         let cam_pos = Vec3::new(
             sync.get("cam:pos.x"),
             sync.get("cam:pos.y"),
@@ -141,7 +181,8 @@ impl Demo {
             Vec3::unit_y(),
         );
 
-        self.bloom_pass
+        self.resizables
+            .bloom_pass
             .fbo
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
 
@@ -160,13 +201,13 @@ impl Demo {
 
         // Bloom pass -----------------------------------------------------------------------------
 
-        self.blur_pass_x.fbo.bind(0);
-        self.bloom_pass.render(&self, &[], &[]);
+        self.resizables.blur_pass_x.fbo.bind(0);
+        self.resizables.bloom_pass.render(&self, &[], &[]);
 
         // X-blur pass ----------------------------------------------------------------------------
 
-        self.blur_pass_y.fbo.bind(0);
-        self.blur_pass_x.render(
+        self.resizables.blur_pass_y.fbo.bind(0);
+        self.resizables.blur_pass_x.render(
             &self,
             &[],
             &[("u_BlurDirection", UniformValue::Vec2f(1., 0.))],
@@ -174,8 +215,8 @@ impl Demo {
 
         // Y-blur pass ----------------------------------------------------------------------------
 
-        self.post_pass.fbo.bind(0);
-        self.blur_pass_y.render(
+        self.resizables.post_pass.fbo.bind(0);
+        self.resizables.blur_pass_y.render(
             &self,
             &[],
             &[("u_BlurDirection", UniformValue::Vec2f(0., 1.))],
@@ -184,17 +225,18 @@ impl Demo {
         // Post pass ------------------------------------------------------------------------------
 
         // Generate noise
-        let noise: Vec<u8> = (0..(self.resolution.0 * self.resolution.1 / NOISE_SCALE.pow(2)))
+        let noise: Vec<u8> = (0..(self.resolution().width * self.resolution().height
+            / NOISE_SCALE.pow(2)))
             .map(|_| self.rng.gen())
             .collect();
 
         // Upload noise to Texture
-        self.noise_texture.sub_image::<u8>(
+        self.resizables.noise_texture.sub_image::<u8>(
             0,
             0,
             0,
-            self.resolution.0 / NOISE_SCALE,
-            self.resolution.1 / NOISE_SCALE,
+            i32::try_from(self.resolution().width / NOISE_SCALE).unwrap(),
+            i32::try_from(self.resolution().height / NOISE_SCALE).unwrap(),
             glesv2::LUMINANCE,
             glesv2::UNSIGNED_BYTE,
             noise.as_slice(),
@@ -203,14 +245,15 @@ impl Demo {
         let noise_amount = UniformValue::Float(sync.get("noise_amount"));
 
         Framebuffer::bind_default(self.gl.clone(), 0);
-        self.post_pass.render(
+        self.resizables.post_pass.render(
             &self,
             &[
-                self.bloom_pass
+                self.resizables
+                    .bloom_pass
                     .fbo
                     .texture(glesv2::COLOR_ATTACHMENT0)
                     .unwrap(),
-                &self.noise_texture,
+                &self.resizables.noise_texture,
             ],
             &[
                 ("u_NoiseAmount", noise_amount),

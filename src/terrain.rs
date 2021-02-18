@@ -75,11 +75,11 @@ impl Terrain {
         program.bind(Some(&[
             (
                 program.uniform_location("u_Projection").unwrap(),
-                UniformValue::Matrix4fv(1, demo.projection.as_ref().as_ptr()),
+                UniformValue::Matrix4fv(1, demo.projection().as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                UniformValue::Matrix4fv(1, demo.view.as_ref().as_ptr()),
+                UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_LightPosition").unwrap(),

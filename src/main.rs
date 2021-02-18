@@ -10,7 +10,6 @@ use glutin::{
     window::{Fullscreen, WindowBuilder},
     Api, ContextBuilder, GlRequest,
 };
-use std::convert::TryInto;
 
 fn print_monitors<T>(event_loop: EventLoop<T>) {
     for (i, monitor) in event_loop.available_monitors().enumerate() {
@@ -28,6 +27,16 @@ fn print_monitors<T>(event_loop: EventLoop<T>) {
     }
 }
 
+struct MonitorId(Option<usize>);
+
+impl std::str::FromStr for MonitorId {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Some(s.parse()?)))
+    }
+}
+
 fn main() -> Result<()> {
     // Initialize logging
     log::set_logger(&logger::Logger).unwrap();
@@ -35,7 +44,6 @@ fn main() -> Result<()> {
 
     // Initialize window stuff
     let title = "Demo";
-    let default_size = PhysicalSize::new(1280, 720);
     let event_loop = EventLoop::new();
 
     // Process CLI
@@ -44,34 +52,28 @@ fn main() -> Result<()> {
         print_monitors(event_loop);
         return Ok(());
     }
-    let fullscreen: Option<usize> = pargs
+    let monitor: Option<MonitorId> = pargs
         .opt_value_from_str("--fullscreen")
-        .context("--fullscreen requires monitor number")?;
-    let rest = pargs.finish();
-    if !rest.is_empty() {
-        return Err(anyhow!("Unrecognized arguments {:?}", rest));
-    }
+        .unwrap_or(Some(MonitorId(None)));
 
-    // Configure for the specified monitor
-    let fullscreen = match fullscreen {
-        Some(id) => Some(
+    // Configure fullscreen for the specified monitor
+    let fullscreen = match monitor {
+        Some(MonitorId(Some(id))) => Some(Fullscreen::Borderless(Some(
             event_loop
                 .available_monitors()
                 .nth(id)
                 .context("Requested monitor doens't exist")?,
-        ),
-        None => None,
+        ))),
+        Some(_) => Some(Fullscreen::Borderless(None)),
+        _ => None,
     };
 
     // Build a window with an OpenGL context
     let window_builder = WindowBuilder::new()
         .with_title(title)
         .with_app_id("demo".into())
-        .with_inner_size(match &fullscreen {
-            Some(monitor) => monitor.size(),
-            None => default_size,
-        })
-        .with_fullscreen(fullscreen.map(|monitor| Fullscreen::Borderless(Some(monitor))))
+        .with_inner_size(PhysicalSize::new(1280, 720))
+        .with_fullscreen(fullscreen)
         .with_resizable(false)
         .with_decorations(false);
     let windowed_context = ContextBuilder::new()
@@ -97,11 +99,7 @@ fn main() -> Result<()> {
 
     // Load demo content
     let size = windowed_context.window().inner_size();
-    let mut demo = Demo::new(
-        size.width.try_into().unwrap(),
-        size.height.try_into().unwrap(),
-        gl,
-    )?;
+    let mut demo = Demo::new(size, gl)?;
 
     // If release build, start the music
     #[cfg(not(debug_assertions))]
@@ -121,6 +119,10 @@ fn main() -> Result<()> {
                 VirtualKeyCode::Escape | VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
                 _ => (),
             },
+            WindowEvent::Resized(size) => {
+                windowed_context.resize(size);
+                demo.resize(size);
+            }
             _ => (),
         },
         Event::MainEventsCleared => {

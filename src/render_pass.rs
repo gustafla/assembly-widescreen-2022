@@ -3,6 +3,8 @@ use crate::glesv2::{
     UniformValue,
 };
 use crate::Demo;
+use glutin::dpi::PhysicalSize;
+use std::convert::TryFrom;
 
 pub struct RenderPass {
     gl: RcGl,
@@ -13,13 +15,19 @@ pub struct RenderPass {
 impl RenderPass {
     pub fn new(
         gl: RcGl,
-        w: i32,
-        h: i32,
+        resolution: PhysicalSize<u32>,
         frag_path: &str,
         renderbuffers: Option<Vec<(GLenum, RenderbufferAttachment)>>,
     ) -> Self {
         let fbo_texture = Texture::new(gl.clone(), glesv2::TEXTURE_2D);
-        fbo_texture.image::<u8>(0, glesv2::RGB, w, h, glesv2::UNSIGNED_BYTE, None);
+        fbo_texture.image::<u8>(
+            0,
+            glesv2::RGB,
+            i32::try_from(resolution.width).unwrap(),
+            i32::try_from(resolution.height).unwrap(),
+            glesv2::UNSIGNED_BYTE,
+            None,
+        );
         fbo_texture.parameters(&[
             (glesv2::TEXTURE_MIN_FILTER, glesv2::NEAREST),
             (glesv2::TEXTURE_MAG_FILTER, glesv2::NEAREST),
@@ -76,7 +84,10 @@ impl RenderPass {
         if let Some(loc) = program.uniform_location("u_Resolution") {
             uniforms.push((
                 loc,
-                UniformValue::Vec2f(demo.resolution.0 as f32, demo.resolution.1 as f32),
+                UniformValue::Vec2f(
+                    demo.resolution().width as f32,
+                    demo.resolution().height as f32,
+                ),
             ));
         }
 

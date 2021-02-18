@@ -140,15 +140,18 @@ impl ParticleSystem {
         program.bind(Some(&[
             (
                 program.uniform_location("u_Resolution").unwrap(),
-                UniformValue::Vec2f(demo.resolution.0 as f32, demo.resolution.1 as f32),
+                UniformValue::Vec2f(
+                    demo.resolution().width as f32,
+                    demo.resolution().height as f32,
+                ),
             ),
             (
                 program.uniform_location("u_Projection").unwrap(),
-                UniformValue::Matrix4fv(1, demo.projection.as_ref().as_ptr()),
+                UniformValue::Matrix4fv(1, demo.projection().as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                UniformValue::Matrix4fv(1, demo.view.as_ref().as_ptr()),
+                UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
             ),
         ]));
 
