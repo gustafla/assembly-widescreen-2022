@@ -157,6 +157,7 @@ impl Demo {
         sync: &mut Sync,
         to_size: PhysicalSize<u32>,
     ) -> Result<(), glesv2::Error> {
+        self.gl.clear_color(0., 0., 0., 1.);
         self.gl.viewport(
             0,
             0,
@@ -244,8 +245,7 @@ impl Demo {
         let noise_amount = UniformValue::Float(sync.get("noise_amount"));
 
         // Render to screen
-        self.gl.clear_color(0., 0., 0., 1.);
-        Framebuffer::bind_default(self.gl.clone(), glesv2::COLOR_BUFFER_BIT);
+        Framebuffer::bind_default(self.gl.clone(), 0);
         self.post_pass.render(
             &self,
             &[
