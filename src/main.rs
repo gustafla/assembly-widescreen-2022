@@ -11,22 +11,6 @@ use glutin::{
     Api, ContextBuilder, GlRequest,
 };
 
-fn print_monitors<T>(event_loop: EventLoop<T>) {
-    for (i, monitor) in event_loop.available_monitors().enumerate() {
-        println!("Monitor {}:", i);
-        for (j, video_mode) in monitor.video_modes().enumerate() {
-            println!(
-                "\tMode {}: {}x{} {}-bit {}Hz",
-                j,
-                video_mode.size().width,
-                video_mode.size().height,
-                video_mode.bit_depth(),
-                video_mode.refresh_rate()
-            );
-        }
-    }
-}
-
 struct MonitorId(Option<usize>);
 
 impl std::str::FromStr for MonitorId {
@@ -48,13 +32,13 @@ fn main() -> Result<()> {
 
     // Process CLI
     let mut pargs = pico_args::Arguments::from_env();
-    if pargs.contains("--list-monitors") {
-        print_monitors(event_loop);
-        return Ok(());
-    }
     let monitor: Option<MonitorId> = pargs
         .opt_value_from_str("--fullscreen")
         .unwrap_or(Some(MonitorId(None)));
+    let internal_size = PhysicalSize::new(
+        pargs.value_from_str(["-w", "--width"]).unwrap_or(1280),
+        pargs.value_from_str(["-h", "--height"]).unwrap_or(720),
+    );
 
     // Configure fullscreen for the specified monitor
     let fullscreen = match monitor {
@@ -62,7 +46,7 @@ fn main() -> Result<()> {
             event_loop
                 .available_monitors()
                 .nth(id)
-                .context("Requested monitor doens't exist")?,
+                .context("Requested monitor doesn't exist")?,
         ))),
         Some(_) => Some(Fullscreen::Borderless(None)),
         _ => None,
@@ -72,9 +56,8 @@ fn main() -> Result<()> {
     let window_builder = WindowBuilder::new()
         .with_title(title)
         .with_app_id("demo".into())
-        .with_inner_size(PhysicalSize::new(1280, 720))
+        .with_inner_size(internal_size)
         .with_fullscreen(fullscreen)
-        .with_resizable(false)
         .with_decorations(false);
     let windowed_context = ContextBuilder::new()
         .with_gl(GlRequest::Specific(Api::OpenGlEs, (2, 0)))
@@ -98,8 +81,7 @@ fn main() -> Result<()> {
     let mut sync = Sync::new(120., 8.);
 
     // Load demo content
-    let size = windowed_context.window().inner_size();
-    let mut demo = Demo::new(size, gl)?;
+    let mut demo = Demo::new(internal_size, gl)?;
 
     // If release build, start the music
     #[cfg(not(debug_assertions))]
@@ -121,7 +103,6 @@ fn main() -> Result<()> {
             },
             WindowEvent::Resized(size) => {
                 windowed_context.resize(size);
-                demo.resize(size);
             }
             _ => (),
         },
@@ -130,7 +111,7 @@ fn main() -> Result<()> {
             *control_flow = sync.update(&mut player);
 
             // Render the frame
-            if let Err(e) = demo.render(&mut sync) {
+            if let Err(e) = demo.render(&mut sync, windowed_context.window().inner_size()) {
                 panic!("{}", e);
             }
 

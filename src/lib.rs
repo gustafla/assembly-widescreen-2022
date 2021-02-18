@@ -31,7 +31,13 @@ pub enum Error {
     ResourceLoading(#[from] glesv2::resource_mapper::Error),
 }
 
-struct DemoResizables {
+pub struct Demo {
+    view: Mat4,
+    resources: ResourceMapper,
+    gl: RcGl,
+    rng: XorShiftRng,
+    particle_system: ParticleSystem,
+    terrain: Terrain,
     resolution: PhysicalSize<u32>,
     projection: Mat4,
     noise_texture: Texture,
@@ -41,68 +47,9 @@ struct DemoResizables {
     post_pass: RenderPass,
 }
 
-impl DemoResizables {
-    fn new(gl: RcGl, size: PhysicalSize<u32>) -> Self {
-        Self {
-            resolution: size,
-            noise_texture: {
-                let noise_texture = Texture::new(gl.clone(), glesv2::TEXTURE_2D);
-                noise_texture.image::<u8>(
-                    0,
-                    glesv2::LUMINANCE,
-                    i32::try_from(size.width / NOISE_SCALE).unwrap(),
-                    i32::try_from(size.height / NOISE_SCALE).unwrap(),
-                    glesv2::UNSIGNED_BYTE,
-                    None,
-                );
-                noise_texture.parameters(&[
-                    (glesv2::TEXTURE_MIN_FILTER, glesv2::NEAREST),
-                    (glesv2::TEXTURE_MAG_FILTER, glesv2::NEAREST),
-                    (glesv2::TEXTURE_WRAP_S, glesv2::REPEAT),
-                    (glesv2::TEXTURE_WRAP_T, glesv2::REPEAT),
-                ]);
-                noise_texture
-            },
-            projection: Mat4::perspective_rh_gl(
-                60. * (std::f32::consts::PI / 180.),
-                size.width as f32 / size.height as f32,
-                0.1,
-                1000.,
-            ),
-            bloom_pass: RenderPass::new(
-                gl.clone(),
-                size,
-                "bloom.frag",
-                Some(vec![(glesv2::DEPTH_ATTACHMENT, {
-                    let renderbuffer = Renderbuffer::new(gl.clone());
-                    renderbuffer.storage(
-                        glesv2::DEPTH_COMPONENT16,
-                        i32::try_from(size.width).unwrap(),
-                        i32::try_from(size.height).unwrap(),
-                    );
-                    RenderbufferAttachment { renderbuffer }
-                })]),
-            ),
-            blur_pass_x: RenderPass::new(gl.clone(), size, "two_pass_gaussian_blur.frag", None),
-            blur_pass_y: RenderPass::new(gl.clone(), size, "two_pass_gaussian_blur.frag", None),
-            post_pass: RenderPass::new(gl, size, "post.frag", None),
-        }
-    }
-}
-
-pub struct Demo {
-    view: Mat4,
-    resources: ResourceMapper,
-    gl: RcGl,
-    rng: XorShiftRng,
-    particle_system: ParticleSystem,
-    terrain: Terrain,
-    resizables: DemoResizables,
-}
-
 impl Demo {
     pub fn resolution(&self) -> PhysicalSize<u32> {
-        self.resizables.resolution
+        self.resolution
     }
 
     pub fn view(&self) -> Mat4 {
@@ -110,11 +57,7 @@ impl Demo {
     }
 
     pub fn projection(&self) -> Mat4 {
-        self.resizables.projection
-    }
-
-    pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.resizables = DemoResizables::new(self.gl.clone(), size);
+        self.projection
     }
 
     pub fn new(resolution: PhysicalSize<u32>, gl: RcGl) -> Result<Self, Error> {
@@ -150,7 +93,48 @@ impl Demo {
             terrain: Terrain::new(gl.clone(), 200, 200, |x, z| {
                 (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.
             }),
-            resizables: DemoResizables::new(gl, resolution),
+            resolution,
+            noise_texture: {
+                let noise_texture = Texture::new(gl.clone(), glesv2::TEXTURE_2D);
+                noise_texture.image::<u8>(
+                    0,
+                    glesv2::LUMINANCE,
+                    i32::try_from(resolution.width / NOISE_SCALE).unwrap(),
+                    i32::try_from(resolution.height / NOISE_SCALE).unwrap(),
+                    glesv2::UNSIGNED_BYTE,
+                    None,
+                );
+                noise_texture.parameters(&[
+                    (glesv2::TEXTURE_MIN_FILTER, glesv2::NEAREST),
+                    (glesv2::TEXTURE_MAG_FILTER, glesv2::NEAREST),
+                    (glesv2::TEXTURE_WRAP_S, glesv2::REPEAT),
+                    (glesv2::TEXTURE_WRAP_T, glesv2::REPEAT),
+                ]);
+                noise_texture
+            },
+            projection: Mat4::perspective_rh_gl(
+                60. * (std::f32::consts::PI / 180.),
+                resolution.width as f32 / resolution.height as f32,
+                0.1,
+                1000.,
+            ),
+            bloom_pass: RenderPass::new(
+                gl.clone(),
+                resolution,
+                "bloom.frag",
+                Some(vec![(glesv2::DEPTH_ATTACHMENT, {
+                    let renderbuffer = Renderbuffer::new(gl.clone());
+                    renderbuffer.storage(
+                        glesv2::DEPTH_COMPONENT16,
+                        i32::try_from(resolution.width).unwrap(),
+                        i32::try_from(resolution.height).unwrap(),
+                    );
+                    RenderbufferAttachment { renderbuffer }
+                })]),
+            ),
+            blur_pass_x: RenderPass::new(gl.clone(), resolution, "two_pass_gaussian_blur.frag", None),
+            blur_pass_y: RenderPass::new(gl.clone(), resolution, "two_pass_gaussian_blur.frag", None),
+            post_pass: RenderPass::new(gl, resolution, "post.frag", None),
         };
 
         log::trace!("demo created");
@@ -158,7 +142,11 @@ impl Demo {
         Ok(demo)
     }
 
-    pub fn render(&mut self, sync: &mut Sync) -> Result<(), glesv2::Error> {
+    pub fn render(
+        &mut self,
+        sync: &mut Sync,
+        to_size: PhysicalSize<u32>,
+    ) -> Result<(), glesv2::Error> {
         self.gl.viewport(
             0,
             0,
@@ -181,8 +169,7 @@ impl Demo {
             Vec3::unit_y(),
         );
 
-        self.resizables
-            .bloom_pass
+        self.bloom_pass
             .fbo
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
 
@@ -201,13 +188,13 @@ impl Demo {
 
         // Bloom pass -----------------------------------------------------------------------------
 
-        self.resizables.blur_pass_x.fbo.bind(0);
-        self.resizables.bloom_pass.render(&self, &[], &[]);
+        self.blur_pass_x.fbo.bind(0);
+        self.bloom_pass.render(&self, &[], &[]);
 
         // X-blur pass ----------------------------------------------------------------------------
 
-        self.resizables.blur_pass_y.fbo.bind(0);
-        self.resizables.blur_pass_x.render(
+        self.blur_pass_y.fbo.bind(0);
+        self.blur_pass_x.render(
             &self,
             &[],
             &[("u_BlurDirection", UniformValue::Vec2f(1., 0.))],
@@ -215,8 +202,8 @@ impl Demo {
 
         // Y-blur pass ----------------------------------------------------------------------------
 
-        self.resizables.post_pass.fbo.bind(0);
-        self.resizables.blur_pass_y.render(
+        self.post_pass.fbo.bind(0);
+        self.blur_pass_y.render(
             &self,
             &[],
             &[("u_BlurDirection", UniformValue::Vec2f(0., 1.))],
@@ -231,7 +218,7 @@ impl Demo {
             .collect();
 
         // Upload noise to Texture
-        self.resizables.noise_texture.sub_image::<u8>(
+        self.noise_texture.sub_image::<u8>(
             0,
             0,
             0,
@@ -244,16 +231,22 @@ impl Demo {
 
         let noise_amount = UniformValue::Float(sync.get("noise_amount"));
 
+        // Render to screen
         Framebuffer::bind_default(self.gl.clone(), 0);
-        self.resizables.post_pass.render(
+        self.gl.viewport(
+            0,
+            0,
+            i32::try_from(to_size.width).unwrap(),
+            i32::try_from(to_size.height).unwrap(),
+        );
+        self.post_pass.render(
             &self,
             &[
-                self.resizables
-                    .bloom_pass
+                self.bloom_pass
                     .fbo
                     .texture(glesv2::COLOR_ATTACHMENT0)
                     .unwrap(),
-                &self.resizables.noise_texture,
+                &self.noise_texture,
             ],
             &[
                 ("u_NoiseAmount", noise_amount),
