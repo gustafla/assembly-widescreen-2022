@@ -71,6 +71,7 @@ fn main() -> Result<()> {
     let windowed_context = unsafe { windowed_context.make_current() }
         .map_err(|e| anyhow!("Failed to make context current: {:?}", e))?;
 
+
     // Load OpenGL interface
     let gl = RcGl::new(|s| windowed_context.get_proc_address(s));
 
@@ -83,9 +84,12 @@ fn main() -> Result<()> {
     // Load demo content
     let mut demo = Demo::new(internal_size, gl)?;
 
-    // If release build, start the music
+    // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]
-    player.play();
+    {
+        windowed_context.window().set_cursor_visible(false);
+        player.play();
+    }
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match event {
