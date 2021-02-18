@@ -71,7 +71,6 @@ fn main() -> Result<()> {
     let windowed_context = unsafe { windowed_context.make_current() }
         .map_err(|e| anyhow!("Failed to make context current: {:?}", e))?;
 
-
     // Load OpenGL interface
     let gl = RcGl::new(|s| windowed_context.get_proc_address(s));
 
@@ -125,5 +124,5 @@ fn main() -> Result<()> {
                 .expect("Failed to swap buffers");
         }
         _ => (),
-    });
+    })
 }

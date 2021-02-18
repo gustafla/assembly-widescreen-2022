@@ -245,7 +245,7 @@ impl Demo {
         let noise_amount = UniformValue::Float(sync.get("noise_amount"));
 
         // Render to screen
-        Framebuffer::bind_default(self.gl.clone(), 0);
+        Framebuffer::bind_default(self.gl.clone(), glesv2::COLOR_BUFFER_BIT);
         self.post_pass.render(
             &self,
             &[
