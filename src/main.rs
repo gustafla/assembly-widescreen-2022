@@ -32,23 +32,28 @@ fn main() -> Result<()> {
 
     // Process CLI
     let mut pargs = pico_args::Arguments::from_env();
-    let monitor: Option<MonitorId> = pargs
+    let fullscreen_monitor: Option<MonitorId> = pargs
         .opt_value_from_str("--fullscreen")
         .unwrap_or(Some(MonitorId(None)));
+    let windowed: bool = pargs.contains("--windowed");
     let internal_size = PhysicalSize::new(
         pargs.value_from_str(["-w", "--width"]).unwrap_or(1280),
         pargs.value_from_str(["-h", "--height"]).unwrap_or(720),
     );
 
+    // Default to fullscreen in release builds
+    #[cfg(not(debug_assertions))]
+    let fullscreen_monitor = Some(fullscreen_monitor.unwrap_or(MonitorId(None)));
+
     // Configure fullscreen for the specified monitor
-    let fullscreen = match monitor {
-        Some(MonitorId(Some(id))) => Some(Fullscreen::Borderless(Some(
+    let fullscreen = match (fullscreen_monitor, windowed) {
+        (Some(MonitorId(Some(id))), false) => Some(Fullscreen::Borderless(Some(
             event_loop
                 .available_monitors()
                 .nth(id)
                 .context("Requested monitor doesn't exist")?,
         ))),
-        Some(_) => Some(Fullscreen::Borderless(None)),
+        (Some(_), false) => Some(Fullscreen::Borderless(None)),
         _ => None,
     };
 
