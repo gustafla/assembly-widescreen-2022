@@ -11,17 +11,45 @@ use glutin::{
     Api, ContextBuilder, GlRequest,
 };
 
-struct MonitorId(Option<usize>);
+fn print_help() {
+    print!(
+        r#"List of available options:
+    --help          Print this help
+    --monitor id    Specify a monitor to use in fullscreen, 0-based
+    --windowed      Don't go fullscreen
+    -w, --width     Set the rendering width (default 1280)
+    -h, --height    Set the rendering height (default 720)
 
-impl std::str::FromStr for MonitorId {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Some(s.parse()?)))
-    }
+To force X11 or Wayland, set the environment variable
+WINIT_UNIX_BACKEND to x11 or wayland.
+"#
+    );
 }
 
 fn main() -> Result<()> {
+    // Process CLI
+    let mut pargs = pico_args::Arguments::from_env();
+    if pargs.contains("--help") {
+        print_help();
+        return Ok(());
+    }
+    eprintln!("See --help if the default options don't work for you");
+    let monitor: Option<usize> = pargs.opt_value_from_str("--monitor")?;
+    let windowed: bool = pargs.contains("--windowed");
+    let internal_size = PhysicalSize::new(
+        pargs.opt_value_from_str(["-w", "--width"])?.unwrap_or(1280),
+        pargs.opt_value_from_str(["-h", "--height"])?.unwrap_or(720),
+    );
+    let remaining = pargs.finish();
+    if !remaining.is_empty() {
+        return Err(anyhow!("Unknown arguments {:?}", remaining));
+    }
+    for &size in &[internal_size.width, internal_size.height] {
+        if size < 1 || size > 2u32.pow(14) {
+            return Err(anyhow!("Size cannot be {}", size));
+        }
+    }
+
     // Initialize logging
     log::set_logger(&logger::Logger).unwrap();
     log::set_max_level(log::LevelFilter::max());
@@ -29,32 +57,18 @@ fn main() -> Result<()> {
     // Initialize window stuff
     let title = "Demo";
     let event_loop = EventLoop::new();
-
-    // Process CLI
-    let mut pargs = pico_args::Arguments::from_env();
-    let fullscreen_monitor: Option<MonitorId> = pargs
-        .opt_value_from_str("--fullscreen")
-        .unwrap_or(Some(MonitorId(None)));
-    let windowed: bool = pargs.contains("--windowed");
-    let internal_size = PhysicalSize::new(
-        pargs.value_from_str(["-w", "--width"]).unwrap_or(1280),
-        pargs.value_from_str(["-h", "--height"]).unwrap_or(720),
-    );
-
-    // Default to fullscreen in release builds
-    #[cfg(not(debug_assertions))]
-    let fullscreen_monitor = Some(fullscreen_monitor.unwrap_or(MonitorId(None)));
-
-    // Configure fullscreen for the specified monitor
-    let fullscreen = match (fullscreen_monitor, windowed) {
-        (Some(MonitorId(Some(id))), false) => Some(Fullscreen::Borderless(Some(
-            event_loop
-                .available_monitors()
-                .nth(id)
-                .context("Requested monitor doesn't exist")?,
-        ))),
-        (Some(_), false) => Some(Fullscreen::Borderless(None)),
-        _ => None,
+    let fullscreen = if !(windowed || cfg!(debug_assertions)) {
+        match monitor {
+            Some(id) => Some(Fullscreen::Borderless(Some(
+                event_loop
+                    .available_monitors()
+                    .nth(id)
+                    .context("Requested monitor doesn't exist")?,
+            ))),
+            None => Some(Fullscreen::Borderless(None)),
+        }
+    } else {
+        None
     };
 
     // Build a window with an OpenGL context
