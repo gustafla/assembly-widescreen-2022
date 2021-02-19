@@ -1,0 +1,4 @@
+FROM liuchong/rustup:stable
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y libpulse-dev && \
+    rm -rf /var/lib/apt/lists/*

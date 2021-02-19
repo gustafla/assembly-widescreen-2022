@@ -1,3 +1,4 @@
 /target
+/buildscripts/out
 **/*.rs.bk
 tracks.bin
