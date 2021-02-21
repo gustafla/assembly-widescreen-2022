@@ -3,7 +3,7 @@ set -e
 
 # Check that the CLI is being used at all
 supported="host, arm"
-[ -z $@ ] && echo Please choose at least one platform from \"$supported\" && exit 1
+[[ -z $@ ]] && echo Please choose at least one platform from \"$supported\" && exit 1
 
 # Work in this script's directory
 cd "$(dirname $0)"
