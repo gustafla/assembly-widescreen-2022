@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 set -e
 
+# Check that the CLI is being used at all
+supported="host, arm"
+[ -z $@ ] && echo Please choose at least one platform from \"$supported\" && exit 1
+
 # Work in this script's directory
 cd "$(dirname $0)"
 
 # Determine crate/binary name
 crate=$(grep '^name[ \t]*=[ \t]*\".*\"' ../Cargo.toml | cut -d'=' -f 2 | tr -d '\t "')
 
-for platform in host arm; do
+for platform in $@; do
     case ${platform} in
         host)
             strip="strip"
@@ -17,6 +21,10 @@ for platform in host arm; do
             target="arm-unknown-linux-gnueabihf"
             strip="arm-linux-gnueabihf-strip"
             ext=".arm"
+            ;;
+        *)
+            echo Supported plaforms are \"$supported\"
+            exit 1
             ;;
     esac
 

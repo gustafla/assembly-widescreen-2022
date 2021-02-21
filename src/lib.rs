@@ -70,7 +70,7 @@ impl Demo {
             ParticleSpawner::new(
                 Vec3::new(0., 2., 0.),
                 ParticleSpawnerKind::Box((-5., 0., -5.), (5., 5., 5.)),
-                ParticleSpawnerMethod::Once(100000),
+                ParticleSpawnerMethod::Once(1000),
             ),
             30.,
             60,
@@ -187,7 +187,7 @@ impl Demo {
         // Terrain and particle system ------------------------------------------------------------
 
         self.gl.enable(glesv2::DEPTH_TEST);
-        self.gl.enable(glesv2::BLEND);
+        //self.gl.enable(glesv2::BLEND);
 
         let sim_time = sync.get("sim_time");
         let lightpos = self.particle_system.prepare(cam_pos, sim_time, 128);
