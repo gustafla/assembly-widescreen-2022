@@ -96,10 +96,12 @@ impl Player {
             channels: u8::try_from(channels).unwrap(),
             rate: u32::try_from(sample_rate).unwrap(),
         };
+        let buf_len = u32::try_from(BUF_SIZE * std::mem::size_of::<i16>()).unwrap();
         let buffer_attr = BufferAttr {
-            maxlength: std::u32::MAX,
+            // Set the maximum lenght to get lower latency
+            maxlength: buf_len * 2,
             // Set target length to get lower latency
-            tlength: u32::try_from(BUF_SIZE * std::mem::size_of::<i16>()).unwrap(),
+            tlength: buf_len,
             prebuf: std::u32::MAX,
             minreq: std::u32::MAX,
             fragsize: std::u32::MAX,
