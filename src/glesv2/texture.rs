@@ -93,6 +93,13 @@ impl Texture {
             }
         }
     }
+
+    pub fn generate_mipmaps(&self) {
+        self.bind(0);
+        unsafe {
+            self.gl.GenerateMipmap(self.target);
+        }
+    }
 }
 
 impl Drop for Texture {

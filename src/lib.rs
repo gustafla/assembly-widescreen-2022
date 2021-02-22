@@ -42,8 +42,6 @@ pub struct Demo {
     projection: Mat4,
     noise_texture: Texture,
     bloom_pass: RenderPass,
-    blur_pass_x: RenderPass,
-    blur_pass_y: RenderPass,
     post_pass: RenderPass,
 }
 
@@ -132,19 +130,12 @@ impl Demo {
                     RenderbufferAttachment { renderbuffer }
                 })]),
             ),
-            blur_pass_x: RenderPass::new(
-                gl.clone(),
-                resolution,
-                "two_pass_gaussian_blur.frag",
-                None,
-            ),
-            blur_pass_y: RenderPass::new(
-                gl.clone(),
-                resolution,
-                "two_pass_gaussian_blur.frag",
-                None,
-            ),
-            post_pass: RenderPass::new(gl, resolution, "post.frag", None),
+            post_pass: {
+                let pass = RenderPass::new(gl, resolution, "post.frag", None);
+                let tex = pass.fbo.texture(glesv2::COLOR_ATTACHMENT0).unwrap();
+                tex.parameters(&[(glesv2::TEXTURE_MIN_FILTER, glesv2::LINEAR_MIPMAP_NEAREST)]);
+                pass
+            },
         };
 
         log::trace!("demo created");
@@ -180,11 +171,11 @@ impl Demo {
             Vec3::unit_y(),
         );
 
+        // Terrain and particle system ------------------------------------------------------------
+
         self.bloom_pass
             .fbo
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
-
-        // Terrain and particle system ------------------------------------------------------------
 
         self.gl.enable(glesv2::DEPTH_TEST);
         //self.gl.enable(glesv2::BLEND);
@@ -199,28 +190,8 @@ impl Demo {
 
         // Bloom pass -----------------------------------------------------------------------------
 
-        self.blur_pass_x.fbo.bind(0);
-        self.bloom_pass.render(&self, &[], &[], None);
-
-        // X-blur pass ----------------------------------------------------------------------------
-
-        self.blur_pass_y.fbo.bind(0);
-        self.blur_pass_x.render(
-            &self,
-            &[],
-            &[("u_BlurDirection", UniformValue::Vec2f(1., 0.))],
-            None,
-        );
-
-        // Y-blur pass ----------------------------------------------------------------------------
-
         self.post_pass.fbo.bind(0);
-        self.blur_pass_y.render(
-            &self,
-            &[],
-            &[("u_BlurDirection", UniformValue::Vec2f(0., 1.))],
-            None,
-        );
+        self.bloom_pass.render(&self, &[], &[], None);
 
         // Post pass ------------------------------------------------------------------------------
 
@@ -242,10 +213,15 @@ impl Demo {
             noise.as_slice(),
         );
 
-        let noise_amount = UniformValue::Float(sync.get("noise_amount"));
-
         // Render to screen
         Framebuffer::bind_default(self.gl.clone(), glesv2::COLOR_BUFFER_BIT);
+        // Mipmap for blur
+        self.post_pass
+            .fbo
+            .texture(glesv2::COLOR_ATTACHMENT0)
+            .unwrap()
+            .generate_mipmaps();
+
         self.post_pass.render(
             &self,
             &[
@@ -256,7 +232,10 @@ impl Demo {
                 &self.noise_texture,
             ],
             &[
-                ("u_NoiseAmount", noise_amount),
+                (
+                    "u_NoiseAmount",
+                    UniformValue::Float(sync.get("noise_amount")),
+                ),
                 ("u_NoiseScale", UniformValue::Float(NOISE_SCALE as f32)),
                 ("u_Beat", UniformValue::Float(sync.get_beat())),
             ],

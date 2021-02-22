@@ -11,13 +11,13 @@ uniform sampler2D u_InputSampler1; // Render
 uniform sampler2D u_InputSampler2; // Noise
 uniform vec2 u_Resolution;
 
-vec3 fftbar() {
-    if (v_TexCoord.x < 0.05) {
-        if (u_Beat > v_TexCoord.y) {
-            return vec3(1.);
-        }
-    }
-    return vec3(0.);
+float bloom(vec2 coords) {
+    return
+    texture2D(u_InputSampler0, coords, 7.).r +
+    texture2D(u_InputSampler0, coords, 6.).r +
+    texture2D(u_InputSampler0, coords, 5.).r +
+    texture2D(u_InputSampler0, coords, 4.).r +
+    texture2D(u_InputSampler0, coords, 3.).r;
 }
 
 void main() {
@@ -35,11 +35,11 @@ void main() {
 
     // colors (clamp(bloom + original - vignette) + noise)
     vec3 color = max(
-            texture2D(u_InputSampler0, distor).rgb + // bloom
+            vec3(bloom(distor)) + // bloom
             texture2D(u_InputSampler1, distor).rgb - // image
             length(center * 0.4), 0.) + // vignette
         texture2D(u_InputSampler2, noisecoord).r * u_NoiseAmount; // noise
 
     // output
-    gl_FragColor = vec4(color + fftbar(), 1.);
+    gl_FragColor = vec4(color + u_Beat * 0.01, 1.);
 }
