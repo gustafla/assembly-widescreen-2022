@@ -8,6 +8,9 @@ supported="host, arm"
 # Work in this script's directory
 cd "$(dirname $0)"
 
+# Remove previous build(s)
+rm -rf out
+
 # Determine crate/binary name
 crate=$(grep '^name[ \t]*=[ \t]*\".*\"' ../Cargo.toml | cut -d'=' -f 2 | tr -d '\t "')
 
