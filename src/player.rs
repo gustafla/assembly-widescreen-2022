@@ -42,6 +42,7 @@ pub struct Player {
     channels: usize,
     sample_rate_channels: f32,
     len_secs: f32,
+    pulseaudio: Arc<Simple>,
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
     playback_thread: JoinHandle<()>,
@@ -103,7 +104,7 @@ impl Player {
             minreq: std::u32::MAX,
             fragsize: std::u32::MAX,
         };
-        let simple = Simple::new(
+        let pulseaudio = Arc::new(Simple::new(
             None,  // Default server
             title, // Application name
             Direction::Playback,
@@ -112,7 +113,7 @@ impl Player {
             &spec,   // Sample format
             None,    // Default channel map
             Some(&buffer_attr),
-        )?;
+        )?);
 
         let playback_position = Arc::new(AtomicUsize::new(0));
         let playing = Arc::new(AtomicBool::new(false));
@@ -120,6 +121,7 @@ impl Player {
         // Start a thread for music streaming (from RAM to pulse)
         let playback_thread = {
             let audio_data = audio_data.clone();
+            let pulseaudio = pulseaudio.clone();
             let playback_position = playback_position.clone();
             let playing = playing.clone();
             std::thread::spawn(move || loop {
@@ -133,7 +135,7 @@ impl Player {
                         // If any, let's play them
                         if samples > 0 {
                             let slice = &audio_data[pos..][..samples];
-                            simple.write(bytemuck::cast_slice(slice)).unwrap();
+                            pulseaudio.write(bytemuck::cast_slice(slice)).unwrap();
                             continue;
                         }
                     }
@@ -157,6 +159,7 @@ impl Player {
             channels,
             sample_rate_channels,
             len_secs,
+            pulseaudio,
             playback_position,
             playing,
             playback_thread,
@@ -189,6 +192,12 @@ impl Player {
     }
 
     pub fn time_secs(&mut self) -> f32 {
+        let latency = self
+            .pulseaudio
+            .get_latency()
+            .map(|us| us.as_secs_f32())
+            .unwrap_or(0.);
+
         let timer_secs = (if self.is_playing() {
             self.start_time.elapsed()
         } else {
@@ -197,7 +206,7 @@ impl Player {
             .as_micros() as f32
             / 1_000_000f32;
 
-        timer_secs.min(self.len_secs)
+        (timer_secs - latency).clamp(0., self.len_secs)
     }
 
     pub fn seek(&mut self, secs: f32) {
