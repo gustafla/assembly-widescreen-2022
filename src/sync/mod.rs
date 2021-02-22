@@ -1,9 +1,7 @@
-#[cfg(debug_assertions)]
 mod frame_counter;
-#[cfg(debug_assertions)]
-use frame_counter::FrameCounter;
 
 use crate::Player;
+use frame_counter::FrameCounter;
 use glutin::event_loop::ControlFlow;
 
 const TRACKS_FILE: &str = "resources/tracks.bin";
@@ -13,12 +11,11 @@ pub struct Sync {
     beats_per_sec: f32,
     rows_per_beat: f32,
     beat: f32,
+    frame_counter: Option<FrameCounter>,
     #[cfg(debug_assertions)]
     rocket: rust_rocket::RocketClient,
     #[cfg(not(debug_assertions))]
     rocket: rust_rocket::RocketPlayer,
-    #[cfg(debug_assertions)]
-    frame_counter: FrameCounter,
 }
 
 #[cfg(debug_assertions)]
@@ -33,7 +30,7 @@ fn connect() -> rust_rocket::RocketClient {
 }
 
 impl Sync {
-    pub fn new(bpm: f32, rows_per_beat: f32) -> Self {
+    pub fn new(bpm: f32, rows_per_beat: f32, benchmark: bool) -> Self {
         #[cfg(debug_assertions)]
         let rocket = {
             log::info!("Connecting to rocket tracker");
@@ -52,9 +49,8 @@ impl Sync {
             beats_per_sec: bpm / 60.,
             rows_per_beat,
             beat: 0.,
+            frame_counter: benchmark.then(|| FrameCounter::new()),
             rocket,
-            #[cfg(debug_assertions)]
-            frame_counter: FrameCounter::new(),
         }
     }
 
@@ -120,8 +116,9 @@ impl Sync {
 
     /// Call once per frame
     pub fn update(&mut self, player: &mut Player) -> ControlFlow {
-        #[cfg(debug_assertions)]
-        self.frame_counter.tick();
+        if let Some(frame_counter) = &mut self.frame_counter {
+            frame_counter.tick();
+        }
 
         // Poll rocket events
         #[cfg(debug_assertions)]

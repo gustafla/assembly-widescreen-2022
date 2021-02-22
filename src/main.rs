@@ -17,6 +17,7 @@ fn print_help() {
     --help          Print this help
     --monitor id    Specify a monitor to use in fullscreen, 0-based
     --windowed      Don't go fullscreen
+    --benchmark     Log frametimes
     -w, --width     Set the rendering width (default 1280)
     -h, --height    Set the rendering height (default 720)
 
@@ -35,7 +36,8 @@ fn main() -> Result<()> {
     }
     eprintln!("See --help if the default options don't work for you");
     let monitor: Option<usize> = pargs.opt_value_from_str("--monitor")?;
-    let windowed: bool = pargs.contains("--windowed");
+    let windowed = pargs.contains("--windowed");
+    let benchmark = pargs.contains("--benchmark");
     let internal_size = PhysicalSize::new(
         pargs.opt_value_from_str(["-w", "--width"])?.unwrap_or(1280),
         pargs.opt_value_from_str(["-h", "--height"])?.unwrap_or(720),
@@ -97,7 +99,7 @@ fn main() -> Result<()> {
     let mut player = Player::new("resources/music.ogg", title).context("Failed to load music")?;
 
     // Initialize rocket
-    let mut sync = Sync::new(120., 8.);
+    let mut sync = Sync::new(120., 8., benchmark || cfg!(debug_assertions));
 
     // Load demo content
     let mut demo = Demo::new(internal_size, gl)?;
