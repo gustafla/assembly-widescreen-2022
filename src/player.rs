@@ -132,13 +132,8 @@ impl Player {
                         let samples = BUF_SIZE.min(audio_data.len() - pos.min(audio_data.len()));
                         // If any, let's play them
                         if samples > 0 {
-                            let bytes = samples * std::mem::size_of::<i16>();
-                            unsafe {
-                                let ptr = audio_data.as_ptr().add(pos);
-                                let buf_slice = std::slice::from_raw_parts(ptr as *const u8, bytes);
-                                // Write samples in native endian as we told Pulse so
-                                simple.write(buf_slice).unwrap(); // This call blocks
-                            }
+                            let slice = &audio_data[pos..][..samples];
+                            simple.write(bytemuck::cast_slice(slice)).unwrap();
                             continue;
                         }
                     }
