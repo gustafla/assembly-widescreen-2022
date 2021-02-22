@@ -14,12 +14,14 @@ use glutin::{
 fn print_help() {
     print!(
         r#"List of available options:
-    --help          Print this help
-    --monitor id    Specify a monitor to use in fullscreen, 0-based
-    --windowed      Don't go fullscreen
-    --benchmark     Log frametimes
-    -w, --width     Set the rendering width (default 1280)
-    -h, --height    Set the rendering height (default 720)
+    --help              Print this help
+    --list-monitors     List available monitors and video modes
+    --monitor id        Specify a monitor to use in fullscreen
+    --exclusive mode    Exclusive fullscreen (see --list-monitors for modes)
+    --windowed          Don't go fullscreen
+    --benchmark         Log frametimes
+    -w, --width         Set the rendering width (default 1280)
+    -h, --height        Set the rendering height (default 720)
 
 To force X11 or Wayland, set the environment variable
 WINIT_UNIX_BACKEND to x11 or wayland.
@@ -27,15 +29,40 @@ WINIT_UNIX_BACKEND to x11 or wayland.
     );
 }
 
+fn list_monitors<T>(event_loop: EventLoop<T>) {
+    for (i, monitor) in event_loop.available_monitors().enumerate() {
+        println!("Monitor {}", i);
+        for (j, mode) in monitor.video_modes().enumerate() {
+            println!(
+                "   Mode {}: {}x{} {}-bit {}Hz",
+                j,
+                mode.size().width,
+                mode.size().height,
+                mode.bit_depth(),
+                mode.refresh_rate()
+            );
+        }
+    }
+}
+
 fn main() -> Result<()> {
+    // Initialize winit
+    let title = "Demo";
+    let event_loop = EventLoop::new();
+
     // Process CLI
     let mut pargs = pico_args::Arguments::from_env();
     if pargs.contains("--help") {
         print_help();
         return Ok(());
     }
+    if pargs.contains("--list-monitors") {
+        list_monitors(event_loop);
+        return Ok(());
+    }
     eprintln!("See --help if the default options don't work for you");
     let monitor: Option<usize> = pargs.opt_value_from_str("--monitor")?;
+    let exclusive_mode: Option<usize> = pargs.opt_value_from_str("--exclusive")?;
     let windowed = pargs.contains("--windowed");
     let benchmark = pargs.contains("--benchmark");
     let internal_size = PhysicalSize::new(
@@ -56,18 +83,33 @@ fn main() -> Result<()> {
     log::set_logger(&logger::Logger).unwrap();
     log::set_max_level(log::LevelFilter::max());
 
-    // Initialize window stuff
-    let title = "Demo";
-    let event_loop = EventLoop::new();
+    // Select fullscreen mode
     let fullscreen = if !(windowed || cfg!(debug_assertions)) {
-        match monitor {
-            Some(id) => Some(Fullscreen::Borderless(Some(
+        match (monitor, exclusive_mode) {
+            (Some(id), Some(mode)) => Some(Fullscreen::Exclusive(
+                event_loop
+                    .available_monitors()
+                    .nth(id)
+                    .context("Requested monitor doesn't exist")?
+                    .video_modes()
+                    .nth(mode)
+                    .context("Requested mode doesn't exist")?,
+            )),
+            (None, Some(mode)) => Some(Fullscreen::Exclusive(
+                event_loop
+                    .primary_monitor()
+                    .context("Cannot determine primary monitor, use --monitor to choose manually")?
+                    .video_modes()
+                    .nth(mode)
+                    .context("Requested mode doesn't exist")?,
+            )),
+            (Some(id), None) => Some(Fullscreen::Borderless(Some(
                 event_loop
                     .available_monitors()
                     .nth(id)
                     .context("Requested monitor doesn't exist")?,
             ))),
-            None => Some(Fullscreen::Borderless(None)),
+            (None, None) => Some(Fullscreen::Borderless(None)),
         }
     } else {
         None
