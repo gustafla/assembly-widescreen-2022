@@ -221,11 +221,15 @@ impl Player {
 
         // Set new position and update timing etc
         self.playback_position.store(pos, Ordering::SeqCst);
-        self.playback_thread.thread().unpark();
         self.time_offset = self.pos_to_duration(pos);
         let time = Instant::now();
         self.start_time = time;
         self.pause_time = time;
+
+        // Unpark playback if needed
+        if self.is_playing() {
+            self.playback_thread.thread().unpark();
+        }
     }
 
     fn pos_to_duration(&self, pos: usize) -> Duration {
