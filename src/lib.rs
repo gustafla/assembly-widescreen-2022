@@ -265,6 +265,12 @@ impl Demo {
 
         glesv2::check(self.gl.clone())
     }
+
+    #[cfg(debug_assertions)]
+    pub fn reload(&mut self) -> Result<(), Error> {
+        self.resources = ResourceMapper::new(self.gl.clone(), "resources")?;
+        Ok(())
+    }
 }
 
 impl Drop for Demo {

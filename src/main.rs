@@ -121,6 +121,8 @@ fn main() -> Result<()> {
                 ..
             } => match keycode {
                 VirtualKeyCode::Escape | VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
+                #[cfg(debug_assertions)]
+                VirtualKeyCode::R => demo.reload().unwrap(),
                 _ => (),
             },
             WindowEvent::Resized(size) => {

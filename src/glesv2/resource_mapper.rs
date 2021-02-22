@@ -73,10 +73,12 @@ impl ResourceMapper {
             );
         }
 
-        log::trace!("Done, calling glReleaseShaderCompiler");
+        #[cfg(not(debug_assertions))]
         unsafe {
             gl.ReleaseShaderCompiler();
         }
+
+        log::trace!("Done");
 
         Ok(ResourceMapper {
             datapath,
