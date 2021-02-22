@@ -93,12 +93,9 @@ impl ParticleSystem {
         }
     }
 
-    pub fn prepare(&mut self, campos: Vec3, time: f32, lights: usize) -> Vec<f32> {
+    pub fn prepare(&mut self, time: f32, cam_pos: Vec3) {
         // Clear last results
         self.interpolated.clear();
-
-        // Allocate vec for particles to be selected as lights
-        let mut selected_lights = Vec::with_capacity(lights * 3);
 
         let i = (time / self.time_step) as usize;
         for frame_group in &self.position_frames {
@@ -112,23 +109,21 @@ impl ParticleSystem {
             self.interpolated.extend(interpolated);
         }
 
-        // Select n points to be used for lighting
-        for selection in 0..lights {
-            // First are fine for random distributions
-            let selection = self.interpolated[selection];
-            selected_lights.extend(&[selection.x, selection.y, selection.z]);
-        }
-
         if self.gl.get_booleanv(glesv2::DEPTH_TEST) && self.gl.get_booleanv(glesv2::BLEND) {
             // Sort particles because of alpha blending + depth testing = difficult
             self.interpolated.sort_unstable_by(|a, b| {
-                b.distance(campos) // TODO sort by distance squared
-                    .partial_cmp(&a.distance(campos))
-                    .unwrap()
+                // sort by distance squared
+                {
+                    let btoc = cam_pos - *b;
+                    &(btoc.x * btoc.x + btoc.y * btoc.y)
+                }
+                .partial_cmp({
+                    let atoc = cam_pos - *a;
+                    &(atoc.x * atoc.x + atoc.y * atoc.y)
+                })
+                .unwrap()
             });
         }
-
-        selected_lights
     }
 
     pub fn render(&self, demo: &Demo) {

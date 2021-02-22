@@ -23,8 +23,8 @@ void main() {
     float dist = -pos.z;
 
     v_Color = vec4(hsv2rgb(vec3((a_Pos.x + a_Pos.y) / 110. + 0.5, 0.4, 1.3)),
-            15. / dist);
+            20. / dist);
 
-    gl_PointSize = max(length(u_Resolution) / (dist * 15.), 1.);
+    gl_PointSize = max(length(u_Resolution) / (dist * 10.), 1.);
     gl_Position = u_Projection * pos;
 }

@@ -178,11 +178,11 @@ impl Demo {
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
 
         self.gl.enable(glesv2::DEPTH_TEST);
-        //self.gl.enable(glesv2::BLEND);
+        self.gl.enable(glesv2::BLEND);
 
         let sim_time = sync.get("sim_time");
-        let lightpos = self.particle_system.prepare(cam_pos, sim_time, 128);
-        self.terrain.render(&self, lightpos);
+        self.particle_system.prepare(sim_time, cam_pos);
+        self.terrain.render(&self);
         self.particle_system.render(&self);
 
         self.gl.disable(glesv2::BLEND);
@@ -194,6 +194,8 @@ impl Demo {
         self.bloom_pass.render(&self, &[], &[], None);
 
         // Post pass ------------------------------------------------------------------------------
+
+        Framebuffer::bind_default(self.gl.clone(), glesv2::COLOR_BUFFER_BIT);
 
         // Generate noise
         let noise: Vec<u8> = (0..(self.resolution().width * self.resolution().height
@@ -213,8 +215,6 @@ impl Demo {
             noise.as_slice(),
         );
 
-        // Render to screen
-        Framebuffer::bind_default(self.gl.clone(), glesv2::COLOR_BUFFER_BIT);
         // Mipmap for blur
         self.post_pass
             .fbo

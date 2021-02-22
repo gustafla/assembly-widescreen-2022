@@ -66,7 +66,7 @@ impl Terrain {
         }
     }
 
-    pub fn render(&self, demo: &Demo, lightpos: Vec<f32>) {
+    pub fn render(&self, demo: &Demo) {
         let program = demo
             .resources
             .program("gouraud.vert flatshade.frag")
@@ -80,10 +80,6 @@ impl Terrain {
             (
                 program.uniform_location("u_View").unwrap(),
                 UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
-            ),
-            (
-                program.uniform_location("u_LightPosition").unwrap(),
-                UniformValue::Vec3fv((lightpos.len() / 3) as GLsizei, lightpos.as_ptr()),
             ),
         ]));
 

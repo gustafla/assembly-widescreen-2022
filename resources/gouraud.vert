@@ -8,17 +8,13 @@ varying vec4 v_Color;
 
 uniform mat4 u_Projection;
 uniform mat4 u_View;
-uniform vec3 u_LightPosition[128];
 
 void main() {
-    float l = 0.;
+    vec3 sundir = normalize(vec3(2., -3., 0.4));
 
-    for (int i = 0; i < 128; i++) {
-        vec3 light_position = u_LightPosition[i];
-        vec3 p = light_position - a_Pos.xyz;
-        float len = length(p);
-        l += max(dot(a_Normal, p/len), 0.) / (len * len);
-    }
+    float l = 0.01;
+
+    l += max(dot(a_Normal, -sundir), 0.) * 0.2;
 
     v_Color = vec4(vec3(l), 1.);
 
