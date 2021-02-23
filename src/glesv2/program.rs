@@ -1,4 +1,4 @@
-use super::{types::*, RcGl, Shader, UniformValue};
+use super::*;
 use log::trace;
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
@@ -7,54 +7,49 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    Shader(#[from] super::shader::Error),
+    Shader(#[from] shader::Error),
     #[error("Failed to link shaders {0:?}: {1:?}")]
     Link(Option<Vec<PathBuf>>, Option<String>),
 }
 
 pub struct Program {
-    gl: RcGl,
     handle: GLuint,
 }
 
 impl Program {
-    pub fn from_shaders(gl: RcGl, shaders: &[GLuint]) -> Result<Program, Error> {
-        let handle = unsafe { gl.CreateProgram() };
+    pub fn from_shaders(shaders: &[GLuint]) -> Result<Program, Error> {
+        let handle = unsafe { CreateProgram() };
 
         for shader in shaders {
             unsafe {
-                gl.AttachShader(handle, *shader);
+                AttachShader(handle, *shader);
             }
         }
 
         unsafe {
-            gl.LinkProgram(handle);
+            LinkProgram(handle);
         }
 
         let mut status = 0;
         unsafe {
-            gl.GetProgramiv(handle, super::LINK_STATUS, &mut status);
+            GetProgramiv(handle, LINK_STATUS, &mut status);
         }
 
-        if status as GLboolean == super::FALSE {
-            let info_log = gl.get_info_log(
-                handle,
-                super::Gles2::GetProgramiv,
-                super::Gles2::GetProgramInfoLog,
-            );
+        if status as GLboolean == FALSE {
+            let info_log = get_info_log(handle, GetProgramiv, GetProgramInfoLog);
 
             unsafe {
-                gl.DeleteProgram(handle);
+                DeleteProgram(handle);
             }
 
             return Err(Error::Link(None, Some(info_log)));
         }
 
         trace!("Program {} {:?} linked", handle, shaders);
-        Ok(Program { gl, handle })
+        Ok(Program { handle })
     }
 
-    pub fn from_sources<P: AsRef<Path>>(gl: RcGl, paths: &[P]) -> Result<Program, Error> {
+    pub fn from_sources<P: AsRef<Path>>(paths: &[P]) -> Result<Program, Error> {
         trace!(
             "Linking program from {:?}...",
             paths
@@ -65,11 +60,10 @@ impl Program {
 
         let mut shaders = Vec::new();
         for path in paths {
-            shaders.push(Shader::from_source(gl.clone(), path)?);
+            shaders.push(Shader::from_source(path)?);
         }
 
         Self::from_shaders(
-            gl,
             shaders
                 .iter()
                 .map(|s| s.handle())
@@ -94,48 +88,45 @@ impl Program {
 
     pub fn bind(&self, uniforms: Option<&[(GLint, UniformValue)]>) {
         unsafe {
-            self.gl.UseProgram(self.handle());
+            UseProgram(self.handle());
             if let Some(uniforms) = uniforms {
                 for (location, value) in uniforms {
                     match value {
                         UniformValue::Float(x) => {
-                            self.gl.Uniform1f(*location, *x);
+                            Uniform1f(*location, *x);
                         }
                         UniformValue::Vec2f(x, y) => {
-                            self.gl.Uniform2f(*location, *x, *y);
+                            Uniform2f(*location, *x, *y);
                         }
                         UniformValue::Vec3f(x, y, z) => {
-                            self.gl.Uniform3f(*location, *x, *y, *z);
+                            Uniform3f(*location, *x, *y, *z);
                         }
                         UniformValue::Vec4f(x, y, z, w) => {
-                            self.gl.Uniform4f(*location, *x, *y, *z, *w);
+                            Uniform4f(*location, *x, *y, *z, *w);
                         }
                         UniformValue::Floatv(count, ptr) => {
-                            self.gl.Uniform1fv(*location, *count, *ptr);
+                            Uniform1fv(*location, *count, *ptr);
                         }
                         UniformValue::Vec2fv(count, ptr) => {
-                            self.gl.Uniform2fv(*location, *count, *ptr);
+                            Uniform2fv(*location, *count, *ptr);
                         }
                         UniformValue::Vec3fv(count, ptr) => {
-                            self.gl.Uniform3fv(*location, *count, *ptr);
+                            Uniform3fv(*location, *count, *ptr);
                         }
                         UniformValue::Vec4fv(count, ptr) => {
-                            self.gl.Uniform4fv(*location, *count, *ptr);
+                            Uniform4fv(*location, *count, *ptr);
                         }
                         UniformValue::Matrix2fv(count, ptr) => {
-                            self.gl
-                                .UniformMatrix2fv(*location, *count, super::FALSE, *ptr);
+                            UniformMatrix2fv(*location, *count, FALSE, *ptr);
                         }
                         UniformValue::Matrix3fv(count, ptr) => {
-                            self.gl
-                                .UniformMatrix3fv(*location, *count, super::FALSE, *ptr);
+                            UniformMatrix3fv(*location, *count, FALSE, *ptr);
                         }
                         UniformValue::Matrix4fv(count, ptr) => {
-                            self.gl
-                                .UniformMatrix4fv(*location, *count, super::FALSE, *ptr);
+                            UniformMatrix4fv(*location, *count, FALSE, *ptr);
                         }
                         UniformValue::Int(i) => {
-                            self.gl.Uniform1i(*location, *i);
+                            Uniform1i(*location, *i);
                         }
                     }
                 }
@@ -145,7 +136,7 @@ impl Program {
 
     pub fn attrib_location(&self, name: &str) -> Option<GLint> {
         let name = CString::new(name).unwrap();
-        let loc = unsafe { self.gl.GetAttribLocation(self.handle(), name.as_ptr()) };
+        let loc = unsafe { GetAttribLocation(self.handle(), name.as_ptr()) };
         match loc {
             -1 => None,
             _ => Some(loc),
@@ -154,7 +145,7 @@ impl Program {
 
     pub fn uniform_location(&self, name: &str) -> Option<GLint> {
         let name = CString::new(name).unwrap();
-        let loc = unsafe { self.gl.GetUniformLocation(self.handle(), name.as_ptr()) };
+        let loc = unsafe { GetUniformLocation(self.handle(), name.as_ptr()) };
         match loc {
             -1 => None,
             _ => Some(loc),
@@ -166,7 +157,7 @@ impl Drop for Program {
     fn drop(&mut self) {
         trace!("Program {} dropped", self.handle());
         unsafe {
-            self.gl.DeleteProgram(self.handle());
+            DeleteProgram(self.handle());
         }
     }
 }

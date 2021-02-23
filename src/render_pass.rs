@@ -1,26 +1,21 @@
-use crate::glesv2::{
-    self, types::*, Framebuffer, RcGl, RenderbufferAttachment, Texture, TextureAttachment,
-    UniformValue,
-};
+use crate::glesv2::{self, types::*};
 use crate::Demo;
 use glutin::dpi::PhysicalSize;
 use std::convert::TryFrom;
 
 pub struct RenderPass {
-    gl: RcGl,
-    pub fbo: Framebuffer,
+    pub fbo: glesv2::Framebuffer,
     shader_path: String,
     resolution: PhysicalSize<f32>,
 }
 
 impl RenderPass {
     pub fn new(
-        gl: RcGl,
         resolution: PhysicalSize<u32>,
         frag_path: &str,
-        renderbuffers: Option<Vec<(GLenum, RenderbufferAttachment)>>,
+        renderbuffers: Option<Vec<(GLenum, glesv2::RenderbufferAttachment)>>,
     ) -> Self {
-        let fbo_texture = Texture::new(gl.clone(), glesv2::TEXTURE_2D);
+        let fbo_texture = glesv2::Texture::new(glesv2::TEXTURE_2D);
         fbo_texture.image::<u8>(
             0,
             glesv2::RGB,
@@ -36,11 +31,10 @@ impl RenderPass {
             (glesv2::TEXTURE_WRAP_T, glesv2::CLAMP_TO_EDGE),
         ]);
 
-        let fbo = Framebuffer::new(
-            gl.clone(),
+        let fbo = glesv2::Framebuffer::new(
             Some(vec![(
                 glesv2::COLOR_ATTACHMENT0,
-                TextureAttachment {
+                glesv2::TextureAttachment {
                     target: glesv2::TEXTURE_2D,
                     texture: fbo_texture,
                     mipmap_level: 0,
@@ -51,7 +45,6 @@ impl RenderPass {
         .unwrap();
 
         Self {
-            gl,
             fbo,
             shader_path: format!("shader.vert {}", frag_path),
             resolution: PhysicalSize::new(resolution.width as f32, resolution.height as f32),
@@ -61,20 +54,20 @@ impl RenderPass {
     pub fn render(
         &self,
         demo: &Demo,
-        textures: &[&Texture],
-        uniforms: &[(&str, UniformValue)],
+        textures: &[&glesv2::Texture],
+        uniforms: &[(&str, glesv2::UniformValue)],
         to_size: Option<PhysicalSize<u32>>,
     ) {
         let program = demo.resources.program(&self.shader_path).unwrap();
 
-        let mut uniforms: Vec<(GLint, UniformValue)> = uniforms
+        let mut uniforms: Vec<(GLint, glesv2::UniformValue)> = uniforms
             .iter()
             .map(|(loc, val)| (program.uniform_location(loc).unwrap(), *val))
             .collect();
 
         uniforms.push((
             program.uniform_location("u_InputSampler0").unwrap(),
-            UniformValue::Int(0),
+            glesv2::UniformValue::Int(0),
         ));
 
         self.fbo.texture(glesv2::COLOR_ATTACHMENT0).unwrap().bind(0);
@@ -85,14 +78,14 @@ impl RenderPass {
                 program
                     .uniform_location(&format!("u_InputSampler{}", i))
                     .unwrap(),
-                UniformValue::Int(i as GLint),
+                glesv2::UniformValue::Int(i as GLint),
             ));
         }
 
         if let Some(loc) = program.uniform_location("u_Resolution") {
             uniforms.push((
                 loc,
-                UniformValue::Vec2f(self.resolution.width, self.resolution.height),
+                glesv2::UniformValue::Vec2f(self.resolution.width, self.resolution.height),
             ));
         }
 
@@ -106,7 +99,7 @@ impl RenderPass {
 
         // Letterbox the aspect ratio difference
         if let Some(to_size) = to_size {
-            self.gl.viewport(
+            glesv2::viewport(
                 0,
                 0,
                 i32::try_from(to_size.width).unwrap(),
@@ -145,9 +138,9 @@ impl RenderPass {
         let index_tex_coord = program.attrib_location("a_TexCoord").unwrap() as GLuint;
         let stride = (std::mem::size_of::<f32>() * 5) as GLint;
         unsafe {
-            self.gl.BindBuffer(glesv2::ARRAY_BUFFER, 0);
-            self.gl.EnableVertexAttribArray(index_pos);
-            self.gl.VertexAttribPointer(
+            glesv2::BindBuffer(glesv2::ARRAY_BUFFER, 0);
+            glesv2::EnableVertexAttribArray(index_pos);
+            glesv2::VertexAttribPointer(
                 index_pos,
                 3,
                 glesv2::FLOAT,
@@ -155,8 +148,8 @@ impl RenderPass {
                 stride,
                 quad.as_ptr() as *const GLvoid,
             );
-            self.gl.EnableVertexAttribArray(index_tex_coord);
-            self.gl.VertexAttribPointer(
+            glesv2::EnableVertexAttribArray(index_tex_coord);
+            glesv2::VertexAttribPointer(
                 index_tex_coord,
                 2,
                 glesv2::FLOAT,
@@ -165,7 +158,7 @@ impl RenderPass {
                 (quad.as_ptr().add(3)) as *const GLvoid,
             );
 
-            self.gl.DrawArrays(glesv2::TRIANGLES, 0, 6);
+            glesv2::DrawArrays(glesv2::TRIANGLES, 0, 6);
         }
     }
 }

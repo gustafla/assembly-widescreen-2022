@@ -1,7 +1,7 @@
 mod logger;
 
 use anyhow::{anyhow, Context, Result};
-use demo::{Demo, Player, RcGl, Sync};
+use demo::{Demo, Player, Sync};
 use glutin::{
     dpi::PhysicalSize,
     event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -134,9 +134,6 @@ fn main() -> Result<()> {
     let windowed_context = unsafe { windowed_context.make_current() }
         .map_err(|e| anyhow!("Failed to make context current: {:?}", e))?;
 
-    // Load OpenGL interface
-    let gl = RcGl::new(|s| windowed_context.get_proc_address(s));
-
     // Load music
     let mut player = Player::new("resources/music.ogg", title).context("Failed to load music")?;
 
@@ -144,7 +141,7 @@ fn main() -> Result<()> {
     let mut sync = Sync::new(120., 8., benchmark || cfg!(debug_assertions));
 
     // Load demo content
-    let mut demo = Demo::new(internal_size, gl)?;
+    let mut demo = Demo::new(internal_size)?;
 
     // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]

@@ -1,22 +1,16 @@
-use crate::glesv2::{self, types::*, Buffer, RcGl, UniformValue};
+use crate::glesv2::{self, types::*};
 use crate::Demo;
 use glam::Vec3;
 
 pub struct Terrain {
-    gl: RcGl,
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
+    vertex_buffer: glesv2::Buffer,
+    index_buffer: glesv2::Buffer,
     count: GLint,
 }
 
 impl Terrain {
-    pub fn new(
-        gl: RcGl,
-        xsize: GLushort,
-        zsize: GLushort,
-        height_map: fn(f32, f32) -> f32,
-    ) -> Self {
-        let vertex_buffer = Buffer::new(gl.clone(), glesv2::ARRAY_BUFFER);
+    pub fn new(xsize: GLushort, zsize: GLushort, height_map: fn(f32, f32) -> f32) -> Self {
+        let vertex_buffer = glesv2::Buffer::new(glesv2::ARRAY_BUFFER);
         let mut geometry = Vec::with_capacity(xsize as usize * zsize as usize);
 
         for x in 0i32..xsize as i32 {
@@ -39,7 +33,7 @@ impl Terrain {
         vertex_buffer.bind();
         vertex_buffer.data(&geometry, glesv2::STATIC_DRAW);
 
-        let index_buffer = Buffer::new(gl.clone(), glesv2::ELEMENT_ARRAY_BUFFER);
+        let index_buffer = glesv2::Buffer::new(glesv2::ELEMENT_ARRAY_BUFFER);
         let mut indices: Vec<GLushort> = Vec::new();
 
         for i in 0..xsize - 1 {
@@ -59,7 +53,6 @@ impl Terrain {
         index_buffer.data(&indices, glesv2::STATIC_DRAW);
 
         Self {
-            gl,
             vertex_buffer,
             index_buffer,
             count: indices.len() as GLint,
@@ -75,11 +68,11 @@ impl Terrain {
         program.bind(Some(&[
             (
                 program.uniform_location("u_Projection").unwrap(),
-                UniformValue::Matrix4fv(1, demo.projection().as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, demo.projection().as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
             ),
         ]));
 
@@ -93,10 +86,10 @@ impl Terrain {
         let stride = float_size as GLsizei * 6;
 
         unsafe {
-            self.gl.EnableVertexAttribArray(index_pos);
-            self.gl.EnableVertexAttribArray(index_normal);
+            glesv2::EnableVertexAttribArray(index_pos);
+            glesv2::EnableVertexAttribArray(index_normal);
 
-            self.gl.VertexAttribPointer(
+            glesv2::VertexAttribPointer(
                 index_pos,
                 3,
                 glesv2::FLOAT,
@@ -104,7 +97,7 @@ impl Terrain {
                 stride,
                 std::ptr::null::<GLvoid>(),
             );
-            self.gl.VertexAttribPointer(
+            glesv2::VertexAttribPointer(
                 index_normal,
                 3,
                 glesv2::FLOAT,
@@ -113,7 +106,7 @@ impl Terrain {
                 (float_size * 3) as *const GLvoid,
             );
 
-            self.gl.DrawElements(
+            glesv2::DrawElements(
                 glesv2::TRIANGLE_STRIP,
                 self.count,
                 glesv2::UNSIGNED_SHORT,

@@ -1,4 +1,4 @@
-use super::{types::*, RcGl};
+use super::*;
 use std::error;
 use std::fmt;
 
@@ -26,9 +26,9 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {}
 
-pub fn check(gl: RcGl) -> Result<(), Error> {
-    let status = unsafe { gl.GetError() };
-    if status != super::NO_ERROR {
+pub fn check() -> Result<(), Error> {
+    let status = unsafe { GetError() };
+    if status != NO_ERROR {
         Err(Error(status))
     } else {
         Ok(())

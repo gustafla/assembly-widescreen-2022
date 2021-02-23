@@ -1,20 +1,19 @@
-use super::{types::*, RcGl};
+use super::*;
 use log::trace;
 
 pub struct Texture {
-    gl: RcGl,
     handle: GLuint,
     target: GLenum,
 }
 
 impl Texture {
-    pub fn new(gl: RcGl, target: GLenum) -> Texture {
+    pub fn new(target: GLenum) -> Texture {
         let mut handle = 0;
         unsafe {
-            gl.GenTextures(1, &mut handle);
+            GenTextures(1, &mut handle);
         }
         trace!("Texture {} created", handle);
-        Texture { gl, handle, target }
+        Texture { handle, target }
     }
 
     pub fn handle(&self) -> GLuint {
@@ -23,8 +22,8 @@ impl Texture {
 
     pub fn bind(&self, unit: GLuint) {
         unsafe {
-            self.gl.ActiveTexture(super::TEXTURE0 + unit);
-            self.gl.BindTexture(self.target, self.handle());
+            ActiveTexture(TEXTURE0 + unit);
+            BindTexture(self.target, self.handle());
         }
     }
 
@@ -39,7 +38,7 @@ impl Texture {
     ) {
         self.bind(0);
         unsafe {
-            self.gl.TexImage2D(
+            TexImage2D(
                 self.target,
                 level,
                 format as GLint,
@@ -70,7 +69,7 @@ impl Texture {
     ) {
         self.bind(0);
         unsafe {
-            self.gl.TexSubImage2D(
+            TexSubImage2D(
                 self.target,
                 level,
                 xoffset,
@@ -88,8 +87,7 @@ impl Texture {
         self.bind(0);
         for param in params {
             unsafe {
-                self.gl
-                    .TexParameteri(self.target, param.0, param.1 as GLint);
+                TexParameteri(self.target, param.0, param.1 as GLint);
             }
         }
     }
@@ -97,7 +95,7 @@ impl Texture {
     pub fn generate_mipmaps(&self) {
         self.bind(0);
         unsafe {
-            self.gl.GenerateMipmap(self.target);
+            GenerateMipmap(self.target);
         }
     }
 }
@@ -106,7 +104,7 @@ impl Drop for Texture {
     fn drop(&mut self) {
         trace!("Texture {} dropped", self.handle());
         unsafe {
-            self.gl.DeleteTextures(1, &self.handle());
+            DeleteTextures(1, &self.handle());
         }
     }
 }

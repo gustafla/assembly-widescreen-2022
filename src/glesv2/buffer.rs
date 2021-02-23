@@ -1,4 +1,4 @@
-use super::{types::*, RcGl};
+use super::*;
 use log::trace;
 use std::mem;
 use std::path::Path;
@@ -21,35 +21,29 @@ trait BufBinding {
 }
 
 impl BufBinding for i32 {
-    const BIND: GLenum = super::ELEMENT_ARRAY_BUFFER;
+    const BIND: GLenum = ELEMENT_ARRAY_BUFFER;
 }
 
 impl BufBinding for f32 {
-    const BIND: GLenum = super::ARRAY_BUFFER;
+    const BIND: GLenum = ARRAY_BUFFER;
 }
 
 pub struct Buffer {
-    gl: RcGl,
     handle: GLuint,
     binding: GLenum,
 }
 
 impl Buffer {
-    pub fn new(gl: RcGl, binding: GLenum) -> Self {
+    pub fn new(binding: GLenum) -> Self {
         let mut handle: GLuint = 0;
         unsafe {
-            gl.GenBuffers(1, &mut handle);
+            GenBuffers(1, &mut handle);
         }
         trace!("Buffer {} created", handle);
-        Buffer {
-            gl,
-            handle,
-            binding,
-        }
+        Buffer { handle, binding }
     }
 
     fn from_string<T: BufBinding + FromStr, P: AsRef<Path>>(
-        gl: RcGl,
         data: String,
         path: P,
     ) -> Result<Self, Error>
@@ -64,35 +58,35 @@ impl Buffer {
             );
         }
 
-        let buffer = Self::new(gl, T::BIND);
+        let buffer = Self::new(T::BIND);
 
         buffer.bind();
-        buffer.data(values.as_slice(), super::STATIC_DRAW);
+        buffer.data(values.as_slice(), STATIC_DRAW);
 
         trace!("From {}", path.as_ref().display());
         Ok(buffer)
     }
 
-    pub fn from_file<P: AsRef<Path>>(gl: RcGl, path: P) -> Result<Self, Error> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let content = std::fs::read_to_string(&path)
             .map_err(|e| Error::ReadFile(PathBuf::from(path.as_ref()), e))?;
 
         match path.as_ref().extension().map(|s| s.to_str()) {
-            Some(Some("abuf")) => Self::from_string::<f32, P>(gl, content, path),
-            Some(Some("ibuf")) => Self::from_string::<i32, P>(gl, content, path),
+            Some(Some("abuf")) => Self::from_string::<f32, P>(content, path),
+            Some(Some("ibuf")) => Self::from_string::<i32, P>(content, path),
             _ => Err(Error::DetermineBufferType(PathBuf::from(path.as_ref()))),
         }
     }
 
     pub fn bind(&self) {
         unsafe {
-            self.gl.BindBuffer(self.binding, self.handle);
+            BindBuffer(self.binding, self.handle);
         }
     }
 
     pub fn data<T>(&self, data: &[T], hint: GLenum) {
         unsafe {
-            self.gl.BufferData(
+            BufferData(
                 self.binding,
                 (mem::size_of::<T>() * data.len()) as GLsizeiptr,
                 data.as_ptr() as *const GLvoid,
@@ -103,7 +97,7 @@ impl Buffer {
 
     pub fn sub_data<T>(&self, offset: GLintptr, data: &[T]) {
         unsafe {
-            self.gl.BufferSubData(
+            BufferSubData(
                 self.binding,
                 offset,
                 (mem::size_of::<T>() * data.len()) as GLsizeiptr,
@@ -117,7 +111,7 @@ impl Drop for Buffer {
     fn drop(&mut self) {
         trace!("Buffer {} dropped", self.handle);
         unsafe {
-            self.gl.DeleteBuffers(1, &self.handle);
+            DeleteBuffers(1, &self.handle);
         }
     }
 }

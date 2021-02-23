@@ -1,4 +1,4 @@
-use super::{types::*, RcGl};
+use super::*;
 use log::trace;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -14,19 +14,18 @@ pub enum Error {
 }
 
 pub struct Shader {
-    gl: RcGl,
     handle: GLuint,
 }
 
 impl Shader {
-    pub fn from_source<P: AsRef<Path>>(gl: RcGl, path: P) -> Result<Self, Error> {
+    pub fn from_source<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let content = std::fs::read_to_string(&path)
             .map_err(|e| Error::ReadSourceFile(PathBuf::from(path.as_ref()), e))?;
 
         let handle = unsafe {
-            gl.CreateShader(match path.as_ref().extension().map(|s| s.to_str()) {
-                Some(Some("frag")) => super::FRAGMENT_SHADER,
-                Some(Some("vert")) => super::VERTEX_SHADER,
+            CreateShader(match path.as_ref().extension().map(|s| s.to_str()) {
+                Some(Some("frag")) => FRAGMENT_SHADER,
+                Some(Some("vert")) => VERTEX_SHADER,
                 _ => return Err(Error::DetermineShaderStage(PathBuf::from(path.as_ref()))),
             })
         };
@@ -34,31 +33,27 @@ impl Shader {
         let content = content.as_str().as_bytes();
         let length = content.len() as GLsizei;
         unsafe {
-            gl.ShaderSource(handle, 1, &(content.as_ptr() as *const GLchar), &length);
-            gl.CompileShader(handle);
+            ShaderSource(handle, 1, &(content.as_ptr() as *const GLchar), &length);
+            CompileShader(handle);
         }
 
         let mut status = 0;
         unsafe {
-            gl.GetShaderiv(handle, super::COMPILE_STATUS, &mut status);
+            GetShaderiv(handle, COMPILE_STATUS, &mut status);
         }
 
-        if status as GLboolean == super::FALSE {
-            let info_log = gl.get_info_log(
-                handle,
-                super::Gles2::GetShaderiv,
-                super::Gles2::GetShaderInfoLog,
-            );
+        if status as GLboolean == FALSE {
+            let info_log = get_info_log(handle, GetShaderiv, GetShaderInfoLog);
 
             unsafe {
-                gl.DeleteShader(handle);
+                DeleteShader(handle);
             }
 
             return Err(Error::Compile(PathBuf::from(path.as_ref()), Some(info_log)));
         }
 
         trace!("Shader {} ({}) compiled", handle, path.as_ref().display());
-        Ok(Shader { gl, handle })
+        Ok(Shader { handle })
     }
 
     pub fn handle(&self) -> GLuint {
@@ -70,7 +65,7 @@ impl Drop for Shader {
     fn drop(&mut self) {
         trace!("Shader {} dropped", self.handle());
         unsafe {
-            self.gl.DeleteShader(self.handle());
+            DeleteShader(self.handle());
         }
     }
 }

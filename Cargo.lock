@@ -288,6 +288,7 @@ dependencies = [
  "log",
  "num_cpus",
  "pico-args",
+ "pkg-config",
  "rand",
  "rand_xorshift",
  "rust-rocket",

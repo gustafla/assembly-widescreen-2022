@@ -1,19 +1,18 @@
-use super::{types::*, RcGl};
+use super::*;
 use log::trace;
 
 pub struct Renderbuffer {
-    gl: RcGl,
     handle: GLuint,
 }
 
 impl Renderbuffer {
-    pub fn new(gl: RcGl) -> Renderbuffer {
+    pub fn new() -> Renderbuffer {
         let mut handle = 0;
         unsafe {
-            gl.GenRenderbuffers(1, &mut handle);
+            GenRenderbuffers(1, &mut handle);
         }
         trace!("Renderbuffer {} created", handle);
-        Renderbuffer { gl, handle }
+        Renderbuffer { handle }
     }
 
     pub fn handle(&self) -> GLuint {
@@ -22,7 +21,7 @@ impl Renderbuffer {
 
     pub fn bind(&self) {
         unsafe {
-            self.gl.BindRenderbuffer(super::RENDERBUFFER, self.handle());
+            BindRenderbuffer(RENDERBUFFER, self.handle());
         }
     }
 
@@ -30,8 +29,7 @@ impl Renderbuffer {
         self.bind();
 
         unsafe {
-            self.gl
-                .RenderbufferStorage(super::RENDERBUFFER, format, width, height);
+            RenderbufferStorage(RENDERBUFFER, format, width, height);
         }
     }
 }
@@ -40,7 +38,7 @@ impl Drop for Renderbuffer {
     fn drop(&mut self) {
         trace!("Renderbuffer {} dropped", self.handle());
         unsafe {
-            self.gl.DeleteRenderbuffers(1, &self.handle());
+            DeleteRenderbuffers(1, &self.handle());
         }
     }
 }

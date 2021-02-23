@@ -1,4 +1,4 @@
-use super::{types::*, RcGl, Renderbuffer, Texture};
+use super::*;
 use log::trace;
 use std::collections::HashMap;
 use std::error;
@@ -38,7 +38,6 @@ pub struct RenderbufferAttachment {
 }
 
 pub struct Framebuffer {
-    gl: RcGl,
     handle: GLuint,
     textures: HashMap<GLenum, TextureAttachment>,
     _renderbuffers: Vec<RenderbufferAttachment>,
@@ -46,23 +45,22 @@ pub struct Framebuffer {
 
 impl Framebuffer {
     pub fn new(
-        gl: RcGl,
         texture_attachments: Option<Vec<(GLenum, TextureAttachment)>>,
         renderbuffer_attachments: Option<Vec<(GLenum, RenderbufferAttachment)>>,
     ) -> Result<Framebuffer, Error> {
         let mut handle = 0;
         unsafe {
-            gl.GenFramebuffers(1, &mut handle);
+            GenFramebuffers(1, &mut handle);
             trace!("Framebuffer {} created", handle);
-            gl.BindFramebuffer(super::FRAMEBUFFER, handle);
+            BindFramebuffer(FRAMEBUFFER, handle);
         }
 
         let mut textures: HashMap<GLuint, TextureAttachment> = HashMap::new();
         if let Some(texture_attachments) = texture_attachments {
             for (name, attachment) in texture_attachments {
                 unsafe {
-                    gl.FramebufferTexture2D(
-                        super::FRAMEBUFFER,
+                    FramebufferTexture2D(
+                        FRAMEBUFFER,
                         name,
                         attachment.target,
                         attachment.texture.handle(),
@@ -77,10 +75,10 @@ impl Framebuffer {
         if let Some(renderbuffer_attachments) = renderbuffer_attachments {
             for (name, attachment) in renderbuffer_attachments {
                 unsafe {
-                    gl.FramebufferRenderbuffer(
-                        super::FRAMEBUFFER,
+                    FramebufferRenderbuffer(
+                        FRAMEBUFFER,
                         name,
-                        super::RENDERBUFFER,
+                        RENDERBUFFER,
                         attachment.renderbuffer.handle(),
                     );
                 }
@@ -88,12 +86,11 @@ impl Framebuffer {
             }
         }
 
-        let status = unsafe { gl.CheckFramebufferStatus(super::FRAMEBUFFER) };
-        if status != super::FRAMEBUFFER_COMPLETE {
+        let status = unsafe { CheckFramebufferStatus(FRAMEBUFFER) };
+        if status != FRAMEBUFFER_COMPLETE {
             Err(Error(status))
         } else {
             Ok(Framebuffer {
-                gl,
                 handle,
                 textures,
                 _renderbuffers,
@@ -107,15 +104,15 @@ impl Framebuffer {
 
     pub fn bind(&self, clear_flags: GLbitfield) {
         unsafe {
-            self.gl.BindFramebuffer(super::FRAMEBUFFER, self.handle());
-            self.gl.Clear(clear_flags);
+            BindFramebuffer(FRAMEBUFFER, self.handle());
+            Clear(clear_flags);
         }
     }
 
-    pub fn bind_default(gl: RcGl, clear_flags: GLbitfield) {
+    pub fn bind_default(clear_flags: GLbitfield) {
         unsafe {
-            gl.BindFramebuffer(super::FRAMEBUFFER, 0);
-            gl.Clear(clear_flags);
+            BindFramebuffer(FRAMEBUFFER, 0);
+            Clear(clear_flags);
         }
     }
 
@@ -131,7 +128,7 @@ impl Drop for Framebuffer {
     fn drop(&mut self) {
         trace!("Framebuffer {} dropped", self.handle());
         unsafe {
-            self.gl.DeleteFramebuffers(1, &self.handle());
+            DeleteFramebuffers(1, &self.handle());
         }
     }
 }

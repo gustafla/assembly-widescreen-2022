@@ -1,7 +1,7 @@
 mod particle_spawner;
 
 use crate::{
-    glesv2::{self, types::*, RcGl, UniformValue},
+    glesv2::{self, types::*},
     Demo,
 };
 use glam::Vec3;
@@ -9,7 +9,6 @@ pub use particle_spawner::*;
 use std::thread;
 
 pub struct ParticleSystem {
-    gl: RcGl,
     position_frames: Vec<Vec<Vec<Vec3>>>, // group(frame(coords, n = particles))
     interpolated: Vec<Vec3>,
     time_step: f32,
@@ -17,7 +16,6 @@ pub struct ParticleSystem {
 
 impl ParticleSystem {
     pub fn new(
-        gl: RcGl,
         spawner: ParticleSpawner,
         duration: f32,
         steps: usize,
@@ -86,7 +84,6 @@ impl ParticleSystem {
             .unwrap();
 
         ParticleSystem {
-            gl,
             position_frames,
             interpolated: Vec::with_capacity(largest * cpus),
             time_step,
@@ -109,7 +106,7 @@ impl ParticleSystem {
             self.interpolated.extend(interpolated);
         }
 
-        if self.gl.get_booleanv(glesv2::DEPTH_TEST) && self.gl.get_booleanv(glesv2::BLEND) {
+        if glesv2::get_booleanv(glesv2::DEPTH_TEST) && glesv2::get_booleanv(glesv2::BLEND) {
             // Sort particles because of alpha blending + depth testing = difficult
             self.interpolated.sort_unstable_by(|a, b| {
                 // sort by distance squared
@@ -135,27 +132,27 @@ impl ParticleSystem {
         program.bind(Some(&[
             (
                 program.uniform_location("u_Resolution").unwrap(),
-                UniformValue::Vec2f(
+                glesv2::UniformValue::Vec2f(
                     demo.resolution().width as f32,
                     demo.resolution().height as f32,
                 ),
             ),
             (
                 program.uniform_location("u_Projection").unwrap(),
-                UniformValue::Matrix4fv(1, demo.projection().as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, demo.projection().as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
             ),
         ]));
 
         unsafe {
-            self.gl.BindBuffer(glesv2::ARRAY_BUFFER, 0);
+            glesv2::BindBuffer(glesv2::ARRAY_BUFFER, 0);
 
             let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
-            self.gl.EnableVertexAttribArray(index_pos);
-            self.gl.VertexAttribPointer(
+            glesv2::EnableVertexAttribArray(index_pos);
+            glesv2::VertexAttribPointer(
                 index_pos,
                 3,
                 glesv2::FLOAT,
@@ -163,8 +160,7 @@ impl ParticleSystem {
                 0,
                 self.interpolated.as_ptr() as *const GLvoid,
             );
-            self.gl
-                .DrawArrays(glesv2::POINTS, 0, self.interpolated.len() as GLint);
+            glesv2::DrawArrays(glesv2::POINTS, 0, self.interpolated.len() as GLint);
         }
     }
 }
