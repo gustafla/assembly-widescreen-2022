@@ -33,16 +33,15 @@ pub enum Error {
 // Playback buffering/latency size in samples
 // Assuming 44100Hz stereo, 256 samples is about a frame of latency
 const BUF_SIZE: usize = 256;
-// FFT size in samples per channel, eg fft from stereo track reads double this number of i16s
+// FFT size in frames, eg fft from stereo track reads double this number of i16s
 const FFT_SIZE: usize = 1024;
 
 pub struct Player {
     audio_data: Arc<Vec<i16>>,
-    sample_rate: usize,
-    channels: usize,
+    sample_rate: u32,
+    channels: u8,
     sample_rate_channels: f32,
     len_secs: f32,
-    pulseaudio: Arc<Simple>,
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
     playback_thread: JoinHandle<()>,
@@ -54,7 +53,7 @@ pub struct Player {
 }
 
 impl Player {
-    fn decode_ogg(reader: impl Read + Seek) -> Result<(Arc<Vec<i16>>, usize, usize), Error> {
+    fn decode_ogg(reader: impl Read + Seek) -> Result<(Arc<Vec<i16>>, u32, u8), Error> {
         let mut ogg_stream_reader = OggStreamReader::new(reader)?;
 
         // Because lewton doesn't have time seek at the time of writing,
@@ -75,9 +74,66 @@ impl Player {
 
         Ok((
             Arc::new(audio_data),
-            ogg_stream_reader.ident_hdr.audio_sample_rate as usize,
-            ogg_stream_reader.ident_hdr.audio_channels as usize,
+            ogg_stream_reader.ident_hdr.audio_sample_rate,
+            ogg_stream_reader.ident_hdr.audio_channels,
         ))
+    }
+
+    fn start_pulse(
+        title: &str,
+        audio_data: Arc<Vec<i16>>,
+        sample_rate: u32,
+        channels: u8,
+        playback_position: Arc<AtomicUsize>,
+        playing: Arc<AtomicBool>,
+    ) -> Result<JoinHandle<()>, Error> {
+        let spec = Spec {
+            format: Format::S16NE, // Signed 16-bit in native endian
+            channels,
+            rate: sample_rate,
+        };
+        let buf_len = u32::try_from(BUF_SIZE * std::mem::size_of::<i16>()).unwrap();
+        let buffer_attr = BufferAttr {
+            // Set the maximum length to get lower latency
+            maxlength: buf_len,
+            // Set target length to get lower latency
+            tlength: buf_len,
+            prebuf: std::u32::MAX,
+            minreq: std::u32::MAX,
+            fragsize: std::u32::MAX,
+        };
+        let pulseaudio = Simple::new(
+            None,  // Default server
+            title, // Application name
+            Direction::Playback,
+            None,    // Default device
+            "Music", // Description
+            &spec,   // Sample format
+            None,    // Default channel map
+            Some(&buffer_attr),
+        )?;
+
+        // Start a thread for music streaming (from RAM to pulse)
+        Ok(std::thread::spawn(move || loop {
+            {
+                if playing.load(Ordering::SeqCst) {
+                    // Load position and advance to next audio slice
+                    // Might overflow in theory but not in realistic use
+                    let pos = playback_position.fetch_add(BUF_SIZE, Ordering::SeqCst);
+                    // How many samples can actually still be read
+                    let samples = BUF_SIZE.min(audio_data.len() - pos.min(audio_data.len()));
+                    // If any, let's play them
+                    if samples > 0 {
+                        let slice = &audio_data[pos..][..samples];
+                        pulseaudio.write(bytemuck::cast_slice(slice)).unwrap();
+                        continue;
+                    }
+                }
+
+                // When nothing to play, park
+                std::thread::park();
+            }
+        }))
     }
 
     pub fn new(ogg_path: impl AsRef<Path>, title: &str) -> Result<Self, Error> {
@@ -87,66 +143,20 @@ impl Player {
         let ogg_file = File::open(ogg_path)?;
         let ogg_reader = BufReader::new(ogg_file);
         let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader)?;
-        let sample_rate_channels = (sample_rate * channels) as f32;
+        let sample_rate_channels = (sample_rate * u32::from(channels)) as f32;
         let len_secs = audio_data.len() as f32 / sample_rate_channels;
 
         // Initialize libpulse_simple
-        let spec = Spec {
-            format: Format::S16NE, // Signed 16-bit in native endian
-            channels: u8::try_from(channels).unwrap(),
-            rate: u32::try_from(sample_rate).unwrap(),
-        };
-        let buf_len = u32::try_from(BUF_SIZE * std::mem::size_of::<i16>()).unwrap();
-        let buffer_attr = BufferAttr {
-            // Set the maximum lenght to get lower latency
-            maxlength: buf_len * 2,
-            // Set target length to get lower latency
-            tlength: buf_len,
-            prebuf: std::u32::MAX,
-            minreq: std::u32::MAX,
-            fragsize: std::u32::MAX,
-        };
-        let pulseaudio = Arc::new(Simple::new(
-            None,  // Default server
-            title, // Application name
-            Direction::Playback,
-            None,    // Default device
-            "Music", // Description
-            &spec,   // Sample format
-            None,    // Default channel map
-            Some(&buffer_attr),
-        )?);
-
         let playback_position = Arc::new(AtomicUsize::new(0));
         let playing = Arc::new(AtomicBool::new(false));
-
-        // Start a thread for music streaming (from RAM to pulse)
-        let playback_thread = {
-            let audio_data = audio_data.clone();
-            let pulseaudio = pulseaudio.clone();
-            let playback_position = playback_position.clone();
-            let playing = playing.clone();
-            std::thread::spawn(move || loop {
-                {
-                    if playing.load(Ordering::SeqCst) {
-                        // Load position and advance to next audio slice
-                        // Might overflow in theory but not in realistic use
-                        let pos = playback_position.fetch_add(BUF_SIZE, Ordering::SeqCst);
-                        // How many samples can actually still be read
-                        let samples = BUF_SIZE.min(audio_data.len() - pos.min(audio_data.len()));
-                        // If any, let's play them
-                        if samples > 0 {
-                            let slice = &audio_data[pos..][..samples];
-                            pulseaudio.write(bytemuck::cast_slice(slice)).unwrap();
-                            continue;
-                        }
-                    }
-
-                    // When nothing to play, park
-                    std::thread::park();
-                }
-            })
-        };
+        let playback_thread = Self::start_pulse(
+            title,
+            audio_data.clone(),
+            sample_rate,
+            channels,
+            playback_position.clone(),
+            playing.clone(),
+        )?;
 
         // Initialize FFT
         let mut fft_planner = FftPlanner::new();
@@ -161,7 +171,6 @@ impl Player {
             channels,
             sample_rate_channels,
             len_secs,
-            pulseaudio,
             playback_position,
             playing,
             playback_thread,
@@ -182,24 +191,22 @@ impl Player {
     }
 
     pub fn play(&mut self) {
-        self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::SeqCst));
-        self.start_time = Instant::now();
-        self.playing.store(true, Ordering::SeqCst);
-        self.playback_thread.thread().unpark();
+        if !self.is_playing() {
+            self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::SeqCst));
+            self.start_time = Instant::now();
+            self.playing.store(true, Ordering::SeqCst);
+            self.playback_thread.thread().unpark();
+        }
     }
 
     pub fn pause(&mut self) {
-        self.pause_time = Instant::now();
-        self.playing.store(false, Ordering::SeqCst);
+        if self.is_playing() {
+            self.pause_time = Instant::now();
+            self.playing.store(false, Ordering::SeqCst);
+        }
     }
 
     pub fn time_secs(&mut self) -> f32 {
-        let latency = self
-            .pulseaudio
-            .get_latency()
-            .map(|us| us.as_secs_f32())
-            .unwrap_or(0.);
-
         let timer_secs = (if self.is_playing() {
             self.start_time.elapsed()
         } else {
@@ -208,7 +215,7 @@ impl Player {
             .as_micros() as f32
             / 1_000_000f32;
 
-        (timer_secs - latency).clamp(0., self.len_secs)
+        timer_secs.min(self.len_secs)
     }
 
     pub fn seek(&mut self, secs: f32) {
@@ -216,7 +223,7 @@ impl Player {
         let mut pos = (secs * self.sample_rate_channels) as usize;
 
         // Align to channel
-        pos -= pos % self.channels;
+        pos -= pos % usize::from(self.channels);
 
         // Limit position to avoid buffer over-read panic
         pos = pos.min(self.audio_data.len());
@@ -234,14 +241,6 @@ impl Player {
         }
     }
 
-    fn pos_to_duration(&self, pos: usize) -> Duration {
-        let sample_rate_channels = self.sample_rate * self.channels;
-        Duration::new(
-            (pos / sample_rate_channels) as u64,
-            (((pos % sample_rate_channels) * 1_000_000_000) / sample_rate_channels) as u32,
-        )
-    }
-
     /// Compute average Power Spectral Density of bass (30-300Hz)
     pub fn bass_psd(&mut self, at_secs: f32) -> f32 {
         // Compute the position
@@ -249,16 +248,17 @@ impl Player {
 
         // Limit to audio data range
         pos = pos
-            .min(self.audio_data.len() - FFT_SIZE * self.channels - 1)
+            .min(self.audio_data.len() - FFT_SIZE * usize::from(self.channels) - 1)
             .max(0);
 
         // Align to channel
-        pos -= pos % self.channels;
+        pos -= pos % usize::from(self.channels);
 
         // Take the audio data slice and convert to windowed complex number Vec
         let fft_size_f32 = FFT_SIZE as f32;
-        let mut fft_buffer: Vec<_> = self.audio_data[pos..][..FFT_SIZE * self.channels]
-            .chunks(self.channels)
+        let mut fft_buffer: Vec<_> = self.audio_data[pos..]
+            [..FFT_SIZE * usize::from(self.channels)]
+            .chunks(usize::from(self.channels))
             .enumerate()
             .map(|(n, all_channels_sample)| {
                 // First channel mono
@@ -289,5 +289,15 @@ impl Player {
             .map(|complex| (complex * normalization_scale).norm())
             .sum::<f32>()
             / (end - start) as f32
+    }
+
+    fn pos_to_duration(&self, pos: usize) -> Duration {
+        let sample_rate_channels = u64::from(self.sample_rate) * u64::from(self.channels);
+        let pos = u64::try_from(pos).unwrap();
+        Duration::new(
+            pos / sample_rate_channels,
+            u32::try_from(((pos % sample_rate_channels) * 1_000_000_000) / sample_rate_channels)
+                .unwrap(),
+        )
     }
 }
