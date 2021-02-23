@@ -49,7 +49,7 @@ impl Sync {
             beats_per_sec: bpm / 60.,
             rows_per_beat,
             beat: 0.,
-            frame_counter: benchmark.then(|| FrameCounter::new()),
+            frame_counter: benchmark.then(FrameCounter::new),
             rocket,
         }
     }
