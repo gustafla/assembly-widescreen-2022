@@ -16,7 +16,6 @@ use std::{
         Arc,
     },
     thread::JoinHandle,
-    time::{Duration, Instant},
 };
 use thiserror::Error;
 
@@ -31,7 +30,7 @@ pub enum Error {
 }
 
 // Playback buffering/latency size in samples
-const BUF_SIZE: usize = 2048;
+const BUF_SIZE: usize = 1024;
 // FFT size in frames, eg fft from stereo track reads double this number of i16s
 const FFT_SIZE: usize = 1024;
 
@@ -44,9 +43,6 @@ pub struct Player {
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
     playback_thread: JoinHandle<()>,
-    start_time: Instant,
-    pause_time: Instant,
-    time_offset: Duration,
     fft: Arc<dyn Fft<f32>>,
     fft_scratch: Vec<Complex<f32>>,
 }
@@ -93,9 +89,7 @@ impl Player {
         };
         let buf_len = u32::try_from(BUF_SIZE * std::mem::size_of::<i16>()).unwrap();
         let buffer_attr = BufferAttr {
-            // Set the maximum length to get lower latency
             maxlength: buf_len,
-            // Set target length to get lower latency
             tlength: buf_len,
             prebuf: std::u32::MAX,
             minreq: std::u32::MAX,
@@ -162,8 +156,6 @@ impl Player {
         let fft = fft_planner.plan_fft_forward(FFT_SIZE);
         let fft_scratch = vec![Complex::new(0., 0.); fft.get_inplace_scratch_len()];
 
-        let time = Instant::now();
-
         Ok(Self {
             audio_data,
             sample_rate,
@@ -173,9 +165,6 @@ impl Player {
             playback_position,
             playing,
             playback_thread,
-            start_time: time,
-            pause_time: time,
-            time_offset: Duration::new(0, 0),
             fft,
             fft_scratch,
         })
@@ -190,27 +179,17 @@ impl Player {
     }
 
     pub fn play(&mut self) {
-        self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::Relaxed));
-        self.start_time = Instant::now();
         self.playing.store(true, Ordering::Relaxed);
         self.playback_thread.thread().unpark();
     }
 
     pub fn pause(&mut self) {
-        self.pause_time = Instant::now();
         self.playing.store(false, Ordering::Relaxed);
     }
 
     pub fn time_secs(&mut self) -> f32 {
-        let timer_secs = (if self.is_playing() {
-            self.start_time.elapsed()
-        } else {
-            self.pause_time.duration_since(self.start_time)
-        } + self.time_offset)
-            .as_micros() as f32
-            / 1_000_000f32;
-
-        timer_secs.min(self.len_secs)
+        (self.playback_position.load(Ordering::Relaxed) as f32 / self.sample_rate_channels)
+            .min(self.len_secs)
     }
 
     pub fn seek(&mut self, secs: f32) {
@@ -225,10 +204,6 @@ impl Player {
 
         // Set new position and update timing etc
         self.playback_position.store(pos, Ordering::Relaxed);
-        self.time_offset = self.pos_to_duration(pos);
-        let time = Instant::now();
-        self.start_time = time;
-        self.pause_time = time;
 
         // Unpark playback if needed
         if self.is_playing() {
@@ -237,17 +212,12 @@ impl Player {
     }
 
     /// Compute average Power Spectral Density of bass (30-300Hz)
-    pub fn bass_psd(&mut self, at_secs: f32) -> f32 {
-        // Compute the position
-        let mut pos = (at_secs * self.sample_rate_channels) as usize;
-
-        // Limit to audio data range
-        pos = pos
-            .min(self.audio_data.len() - FFT_SIZE * usize::from(self.channels) - 1)
-            .max(0);
-
-        // Align to channel
-        pos -= pos % usize::from(self.channels);
+    pub fn bass_psd(&mut self) -> f32 {
+        // Load the position
+        let pos = self
+            .playback_position
+            .load(Ordering::Relaxed)
+            .min(self.audio_data.len() - FFT_SIZE * usize::from(self.channels) - 1);
 
         // Take the audio data slice and convert to windowed complex number Vec
         let fft_size_f32 = FFT_SIZE as f32;
@@ -284,15 +254,5 @@ impl Player {
             .map(|complex| (complex * normalization_scale).norm())
             .sum::<f32>()
             / (end - start) as f32
-    }
-
-    fn pos_to_duration(&self, pos: usize) -> Duration {
-        let sample_rate_channels = u64::from(self.sample_rate) * u64::from(self.channels);
-        let pos = u64::try_from(pos).unwrap();
-        Duration::new(
-            pos / sample_rate_channels,
-            u32::try_from(((pos % sample_rate_channels) * 1_000_000_000) / sample_rate_channels)
-                .unwrap(),
-        )
     }
 }

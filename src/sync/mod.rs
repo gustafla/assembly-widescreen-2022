@@ -148,7 +148,7 @@ impl Sync {
         }
 
         // Absolute energy in low freq range is a pretty good musical beat value
-        self.beat = player.bass_psd(secs);
+        self.beat = player.bass_psd();
 
         // Signal winit's event loop that we want to keep rendering
         ControlFlow::Poll
