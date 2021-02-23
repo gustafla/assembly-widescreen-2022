@@ -153,6 +153,7 @@ fn main() -> Result<()> {
         player.play();
     }
 
+    let mut resized = false;
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match event {
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -171,6 +172,7 @@ fn main() -> Result<()> {
             },
             WindowEvent::Resized(size) => {
                 windowed_context.resize(size);
+                resized = true;
             }
             _ => (),
         },
@@ -187,6 +189,12 @@ fn main() -> Result<()> {
             windowed_context
                 .swap_buffers()
                 .expect("Failed to swap buffers");
+
+            // Try to sync better
+            if resized && !windowed && !cfg!(debug_assertions) {
+                player.seek(0.);
+                resized = false;
+            }
         }
         _ => (),
     })

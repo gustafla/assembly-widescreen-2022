@@ -31,8 +31,7 @@ pub enum Error {
 }
 
 // Playback buffering/latency size in samples
-// Assuming 44100Hz stereo, 256 samples is about a frame of latency
-const BUF_SIZE: usize = 256;
+const BUF_SIZE: usize = 2048;
 // FFT size in frames, eg fft from stereo track reads double this number of i16s
 const FFT_SIZE: usize = 1024;
 
@@ -116,10 +115,10 @@ impl Player {
         // Start a thread for music streaming (from RAM to pulse)
         Ok(std::thread::spawn(move || loop {
             {
-                if playing.load(Ordering::SeqCst) {
+                if playing.load(Ordering::Relaxed) {
                     // Load position and advance to next audio slice
                     // Might overflow in theory but not in realistic use
-                    let pos = playback_position.fetch_add(BUF_SIZE, Ordering::SeqCst);
+                    let pos = playback_position.fetch_add(BUF_SIZE, Ordering::Relaxed);
                     // How many samples can actually still be read
                     let samples = BUF_SIZE.min(audio_data.len() - pos.min(audio_data.len()));
                     // If any, let's play them
@@ -187,23 +186,19 @@ impl Player {
     }
 
     pub fn is_playing(&self) -> bool {
-        self.playing.load(Ordering::SeqCst)
+        self.playing.load(Ordering::Relaxed)
     }
 
     pub fn play(&mut self) {
-        if !self.is_playing() {
-            self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::SeqCst));
-            self.start_time = Instant::now();
-            self.playing.store(true, Ordering::SeqCst);
-            self.playback_thread.thread().unpark();
-        }
+        self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::Relaxed));
+        self.start_time = Instant::now();
+        self.playing.store(true, Ordering::Relaxed);
+        self.playback_thread.thread().unpark();
     }
 
     pub fn pause(&mut self) {
-        if self.is_playing() {
-            self.pause_time = Instant::now();
-            self.playing.store(false, Ordering::SeqCst);
-        }
+        self.pause_time = Instant::now();
+        self.playing.store(false, Ordering::Relaxed);
     }
 
     pub fn time_secs(&mut self) -> f32 {
@@ -229,7 +224,7 @@ impl Player {
         pos = pos.min(self.audio_data.len());
 
         // Set new position and update timing etc
-        self.playback_position.store(pos, Ordering::SeqCst);
+        self.playback_position.store(pos, Ordering::Relaxed);
         self.time_offset = self.pos_to_duration(pos);
         let time = Instant::now();
         self.start_time = time;
