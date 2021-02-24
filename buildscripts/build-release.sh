@@ -2,7 +2,7 @@
 set -e
 
 # Check that the CLI is being used at all
-supported="host, arm"
+supported="host, arm, rpi"
 [[ -z $@ ]] && echo Please choose at least one platform from \"$supported\" && exit 1
 
 # Work in this script's directory
@@ -25,6 +25,12 @@ for platform in $@; do
             strip="arm-linux-gnueabihf-strip"
             ext=".arm"
             ;;
+        rpi)
+            features="--no-default-features --features rpi"
+            target="arm-unknown-linux-gnueabihf"
+            strip="arm-linux-gnueabihf-strip"
+            ext=".rpi"
+            ;;
         *)
             echo Supported plaforms are \"$supported\"
             exit 1
@@ -36,7 +42,7 @@ for platform in $@; do
 
     # Compile, link and strip
     docker run --rm -v "$(dirname $PWD)":/build -w /build ${crate}-builder-${platform}:latest sh -c "\
-    cargo build ${target:+--target $target} --release && \
+    cargo build ${target:+--target $target} $features --release && \
     $strip --strip-all target/$target/release/$crate && \
     chown -R $(id -u):$(id -g) target"
 

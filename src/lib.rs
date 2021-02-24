@@ -2,11 +2,11 @@ pub mod glesv2;
 mod particle_system;
 mod player;
 mod render_pass;
+mod resolution;
 mod sync;
 mod terrain;
 
 use glam::{Mat4, Quat, Vec2, Vec3};
-use glutin::dpi::PhysicalSize;
 use particle_system::{
     ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
 };
@@ -14,8 +14,9 @@ pub use player::Player;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
+pub use resolution::Resolution;
 use std::convert::TryFrom;
-pub use sync::Sync;
+pub use sync::DemoSync;
 use terrain::Terrain;
 use thiserror::Error;
 
@@ -33,7 +34,7 @@ pub struct Demo {
     rng: XorShiftRng,
     particle_system: ParticleSystem,
     terrain: Terrain,
-    resolution: PhysicalSize<u32>,
+    resolution: Resolution,
     projection: Mat4,
     noise_texture: glesv2::Texture,
     bloom_pass: RenderPass,
@@ -41,7 +42,7 @@ pub struct Demo {
 }
 
 impl Demo {
-    pub fn resolution(&self) -> PhysicalSize<u32> {
+    pub fn resolution(&self) -> Resolution {
         self.resolution
     }
 
@@ -53,7 +54,9 @@ impl Demo {
         self.projection
     }
 
-    pub fn new(resolution: PhysicalSize<u32>) -> Result<Self, Error> {
+    pub fn new(resolution: impl Into<Resolution>) -> Result<Self, Error> {
+        let resolution = resolution.into();
+
         glesv2::blend_func(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
         glesv2::enable(glesv2::CULL_FACE);
         glesv2::depth_func(glesv2::LESS);
@@ -135,9 +138,11 @@ impl Demo {
 
     pub fn render(
         &mut self,
-        sync: &mut Sync,
-        to_size: PhysicalSize<u32>,
+        sync: &mut DemoSync,
+        to_resolution: impl Into<Resolution>,
     ) -> Result<(), glesv2::Error> {
+        let to_resolution = to_resolution.into();
+
         glesv2::clear_color(0., 0., 0., 1.);
         glesv2::viewport(
             0,
@@ -232,7 +237,7 @@ impl Demo {
                 ),
                 ("u_Beat", glesv2::UniformValue::Float(sync.get_beat())),
             ],
-            Some(to_size),
+            Some(to_resolution),
         );
 
         glesv2::check()

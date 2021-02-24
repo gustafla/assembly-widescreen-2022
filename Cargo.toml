@@ -4,13 +4,22 @@ version = "0.1.0"
 authors = ["Lauri Gustafsson <me@gustafla.space>"]
 edition = "2018"
 
+[features]
+default = ["glutin"]
+rpi = ["videocore", "khronos-egl"]
+
 [dependencies]
+# Optional, for different platforms
+glutin = { version = "0.26.0", optional = true }
+videocore =  { git = "https://github.com/gustafla/rust-videocore", optional = true }
+khronos-egl = { git = "https://github.com/gustafla/khronos-egl", optional = true, features = ["static", "no-pkg-config"] }
+
+# Main dependencies
 log = { version = "0.4.14", features = ["release_max_level_info"] }
 rand = "0.8.3"
 rand_xorshift = "0.3.0"
 num_cpus = "1.13.0"
 anyhow = "1.0.38"
-glutin = "0.26.0"
 thiserror = "1.0.23"
 lewton = "0.10.2"
 bincode = "1.3.1"

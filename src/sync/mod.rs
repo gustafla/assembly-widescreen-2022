@@ -2,11 +2,10 @@ mod frame_counter;
 
 use crate::Player;
 use frame_counter::FrameCounter;
-use glutin::event_loop::ControlFlow;
 
 const TRACKS_FILE: &str = "resources/tracks.bin";
 
-pub struct Sync {
+pub struct DemoSync {
     row: f32,
     beats_per_sec: f32,
     rows_per_beat: f32,
@@ -29,7 +28,7 @@ fn connect() -> rust_rocket::RocketClient {
     }
 }
 
-impl Sync {
+impl DemoSync {
     pub fn new(bpm: f32, rows_per_beat: f32, benchmark: bool) -> Self {
         #[cfg(debug_assertions)]
         let rocket = {
@@ -115,7 +114,11 @@ impl Sync {
     }
 
     /// Call once per frame
-    pub fn update(&mut self, player: &mut Player) -> ControlFlow {
+    ///
+    /// # Return value
+    ///
+    /// Returns true if the demo should should end
+    pub fn update(&mut self, player: &mut Player) -> bool {
         if let Some(frame_counter) = &mut self.frame_counter {
             frame_counter.tick();
         }
@@ -130,7 +133,7 @@ impl Sync {
         // In Release builds, signal exit when the demo has played to the end of music
         #[cfg(not(debug_assertions))]
         if secs >= player.len_secs() {
-            return ControlFlow::Exit;
+            return true;
         }
 
         // Set frame's row for Rocket track gets
@@ -150,8 +153,7 @@ impl Sync {
         // Absolute energy in low freq range is a pretty good musical beat value
         self.beat = player.bass_psd();
 
-        // Signal winit's event loop that we want to keep rendering
-        ControlFlow::Poll
+        false
     }
 
     #[cfg(debug_assertions)]
@@ -185,7 +187,7 @@ impl Sync {
 }
 
 #[cfg(debug_assertions)]
-impl Drop for Sync {
+impl Drop for DemoSync {
     fn drop(&mut self) {
         self.save_tracks();
     }
