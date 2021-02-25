@@ -201,7 +201,8 @@ fn run(
 
     // Initialize videocore rendering and get screen resolution
     bcm_host::init();
-    let display_size = bcm_host::graphics_get_display_size(0).context("Cannot query display size")?;
+    let display_size =
+        bcm_host::graphics_get_display_size(0).context("Cannot query display size")?;
     println!("Display is {}x{}", display_size.width, display_size.height);
 
     // Test the player

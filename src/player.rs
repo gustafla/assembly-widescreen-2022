@@ -75,14 +75,14 @@ impl Player {
     fn start_alsa(
         audio_data: Arc<Vec<i16>>,
         sample_rate: u32,
-        channels: u32,
+        channels: u8,
         playback_position: Arc<AtomicUsize>,
         playing: Arc<AtomicBool>,
     ) {
         std::thread::spawn(move || {
             let pcm = alsa::PCM::new("default", alsa::Direction::Playback, false).unwrap();
             let hwp = pcm::HwParams::any(&pcm).unwrap();
-            hwp.set_channels(channels).unwrap();
+            hwp.set_channels(u32::from(channels)).unwrap();
             hwp.set_rate(sample_rate, alsa::ValueOr::Nearest).unwrap();
             hwp.set_format(pcm::Format::s16()).unwrap();
             hwp.set_access(pcm::Access::RWInterleaved).unwrap();
@@ -108,7 +108,7 @@ impl Player {
             let io = pcm.io_i16().unwrap();
 
             loop {
-                let avail = match pcm.avail_update() {
+                let avail = usize::try_from(match pcm.avail_update() {
                     Ok(n) => n,
                     Err(e) => {
                         log::error!("Recovering from {}", e);
@@ -117,21 +117,26 @@ impl Player {
                         }
                         pcm.avail_update().unwrap()
                     }
-                } as usize
-                    * channels as usize;
+                })
+                .unwrap();
 
                 if avail >= BUF_SIZE / 2 {
+                    let avail_samples = avail * usize::from(channels);
+
                     // Load position and advance to next audio slice
                     // Might overflow in theory but not in realistic use
-                    let pos = playback_position.fetch_add(avail, Ordering::SeqCst);
+                    let pos = playback_position.fetch_add(avail_samples, Ordering::SeqCst);
 
-                    // How many samples can actually still be read
-                    //let samples = buf.len().min(audio_data.len() - pos.min(audio_data.len()));
+                    // How many i16s can actually still be read
+                    let remaining_samples = audio_data.len() - pos.min(audio_data.len());
+                    let can_write_samples = avail_samples.min(remaining_samples);
 
-                    assert_eq!(
-                        io.writei(&audio_data[pos..][..avail]).unwrap() * channels as usize,
-                        avail
-                    );
+                    if can_write_samples == 0 {
+                        // Output silence after end
+                        io.writei(&[0; BUF_SIZE]).unwrap();
+                    } else {
+                        io.writei(&audio_data[pos..][..can_write_samples]).unwrap();
+                    }
 
                     continue;
                 }
@@ -164,7 +169,7 @@ impl Player {
         Self::start_alsa(
             audio_data.clone(),
             sample_rate,
-            channels.into(),
+            channels,
             playback_position.clone(),
             playing.clone(),
         );
