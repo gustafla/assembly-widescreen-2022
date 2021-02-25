@@ -32,3 +32,8 @@
 [x] Switch back to idiomatic namespace style
 [x] Use Error::\*;
 [ ] Use thiserror and anyhow for all unwraps
+
+# Bikeshedding and Yak Shaving
+- [ ] One Dockerfile
+- [ ] Sync timers on ALSA recover
+- [ ] ALSA error handling
