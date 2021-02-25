@@ -238,7 +238,7 @@ fn main() -> Result<()> {
     log::set_max_level(log::LevelFilter::max());
 
     // Load music
-    let player = Player::new("resources/music.ogg", title).context("Failed to load music")?;
+    let player = Player::new("resources/music.ogg").context("Failed to load music")?;
 
     // Initialize rocket
     let sync = DemoSync::new(120., 8., benchmark || cfg!(debug_assertions));

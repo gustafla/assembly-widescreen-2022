@@ -18,21 +18,11 @@ cd build/arm-linux/release && \
 make install && \
 cd && rm -r ~/*
 
-# Install libpulse
-RUN export PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig && \
-wget https://ftpmirror.gnu.org/libtool/libtool-2.4.6.tar.gz && \
-tar xf libtool-2.4.6.tar.gz && cd libtool-2.4.6 && \
+# Install alsa
+RUN wget ftp://ftp.alsa-project.org/pub/lib/alsa-lib-1.1.8.tar.bz2 && \
+tar xf alsa-lib-1.1.8.tar.bz2 && cd alsa-lib-1.1.8 && \
 ./configure --prefix /usr/arm-linux-gnueabihf --host arm-linux-gnueabihf && \
-make -j $(nproc) && make install && cd && \
-wget http://www.mega-nerd.com/libsndfile/files/libsndfile-1.0.28.tar.gz && \
-tar xf libsndfile-1.0.28.tar.gz && cd libsndfile-1.0.28 && \
-./configure --prefix /usr/arm-linux-gnueabihf --host arm-linux-gnueabihf && \
-make -j $(nproc) && make install && cd && \
-wget https://freedesktop.org/software/pulseaudio/releases/pulseaudio-12.2.tar.xz && \
-tar xf pulseaudio-12.2.tar.xz && cd pulseaudio-12.2 && \
-./configure --prefix /usr/arm-linux-gnueabihf --host arm-linux-gnueabihf --without-caps && \
-make -j $(nproc) && make install && cd && rm -r ~/* && \
-cp /usr/arm-linux-gnueabihf/lib/pulseaudio/libpulsecommon-12.2.so /usr/arm-linux-gnueabihf/lib
+make -j $(nproc) && make install && cd && rm -r ~/*
 
 # Install Rust target arm-unknown-linux-gnueabihf
 RUN rustup target add arm-unknown-linux-gnueabihf

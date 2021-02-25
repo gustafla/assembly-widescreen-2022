@@ -1,10 +1,8 @@
-use lewton::inside_ogg::OggStreamReader;
-use pulse::{
-    def::BufferAttr,
-    sample::{Format, Spec},
-    stream::Direction,
+use alsa::{
+    pcm::{self, Frames, State},
+    PollDescriptors,
 };
-use pulse_simple::Simple;
+use lewton::inside_ogg::OggStreamReader;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{
     convert::TryFrom,
@@ -15,7 +13,7 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
-    thread::JoinHandle,
+    time::{Duration, Instant},
 };
 use thiserror::Error;
 
@@ -25,13 +23,11 @@ pub enum Error {
     FileAccess(#[from] std::io::Error),
     #[error("Failed to decode ogg vorbis file")]
     Decode(#[from] lewton::VorbisError),
-    #[error("PulseAudio error: {0}")]
-    PulseAudio(#[from] pulse::error::PAErr),
 }
 
-// Playback buffering/latency size in samples
-const BUF_SIZE: usize = 1024;
-// FFT size in frames, eg fft from stereo track reads double this number of i16s
+// Playback buffering/latency size in frames
+const BUF_SIZE: usize = 4096;
+// FFT size in samples per channel, eg fft from stereo track reads double this number of i16s
 const FFT_SIZE: usize = 1024;
 
 pub struct Player {
@@ -42,7 +38,9 @@ pub struct Player {
     len_secs: f32,
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
-    playback_thread: JoinHandle<()>,
+    start_time: Instant,
+    pause_time: Instant,
+    time_offset: Duration,
     fft: Arc<dyn Fft<f32>>,
     fft_scratch: Vec<Complex<f32>>,
 }
@@ -74,62 +72,83 @@ impl Player {
         ))
     }
 
-    fn start_pulse(
-        title: &str,
+    fn start_alsa(
         audio_data: Arc<Vec<i16>>,
         sample_rate: u32,
-        channels: u8,
+        channels: u32,
         playback_position: Arc<AtomicUsize>,
         playing: Arc<AtomicBool>,
-    ) -> Result<JoinHandle<()>, Error> {
-        let spec = Spec {
-            format: Format::S16NE, // Signed 16-bit in native endian
-            channels,
-            rate: sample_rate,
-        };
-        let buf_len = u32::try_from(BUF_SIZE * std::mem::size_of::<i16>()).unwrap();
-        let buffer_attr = BufferAttr {
-            maxlength: buf_len,
-            tlength: buf_len,
-            prebuf: std::u32::MAX,
-            minreq: std::u32::MAX,
-            fragsize: std::u32::MAX,
-        };
-        let pulseaudio = Simple::new(
-            None,  // Default server
-            title, // Application name
-            Direction::Playback,
-            None,    // Default device
-            "Music", // Description
-            &spec,   // Sample format
-            None,    // Default channel map
-            Some(&buffer_attr),
-        )?;
+    ) {
+        std::thread::spawn(move || {
+            let pcm = alsa::PCM::new("default", alsa::Direction::Playback, false).unwrap();
+            let hwp = pcm::HwParams::any(&pcm).unwrap();
+            hwp.set_channels(channels).unwrap();
+            hwp.set_rate(sample_rate, alsa::ValueOr::Nearest).unwrap();
+            hwp.set_format(pcm::Format::s16()).unwrap();
+            hwp.set_access(pcm::Access::RWInterleaved).unwrap();
+            let size = Frames::try_from(BUF_SIZE).unwrap();
+            hwp.set_buffer_size(size).unwrap();
+            hwp.set_period_size(size / 4, alsa::ValueOr::Nearest)
+                .unwrap();
+            pcm.hw_params(&hwp).unwrap();
 
-        // Start a thread for music streaming (from RAM to pulse)
-        Ok(std::thread::spawn(move || loop {
-            {
-                if playing.load(Ordering::Relaxed) {
+            let hwp = pcm.hw_params_current().unwrap();
+            let swp = pcm.sw_params_current().unwrap();
+            let (bufsize, periodsize) = (
+                hwp.get_buffer_size().unwrap(),
+                hwp.get_period_size().unwrap(),
+            );
+            swp.set_start_threshold(bufsize - periodsize).unwrap();
+            swp.set_avail_min(periodsize).unwrap();
+            pcm.sw_params(&swp).unwrap();
+
+            assert_eq!(hwp.get_rate().unwrap(), sample_rate);
+
+            let mut fds = pcm.get().unwrap();
+            let io = pcm.io_i16().unwrap();
+
+            loop {
+                let avail = match pcm.avail_update() {
+                    Ok(n) => n,
+                    Err(e) => {
+                        log::error!("Recovering from {}", e);
+                        if let Some(errno) = e.errno() {
+                            pcm.recover(errno as std::os::raw::c_int, true).unwrap();
+                        }
+                        pcm.avail_update().unwrap()
+                    }
+                } as usize
+                    * channels as usize;
+
+                if avail >= BUF_SIZE / 2 {
                     // Load position and advance to next audio slice
                     // Might overflow in theory but not in realistic use
-                    let pos = playback_position.fetch_add(BUF_SIZE, Ordering::Relaxed);
+                    let pos = playback_position.fetch_add(avail, Ordering::SeqCst);
+
                     // How many samples can actually still be read
-                    let samples = BUF_SIZE.min(audio_data.len() - pos.min(audio_data.len()));
-                    // If any, let's play them
-                    if samples > 0 {
-                        let slice = &audio_data[pos..][..samples];
-                        pulseaudio.write(bytemuck::cast_slice(slice)).unwrap();
-                        continue;
-                    }
+                    //let samples = buf.len().min(audio_data.len() - pos.min(audio_data.len()));
+
+                    assert_eq!(
+                        io.writei(&audio_data[pos..][..avail]).unwrap() * channels as usize,
+                        avail
+                    );
+
+                    continue;
                 }
 
-                // When nothing to play, park
-                std::thread::park();
+                match (pcm.state(), playing.load(Ordering::SeqCst)) {
+                    (State::Prepared, true) => pcm.start().unwrap(),
+                    (State::Paused, true) => pcm.pause(false).unwrap(),
+                    (State::Running, false) => pcm.pause(true).unwrap(),
+                    _ => {}
+                }
+
+                alsa::poll::poll(&mut fds, 100).unwrap();
             }
-        }))
+        });
     }
 
-    pub fn new(ogg_path: impl AsRef<Path>, title: &str) -> Result<Self, Error> {
+    pub fn new(ogg_path: impl AsRef<Path>) -> Result<Self, Error> {
         log::info!("Loading {}", ogg_path.as_ref().display());
 
         // Read and decode ogg file
@@ -139,22 +158,23 @@ impl Player {
         let sample_rate_channels = (sample_rate * u32::from(channels)) as f32;
         let len_secs = audio_data.len() as f32 / sample_rate_channels;
 
-        // Initialize libpulse_simple
         let playback_position = Arc::new(AtomicUsize::new(0));
         let playing = Arc::new(AtomicBool::new(false));
-        let playback_thread = Self::start_pulse(
-            title,
+
+        Self::start_alsa(
             audio_data.clone(),
             sample_rate,
-            channels,
+            channels.into(),
             playback_position.clone(),
             playing.clone(),
-        )?;
+        );
 
         // Initialize FFT
         let mut fft_planner = FftPlanner::new();
         let fft = fft_planner.plan_fft_forward(FFT_SIZE);
         let fft_scratch = vec![Complex::new(0., 0.); fft.get_inplace_scratch_len()];
+
+        let time = Instant::now();
 
         Ok(Self {
             audio_data,
@@ -164,7 +184,9 @@ impl Player {
             len_secs,
             playback_position,
             playing,
-            playback_thread,
+            start_time: time,
+            pause_time: time,
+            time_offset: Duration::new(0, 0),
             fft,
             fft_scratch,
         })
@@ -175,21 +197,30 @@ impl Player {
     }
 
     pub fn is_playing(&self) -> bool {
-        self.playing.load(Ordering::Relaxed)
+        self.playing.load(Ordering::SeqCst)
     }
 
     pub fn play(&mut self) {
-        self.playing.store(true, Ordering::Relaxed);
-        self.playback_thread.thread().unpark();
+        self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::SeqCst));
+        self.start_time = Instant::now();
+        self.playing.store(true, Ordering::SeqCst);
     }
 
     pub fn pause(&mut self) {
-        self.playing.store(false, Ordering::Relaxed);
+        self.pause_time = Instant::now();
+        self.playing.store(false, Ordering::SeqCst);
     }
 
     pub fn time_secs(&mut self) -> f32 {
-        (self.playback_position.load(Ordering::Relaxed) as f32 / self.sample_rate_channels)
-            .min(self.len_secs)
+        let timer_secs = (if self.is_playing() {
+            self.start_time.elapsed()
+        } else {
+            self.pause_time.duration_since(self.start_time)
+        } + self.time_offset)
+            .as_micros() as f32
+            / 1_000_000f32;
+
+        timer_secs.min(self.len_secs)
     }
 
     pub fn seek(&mut self, secs: f32) {
@@ -203,27 +234,41 @@ impl Player {
         pos = pos.min(self.audio_data.len());
 
         // Set new position and update timing etc
-        self.playback_position.store(pos, Ordering::Relaxed);
+        self.playback_position.store(pos, Ordering::SeqCst);
+        self.time_offset = self.pos_to_duration(pos);
+        let time = Instant::now();
+        self.start_time = time;
+        self.pause_time = time;
+    }
 
-        // Unpark playback if needed
-        if self.is_playing() {
-            self.playback_thread.thread().unpark();
-        }
+    fn pos_to_duration(&self, pos: usize) -> Duration {
+        let sample_rate_channels = u64::from(self.sample_rate) * u64::from(self.channels);
+        let pos = u64::try_from(pos).unwrap();
+        Duration::new(
+            pos / sample_rate_channels,
+            u32::try_from(((pos % sample_rate_channels) * 1_000_000_000) / sample_rate_channels)
+                .unwrap(),
+        )
     }
 
     /// Compute average Power Spectral Density of bass (30-300Hz)
-    pub fn bass_psd(&mut self) -> f32 {
-        // Load the position
-        let pos = self
-            .playback_position
-            .load(Ordering::Relaxed)
-            .min(self.audio_data.len() - FFT_SIZE * usize::from(self.channels) - 1);
+    pub fn bass_psd(&mut self, at_secs: f32) -> f32 {
+        // Compute the position
+        let mut pos = (at_secs * self.sample_rate_channels) as usize;
+
+        // Limit to audio data range
+        pos = pos
+            .min(self.audio_data.len() - FFT_SIZE * usize::from(self.channels) - 1)
+            .max(0);
+
+        // Align to channel
+        pos -= pos % usize::from(self.channels);
 
         // Take the audio data slice and convert to windowed complex number Vec
         let fft_size_f32 = FFT_SIZE as f32;
         let mut fft_buffer: Vec<_> = self.audio_data[pos..]
             [..FFT_SIZE * usize::from(self.channels)]
-            .chunks(usize::from(self.channels))
+            .chunks(self.channels.into())
             .enumerate()
             .map(|(n, all_channels_sample)| {
                 // First channel mono

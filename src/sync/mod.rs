@@ -151,7 +151,7 @@ impl DemoSync {
         }
 
         // Absolute energy in low freq range is a pretty good musical beat value
-        self.beat = player.bass_psd();
+        self.beat = player.bass_psd(secs);
 
         false
     }
