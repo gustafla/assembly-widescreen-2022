@@ -1,19 +1,43 @@
 FROM liuchong/rustup:stable
 
-RUN dpkg --add-architecture armhf && \
-    apt-get update && \
+# Install required setup tools
+RUN apt-get update && \
     apt-get install --no-install-recommends -y \
-    git cmake g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf \
-    libpulse-dev:armhf && \
+    git cmake intltool wget pkg-config && \
     rm -rf /var/lib/apt/lists/*
 
+# Install the RPi toolchain
+RUN git clone --depth 1 https://github.com/raspberrypi/tools && \
+cp -r tools/arm-bcm2708/arm-linux-gnueabihf/* /usr && rm -r ~/*
+
+# Install the RPi GPU driver userland
 RUN git clone --depth 1 https://github.com/raspberrypi/userland && \
 cd userland && \
 ./buildme && \
 cd build/arm-linux/release && \
-make install
+make install && \
+cd && rm -r ~/*
 
+# Install libpulse
+RUN export PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig && \
+wget https://ftpmirror.gnu.org/libtool/libtool-2.4.6.tar.gz && \
+tar xf libtool-2.4.6.tar.gz && cd libtool-2.4.6 && \
+./configure --prefix /usr/arm-linux-gnueabihf --host arm-linux-gnueabihf && \
+make -j $(nproc) && make install && cd && \
+wget http://www.mega-nerd.com/libsndfile/files/libsndfile-1.0.28.tar.gz && \
+tar xf libsndfile-1.0.28.tar.gz && cd libsndfile-1.0.28 && \
+./configure --prefix /usr/arm-linux-gnueabihf --host arm-linux-gnueabihf && \
+make -j $(nproc) && make install && cd && \
+wget https://freedesktop.org/software/pulseaudio/releases/pulseaudio-12.2.tar.xz && \
+tar xf pulseaudio-12.2.tar.xz && cd pulseaudio-12.2 && \
+./configure --prefix /usr/arm-linux-gnueabihf --host arm-linux-gnueabihf --without-caps && \
+make -j $(nproc) && make install && cd && rm -r ~/* && \
+cp /usr/arm-linux-gnueabihf/lib/pulseaudio/libpulsecommon-12.2.so /usr/arm-linux-gnueabihf/lib
+
+# Install Rust target arm-unknown-linux-gnueabihf
 RUN rustup target add arm-unknown-linux-gnueabihf
 RUN printf '[target.arm-unknown-linux-gnueabihf]\nlinker = "arm-linux-gnueabihf-gcc"' > /root/.cargo/config.toml
-ENV PKG_CONFIG=arm-linux-gnueabihf-pkg-config
-ENV PKG_CONFIG_LIBDIR_arm_unknown_linux_gnueabihf=/usr/lib/arm-linux-gnueabihf/pkgconfig:/opt/vc/lib/pkgconfig
+
+# Setup pkg-config-rs
+ENV PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig:/opt/vc/lib/pkgconfig
+ENV PKG_CONFIG_ALLOW_CROSS=1

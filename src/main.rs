@@ -192,11 +192,24 @@ fn run(
     mut player: Player,
     mut sync: DemoSync,
 ) -> Result<()> {
+    use videocore::bcm_host;
+
     let remaining = pargs.finish();
     if !remaining.is_empty() {
         return Err(anyhow!("Unknown arguments {:?}", remaining));
     }
 
+    // Initialize videocore rendering and get screen resolution
+    bcm_host::init();
+    let display_size = bcm_host::graphics_get_display_size(0).context("Cannot query display size")?;
+    println!("Display is {}x{}", display_size.width, display_size.height);
+
+    // Test the player
+    player.play();
+    std::thread::sleep(std::time::Duration::new(20, 0));
+
+    // Deinitialize videocore
+    bcm_host::deinit();
     todo!()
 }
 
