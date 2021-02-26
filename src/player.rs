@@ -38,6 +38,7 @@ pub struct Player {
     len_secs: f32,
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
+    error_sync_flag: Arc<AtomicBool>,
     start_time: Instant,
     pause_time: Instant,
     time_offset: Duration,
@@ -78,9 +79,16 @@ impl Player {
         channels: u8,
         playback_position: Arc<AtomicUsize>,
         playing: Arc<AtomicBool>,
+        error_sync_flag: Arc<AtomicBool>,
     ) {
         std::thread::spawn(move || {
-            let pcm = alsa::PCM::new("default", alsa::Direction::Playback, false).unwrap();
+            let pcm = alsa::PCM::new("default", alsa::Direction::Playback, false)
+                .map_err(|e| {
+                    log::error!("Failed to initialize ALSA PCM playback");
+                    e
+                })
+                .unwrap();
+
             let hwp = pcm::HwParams::any(&pcm).unwrap();
             hwp.set_channels(u32::from(channels)).unwrap();
             hwp.set_rate(sample_rate, alsa::ValueOr::Nearest).unwrap();
@@ -102,7 +110,15 @@ impl Player {
             swp.set_avail_min(periodsize).unwrap();
             pcm.sw_params(&swp).unwrap();
 
-            assert_eq!(hwp.get_rate().unwrap(), sample_rate);
+            let got = hwp.get_rate().unwrap();
+            if got != sample_rate {
+                log::error!(
+                    "Required sample rate {} is not supported. Got {}",
+                    sample_rate,
+                    got
+                );
+                assert_eq!(got, sample_rate);
+            }
 
             let mut fds = pcm.get().unwrap();
             let io = pcm.io_i16().unwrap();
@@ -113,8 +129,14 @@ impl Player {
                     Err(e) => {
                         log::error!("Recovering from {}", e);
                         if let Some(errno) = e.errno() {
-                            pcm.recover(errno as std::os::raw::c_int, true).unwrap();
+                            pcm.recover(errno as std::os::raw::c_int, true)
+                                .map_err(|e| {
+                                    log::error!("Cannot recover");
+                                    e
+                                })
+                                .unwrap();
                         }
+                        error_sync_flag.store(true, Ordering::Relaxed);
                         pcm.avail_update().unwrap()
                     }
                 })
@@ -125,23 +147,25 @@ impl Player {
 
                     // Load position and advance to next audio slice
                     // Might overflow in theory but not in realistic use
-                    let pos = playback_position.fetch_add(avail_samples, Ordering::SeqCst);
+                    let pos = playback_position.fetch_add(avail_samples, Ordering::Relaxed);
 
                     // How many i16s can actually still be read
                     let remaining_samples = audio_data.len() - pos.min(audio_data.len());
                     let can_write_samples = avail_samples.min(remaining_samples);
 
                     if can_write_samples == 0 {
-                        // Output silence after end
-                        io.writei(&[0; BUF_SIZE]).unwrap();
+                        // Output silence after end to avoid underruns
+                        io.writei(&[0; BUF_SIZE]).ok();
                     } else {
-                        io.writei(&audio_data[pos..][..can_write_samples]).unwrap();
+                        // Usually writes the right amount when no signal or underrun occurred,
+                        // don't bother checking the return value :)
+                        io.writei(&audio_data[pos..][..can_write_samples]).ok();
                     }
 
                     continue;
                 }
 
-                match (pcm.state(), playing.load(Ordering::SeqCst)) {
+                match (pcm.state(), playing.load(Ordering::Relaxed)) {
                     (State::Prepared, true) => pcm.start().unwrap(),
                     (State::Paused, true) => pcm.pause(false).unwrap(),
                     (State::Running, false) => pcm.pause(true).unwrap(),
@@ -165,6 +189,7 @@ impl Player {
 
         let playback_position = Arc::new(AtomicUsize::new(0));
         let playing = Arc::new(AtomicBool::new(false));
+        let error_sync_flag = Arc::new(AtomicBool::new(false));
 
         Self::start_alsa(
             audio_data.clone(),
@@ -172,6 +197,7 @@ impl Player {
             channels,
             playback_position.clone(),
             playing.clone(),
+            error_sync_flag.clone(),
         );
 
         // Initialize FFT
@@ -189,6 +215,7 @@ impl Player {
             len_secs,
             playback_position,
             playing,
+            error_sync_flag,
             start_time: time,
             pause_time: time,
             time_offset: Duration::new(0, 0),
@@ -202,22 +229,26 @@ impl Player {
     }
 
     pub fn is_playing(&self) -> bool {
-        self.playing.load(Ordering::SeqCst)
+        self.playing.load(Ordering::Relaxed)
     }
 
     pub fn play(&mut self) {
-        self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::SeqCst));
+        self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::Relaxed));
         self.start_time = Instant::now();
-        self.playing.store(true, Ordering::SeqCst);
+        self.playing.store(true, Ordering::Relaxed);
     }
 
     pub fn pause(&mut self) {
         self.pause_time = Instant::now();
-        self.playing.store(false, Ordering::SeqCst);
+        self.playing.store(false, Ordering::Relaxed);
     }
 
     pub fn time_secs(&mut self) -> f32 {
         let timer_secs = (if self.is_playing() {
+            if self.error_sync_flag.fetch_and(false, Ordering::Relaxed) {
+                log::info!("ALSA PCM output errors, trying to sync");
+                self.play();
+            }
             self.start_time.elapsed()
         } else {
             self.pause_time.duration_since(self.start_time)
@@ -239,7 +270,7 @@ impl Player {
         pos = pos.min(self.audio_data.len());
 
         // Set new position and update timing etc
-        self.playback_position.store(pos, Ordering::SeqCst);
+        self.playback_position.store(pos, Ordering::Relaxed);
         self.time_offset = self.pos_to_duration(pos);
         let time = Instant::now();
         self.start_time = time;

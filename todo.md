@@ -32,7 +32,3 @@
 [x] Switch back to idiomatic namespace style
 [x] Use Error::\*;
 [ ] Use thiserror and anyhow for all unwraps
-
-# Bikeshedding and Yak Shaving
-- [X] One Dockerfile
-- [ ] Sync timers on ALSA recover
