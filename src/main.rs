@@ -154,7 +154,13 @@ fn run(
                 } => match keycode {
                     VirtualKeyCode::Escape | VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
                     #[cfg(debug_assertions)]
-                    VirtualKeyCode::R => demo.reload().unwrap(),
+                    VirtualKeyCode::R => demo
+                        .reload()
+                        .map_err(|e| {
+                            log::error!("Failed to reload: {}", e);
+                            e
+                        })
+                        .unwrap(),
                     _ => (),
                 },
                 WindowEvent::Resized(size) => {
@@ -235,7 +241,9 @@ fn main() -> Result<()> {
     }
 
     // Initialize logging
-    log::set_logger(&logger::Logger).unwrap();
+    log::set_logger(&logger::Logger)
+        .map_err(|_| eprintln!("Failed to initialize logger. Going without."))
+        .ok();
     log::set_max_level(log::LevelFilter::max());
 
     // Load music
