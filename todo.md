@@ -36,4 +36,3 @@
 # Bikeshedding and Yak Shaving
 - [X] One Dockerfile
 - [ ] Sync timers on ALSA recover
-- [ ] ALSA error handling
