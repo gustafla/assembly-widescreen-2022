@@ -142,7 +142,7 @@ impl Player {
                 })
                 .unwrap();
 
-                if avail >= BUF_SIZE / 2 {
+                if avail > 0 {
                     let avail_samples = avail * usize::from(channels);
 
                     // Load position and advance to next audio slice
@@ -161,15 +161,29 @@ impl Player {
                         // don't bother checking the return value :)
                         io.writei(&audio_data[pos..][..can_write_samples]).ok();
                     }
-
-                    continue;
                 }
 
-                match (pcm.state(), playing.load(Ordering::Relaxed)) {
-                    (State::Prepared, true) => pcm.start().unwrap(),
-                    (State::Paused, true) => pcm.pause(false).unwrap(),
-                    (State::Running, false) => pcm.pause(true).unwrap(),
-                    _ => {}
+                let should_be_playing = playing.load(Ordering::Relaxed);
+                match pcm.state() {
+                    State::Prepared => {
+                        if should_be_playing {
+                            pcm.start().unwrap();
+                        }
+                    }
+                    State::Paused => {
+                        if should_be_playing {
+                            pcm.pause(false).unwrap();
+                        }
+                    }
+                    State::Running => {
+                        if !should_be_playing {
+                            pcm.pause(true).unwrap();
+                        }
+                    }
+                    State::Suspended | State::XRun => continue, // Try to recover, skip polling
+                    state => {
+                        log::warn!("Unexpected ALSA state {:?}", state);
+                    }
                 }
 
                 alsa::poll::poll(&mut fds, 100).unwrap();
