@@ -34,6 +34,6 @@
 [ ] Use thiserror and anyhow for all unwraps
 
 # Bikeshedding and Yak Shaving
-- [ ] One Dockerfile
+- [X] One Dockerfile
 - [ ] Sync timers on ALSA recover
 - [ ] ALSA error handling

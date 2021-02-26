@@ -542,8 +542,9 @@ dependencies = [
 
 [[package]]
 name = "khronos-egl"
-version = "3.0.1"
-source = "git+https://github.com/gustafla/khronos-egl#2658e18c70408932d717a2049451aa4a0c7dec78"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e8cc4d128654d2191681ab98140c4d99e4bd9333efe1526e033586a5a061e1e"
 dependencies = [
  "libc 0.2.86",
  "pkg-config",

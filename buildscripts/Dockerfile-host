@@ -1,4 +1,0 @@
-FROM liuchong/rustup:stable
-RUN apt-get update && \
-    apt-get install --no-install-recommends -y pkg-config libgles2-mesa-dev libasound2-dev libc-dev && \
-    rm -rf /var/lib/apt/lists/*

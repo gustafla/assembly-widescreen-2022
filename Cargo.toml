@@ -12,7 +12,7 @@ rpi = ["videocore", "khronos-egl"]
 # Optional, for different platforms
 glutin = { version = "0.26.0", optional = true }
 videocore =  { git = "https://github.com/gustafla/rust-videocore", optional = true }
-khronos-egl = { git = "https://github.com/gustafla/khronos-egl", optional = true, features = ["static", "no-pkg-config"] }
+khronos-egl = { version = "4.0.0", optional = true, features = ["static", "no-pkg-config"] }
 
 # Main dependencies
 log = { version = "0.4.14", features = ["release_max_level_info"] }

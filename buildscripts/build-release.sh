@@ -2,7 +2,7 @@
 set -e
 
 # Check that the CLI is being used at all
-supported="host, arm, rpi"
+supported="host, rpi"
 [[ -z $@ ]] && echo Please choose at least one platform from \"$supported\" && exit 1
 
 # Work in this script's directory
@@ -20,31 +20,30 @@ for platform in $@; do
             strip="strip"
             ext=".$(uname -m)"
             ;;
-        arm)
-            target="arm-unknown-linux-gnueabihf"
-            strip="arm-linux-gnueabihf-strip"
-            ext=".arm"
-            ;;
         rpi)
+            # Check that the script is being used on x86_64
+            [[ $(uname -m) != x86_64 ]] && echo Cross compiling is only supported on x86_64 && exit 1
             features="--no-default-features --features rpi"
+            envs="-e PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig:/opt/vc/lib/pkgconfig -e PKG_CONFIG_ALLOW_CROSS=1"
             target="arm-unknown-linux-gnueabihf"
             strip="arm-linux-gnueabihf-strip"
             ext=".rpi"
             ;;
         *)
+            echo ${platform} is not supported
             echo Supported plaforms are \"$supported\"
             exit 1
             ;;
     esac
 
     # Prepare to build
-    docker build -f "Dockerfile-${platform}" -t ${crate}-builder-${platform} .
+    docker build -t ${crate}-builder .
 
     # Compile, link and strip
-    docker run --rm -v "$(dirname $PWD)":/build -w /build ${crate}-builder-${platform}:latest sh -c "\
-    cargo build ${target:+--target $target} $features --release && \
-    $strip --strip-all target/$target/release/$crate && \
-    chown -R $(id -u):$(id -g) target"
+    docker run $envs --rm --user "$(id -u)":"$(id -g)" \
+        -v "$(dirname $PWD)":/build -w /build ${crate}-builder:latest sh -c "\
+        cargo build ${target:+--target $target} $features --release && \
+        $strip --strip-all target/$target/release/$crate"
 
     # Build a final release directory
     mkdir -p out
