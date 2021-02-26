@@ -39,6 +39,7 @@ pub struct Player {
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
     error_sync_flag: Arc<AtomicBool>,
+    playback_thread: std::thread::JoinHandle<()>,
     start_time: Instant,
     pause_time: Instant,
     time_offset: Duration,
@@ -80,7 +81,7 @@ impl Player {
         playback_position: Arc<AtomicUsize>,
         playing: Arc<AtomicBool>,
         error_sync_flag: Arc<AtomicBool>,
-    ) {
+    ) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             let pcm = alsa::PCM::new("default", alsa::Direction::Playback, false)
                 .map_err(|e| {
@@ -127,7 +128,7 @@ impl Player {
                 let avail = usize::try_from(match pcm.avail_update() {
                     Ok(n) => n,
                     Err(e) => {
-                        log::error!("Recovering from {}", e);
+                        log::error!("{}", e);
                         if let Some(errno) = e.errno() {
                             pcm.recover(errno as std::os::raw::c_int, true)
                                 .map_err(|e| {
@@ -163,32 +164,19 @@ impl Player {
                     }
                 }
 
-                let should_be_playing = playing.load(Ordering::Relaxed);
-                match pcm.state() {
-                    State::Prepared => {
-                        if should_be_playing {
-                            pcm.start().unwrap();
-                        }
-                    }
-                    State::Paused => {
-                        if should_be_playing {
-                            pcm.pause(false).unwrap();
-                        }
-                    }
-                    State::Running => {
-                        if !should_be_playing {
-                            pcm.pause(true).unwrap();
-                        }
-                    }
-                    State::Suspended | State::XRun => continue, // Try to recover, skip polling
-                    state => {
-                        log::warn!("Unexpected ALSA state {:?}", state);
-                    }
+                match (pcm.state(), playing.load(Ordering::Relaxed)) {
+                    (State::Running, true) => {}
+                    (State::Running, false) => pcm.pause(true).unwrap(),
+                    (State::Prepared, true) => pcm.start().unwrap(),
+                    (State::Prepared, false) => std::thread::park(),
+                    (State::Paused, true) => pcm.pause(false).unwrap(),
+                    (State::Paused, false) => std::thread::park(),
+                    _ => continue, // Try to recover, skip polling
                 }
 
                 alsa::poll::poll(&mut fds, 100).unwrap();
             }
-        });
+        })
     }
 
     pub fn new(ogg_path: impl AsRef<Path>) -> Result<Self, Error> {
@@ -205,7 +193,7 @@ impl Player {
         let playing = Arc::new(AtomicBool::new(false));
         let error_sync_flag = Arc::new(AtomicBool::new(false));
 
-        Self::start_alsa(
+        let playback_thread = Self::start_alsa(
             audio_data.clone(),
             sample_rate,
             channels,
@@ -230,6 +218,7 @@ impl Player {
             playback_position,
             playing,
             error_sync_flag,
+            playback_thread,
             start_time: time,
             pause_time: time,
             time_offset: Duration::new(0, 0),
@@ -250,6 +239,7 @@ impl Player {
         self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::Relaxed));
         self.start_time = Instant::now();
         self.playing.store(true, Ordering::Relaxed);
+        self.playback_thread.thread().unpark();
     }
 
     pub fn pause(&mut self) {
@@ -289,6 +279,11 @@ impl Player {
         let time = Instant::now();
         self.start_time = time;
         self.pause_time = time;
+
+        // Unpark if needed
+        if self.is_playing() {
+            self.playback_thread.thread().unpark();
+        }
     }
 
     fn pos_to_duration(&self, pos: usize) -> Duration {
