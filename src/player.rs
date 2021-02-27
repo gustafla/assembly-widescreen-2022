@@ -118,7 +118,7 @@ impl Player {
                     sample_rate,
                     got
                 );
-                assert_eq!(got, sample_rate);
+                panic!("Cannot play music on default ALSA PCM device");
             }
 
             let mut fds = pcm.get().unwrap();
