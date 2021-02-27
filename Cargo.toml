@@ -27,7 +27,6 @@ rust-rocket = "0.7.2"
 glam = "0.12.0"
 rustfft = "5.0.1"
 pico-args = "0.4.0"
-bytemuck = "1.5.0"
 alsa = "0.4.3"
 
 [build-dependencies]
