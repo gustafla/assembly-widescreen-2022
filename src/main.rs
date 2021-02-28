@@ -28,7 +28,16 @@ WINIT_UNIX_BACKEND to x11 or wayland.
 }
 
 #[cfg(feature = "glutin")]
-fn list_monitors<T>(event_loop: glutin::event_loop::EventLoop<T>) {
+struct DisplayConfiguration {
+    title: &'static str,
+    monitor: Option<usize>,
+    exclusive_mode: Option<usize>,
+    windowed: bool,
+}
+
+#[cfg(feature = "glutin")]
+fn list_monitors() {
+    let event_loop = glutin::event_loop::EventLoop::new();
     for (i, monitor) in event_loop.available_monitors().enumerate() {
         println!("Monitor {}", i);
         for (j, mode) in monitor.video_modes().enumerate() {
@@ -46,11 +55,10 @@ fn list_monitors<T>(event_loop: glutin::event_loop::EventLoop<T>) {
 
 #[cfg(feature = "glutin")]
 fn run(
-    title: &str,
-    mut pargs: Arguments,
     internal_size: Resolution,
     mut player: Player,
     mut sync: DemoSync,
+    disp: DisplayConfiguration,
 ) -> Result<()> {
     use glutin::{
         event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -63,23 +71,9 @@ fn run(
     // Initialize winit
     let event_loop = EventLoop::new();
 
-    // Process glutin-specific args
-    if pargs.contains("--list-monitors") {
-        list_monitors(event_loop);
-        return Ok(());
-    }
-    eprintln!("See --help if the default options don't work for you");
-    let monitor: Option<usize> = pargs.opt_value_from_str("--monitor")?;
-    let exclusive_mode: Option<usize> = pargs.opt_value_from_str("--exclusive")?;
-    let windowed = pargs.contains("--windowed");
-    let remaining = pargs.finish();
-    if !remaining.is_empty() {
-        return Err(anyhow!("Unknown arguments {:?}", remaining));
-    }
-
     // Select fullscreen mode
-    let fullscreen = if !(windowed || cfg!(debug_assertions)) {
-        match (monitor, exclusive_mode) {
+    let fullscreen = if !(disp.windowed || cfg!(debug_assertions)) {
+        match (disp.monitor, disp.exclusive_mode) {
             (Some(id), Some(mode)) => Some(Fullscreen::Exclusive(
                 event_loop
                     .available_monitors()
@@ -111,7 +105,7 @@ fn run(
 
     // Build a window with an OpenGL context
     let window_builder = WindowBuilder::new()
-        .with_title(title)
+        .with_title(disp.title)
         .with_app_id("demo".into())
         .with_inner_size(internal_size)
         .with_fullscreen(fullscreen)
@@ -191,19 +185,8 @@ fn run(
 }
 
 #[cfg(feature = "rpi")]
-fn run(
-    title: &str,
-    mut pargs: Arguments,
-    internal_size: Resolution,
-    mut player: Player,
-    mut sync: DemoSync,
-) -> Result<()> {
+fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Result<()> {
     use videocore::bcm_host;
-
-    let remaining = pargs.finish();
-    if !remaining.is_empty() {
-        return Err(anyhow!("Unknown arguments {:?}", remaining));
-    }
 
     // Initialize videocore rendering and get screen resolution
     bcm_host::init();
@@ -221,8 +204,6 @@ fn run(
 }
 
 fn main() -> Result<()> {
-    let title = "Demo";
-
     // Process CLI
     let mut pargs = Arguments::from_env();
     if pargs.contains("--help") {
@@ -240,9 +221,32 @@ fn main() -> Result<()> {
         }
     }
 
+    // Process glutin-specific args
+    #[cfg(feature = "glutin")]
+    {
+        if pargs.contains("--list-monitors") {
+            list_monitors();
+            return Ok(());
+        }
+        eprintln!("See --help if the default options don't work for you");
+    }
+    #[cfg(feature = "glutin")]
+    let disp = DisplayConfiguration {
+        title: "Demo",
+        monitor: pargs.opt_value_from_str("--monitor")?,
+        exclusive_mode: pargs.opt_value_from_str("--exclusive")?,
+        windowed: pargs.contains("--windowed"),
+    };
+
+    // Finish args
+    let remaining = pargs.finish();
+    if !remaining.is_empty() {
+        return Err(anyhow!("Unknown arguments {:?}", remaining));
+    }
+
     // Initialize logging
     log::set_logger(&logger::Logger)
-        .map_err(|_| eprintln!("Failed to initialize logger. Going without."))
+        .map_err(|e| eprintln!("{}\nFailed to initialize logger. Going without.", e))
         .ok();
     log::set_max_level(log::LevelFilter::max());
 
@@ -252,5 +256,10 @@ fn main() -> Result<()> {
     // Initialize rocket
     let sync = DemoSync::new(120., 8., benchmark || cfg!(debug_assertions));
 
-    run(title, pargs, internal_size, player, sync)
+    #[cfg(feature = "glutin")]
+    run(internal_size, player, sync, disp)?;
+    #[cfg(feature = "rpi")]
+    run(internal_size, player, sync)?;
+
+    Ok(())
 }
