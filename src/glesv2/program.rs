@@ -1,15 +1,14 @@
 use super::*;
 use log::trace;
-use std::ffi::CString;
-use std::path::{Path, PathBuf};
+use std::{ffi::CString, fmt::Debug, path::Path};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
     Shader(#[from] shader::Error),
-    #[error("Failed to link shaders {0:?}: {1:?}")]
-    Link(Option<Vec<PathBuf>>, Option<String>),
+    #[error("Failed to link {0:?}: {1:?}")]
+    Link(Vec<Shader>, Option<String>),
 }
 
 pub struct Program {
@@ -17,12 +16,12 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn from_shaders(shaders: &[GLuint]) -> Result<Program, Error> {
+    pub fn from_shaders(shaders: &[impl AsRef<Shader> + Clone + Debug]) -> Result<Program, Error> {
         let handle = unsafe { CreateProgram() };
 
         for shader in shaders {
             unsafe {
-                AttachShader(handle, *shader);
+                AttachShader(handle, shader.as_ref().handle());
             }
         }
 
@@ -42,7 +41,10 @@ impl Program {
                 DeleteProgram(handle);
             }
 
-            return Err(Error::Link(None, Some(info_log)));
+            return Err(Error::Link(
+                shaders.iter().map(|s| s.as_ref().clone()).collect(),
+                Some(info_log),
+            ));
         }
 
         trace!("Program {} {:?} linked", handle, shaders);
@@ -63,23 +65,7 @@ impl Program {
             shaders.push(Shader::from_source(path)?);
         }
 
-        Self::from_shaders(
-            shaders
-                .iter()
-                .map(|s| s.handle())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        )
-        .map_err(|e| {
-            if let Error::Link(None, Some(info_log)) = e {
-                Error::Link(
-                    Some(paths.iter().map(|p| PathBuf::from(p.as_ref())).collect()),
-                    Some(info_log),
-                )
-            } else {
-                e
-            }
-        })
+        Self::from_shaders(&shaders)
     }
 
     pub fn handle(&self) -> GLuint {

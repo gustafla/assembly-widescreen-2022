@@ -1,6 +1,8 @@
 use super::*;
-use log::trace;
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::{Debug, Display},
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -13,8 +15,28 @@ pub enum Error {
     Compile(PathBuf, Option<String>),
 }
 
+#[derive(Clone)]
 pub struct Shader {
     handle: GLuint,
+    name: String,
+}
+
+impl Display for Shader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({})", self.name, self.handle)
+    }
+}
+
+impl Debug for Shader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Shader {}", self)
+    }
+}
+
+impl AsRef<Shader> for Shader {
+    fn as_ref(&self) -> &Self {
+        &self
+    }
 }
 
 impl Shader {
@@ -52,8 +74,12 @@ impl Shader {
             return Err(Error::Compile(PathBuf::from(path.as_ref()), Some(info_log)));
         }
 
-        trace!("Shader {} ({}) compiled", handle, path.as_ref().display());
-        Ok(Shader { handle })
+        let shader = Shader {
+            handle,
+            name: path.as_ref().display().to_string(),
+        };
+        log::trace!("Shader {} compiled", shader);
+        Ok(shader)
     }
 
     pub fn handle(&self) -> GLuint {
@@ -63,7 +89,7 @@ impl Shader {
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        trace!("Shader {} dropped", self.handle());
+        log::trace!("Shader {} dropped", self);
         unsafe {
             DeleteShader(self.handle());
         }

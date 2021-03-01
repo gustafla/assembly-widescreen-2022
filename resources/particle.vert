@@ -8,9 +8,6 @@ varying vec4 v_Color;
 uniform vec2 u_Resolution;
 uniform mat4 u_Projection;
 uniform mat4 u_View;
-uniform int u_LightCount;
-uniform vec3 u_LightPosition[256];
-uniform float u_LightIntensity[256];
 
 vec3 hsv2rgb(vec3 c) {
   vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);

@@ -1,6 +1,8 @@
 use super::*;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -64,7 +66,6 @@ impl ResourceMapper {
                             shaders
                                 .get(&datapath.join(p))
                                 .expect(&format!("Shader {} doesn't exist.", p))
-                                .handle()
                         })
                         .collect::<Vec<_>>()
                         .as_slice(),
