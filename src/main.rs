@@ -186,21 +186,134 @@ fn run(
 
 #[cfg(feature = "rpi")]
 fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Result<()> {
-    use videocore::bcm_host;
+    use videocore::{bcm_host, dispmanx, image};
 
     // Initialize videocore rendering and get screen resolution
     bcm_host::init();
-    let display_size =
-        bcm_host::graphics_get_display_size(0).context("Cannot query display size")?;
-    println!("Display is {}x{}", display_size.width, display_size.height);
+    let size = bcm_host::graphics_get_display_size(0).context("Cannot query display size")?;
 
-    // Test the player
-    player.play();
-    std::thread::sleep(std::time::Duration::new(20, 0));
+    // Fill parameter structs
+    let mut src = image::Rect {
+        x: 0,
+        y: 0,
+        width: (internal_size.width as i32) << 16,
+        height: (internal_size.height as i32) << 16,
+    };
+    let mut dst = image::Rect {
+        x: 0,
+        y: 0,
+        width: size.width as i32,
+        height: size.height as i32,
+    };
+    let mut alpha = dispmanx::VCAlpha {
+        flags: dispmanx::FlagsAlpha::FixedAllPixels,
+        opacity: 255,
+        mask: 0,
+    };
+
+    // Open dispmanx display
+    let display = dispmanx::display_open(0);
+    let update = dispmanx::update_start(0);
+
+    // Create element to show
+    let element = dispmanx::element_add(
+        update,
+        display,
+        0,
+        &mut dst,
+        0,
+        &mut src,
+        dispmanx::DISPMANX_PROTECTION_NONE,
+        &mut alpha,
+        None,
+        dispmanx::Transform::NoRotate,
+    );
+    println!(
+        "update_submit_sync -> {}",
+        dispmanx::update_submit_sync(update)
+    );
+
+    // Fill dispmanx Window for EGL
+    let mut window = dispmanx::Window {
+        element,
+        width: size.width as i32,
+        height: size.height as i32,
+    };
+
+    // EGL
+    let egl_attribs = [
+        khronos_egl::RED_SIZE,
+        5,
+        khronos_egl::GREEN_SIZE,
+        6,
+        khronos_egl::BLUE_SIZE,
+        5,
+        khronos_egl::ALPHA_SIZE,
+        8,
+        khronos_egl::DEPTH_SIZE,
+        8,
+        khronos_egl::STENCIL_SIZE,
+        8,
+        khronos_egl::SAMPLE_BUFFERS,
+        0,
+        khronos_egl::NONE,
+    ];
+    let egl = khronos_egl::Instance::new(khronos_egl::Static);
+    let egl_display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
+    egl.initialize(egl_display).unwrap();
+    let egl_config = egl
+        .choose_first_config(egl_display, &egl_attribs)
+        .unwrap()
+        .unwrap();
+    let egl_buffer = unsafe {
+        egl.create_window_surface(
+            egl_display,
+            egl_config,
+            &mut window as *mut dispmanx::Window as khronos_egl::NativeWindowType,
+            None,
+        )
+    }
+    .unwrap();
+    let egl_context_attribs = [khronos_egl::CONTEXT_CLIENT_VERSION, 2, khronos_egl::NONE];
+    let egl_context = egl
+        .create_context(egl_display, egl_config, None, &egl_context_attribs)
+        .unwrap();
+    egl.make_current(
+        egl_display,
+        Some(egl_buffer),
+        Some(egl_buffer),
+        Some(egl_context),
+    )
+    .unwrap();
+
+    // Load demo content
+    let mut demo = Demo::new(internal_size)?;
+
+    // If release build, start the music
+    #[cfg(not(debug_assertions))]
+    {
+        player.play();
+    }
+
+    loop {
+        // Update sync, timing and audio related frame parameters
+        if sync.update(&mut player) {
+            break;
+        }
+
+        // Render the frame
+        if let Err(e) = demo.render(&mut sync, internal_size) {
+            panic!("{}", e);
+        }
+
+        // Display the frame
+        egl.swap_buffers(egl_display, egl_buffer).unwrap();
+    }
 
     // Deinitialize videocore
     bcm_host::deinit();
-    todo!()
+
+    Ok(())
 }
 
 fn main() -> Result<()> {
