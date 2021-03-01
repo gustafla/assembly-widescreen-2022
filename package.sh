@@ -12,7 +12,7 @@ cd "$(dirname $0)"
 rm -rf out
 
 # Determine crate/binary name
-crate=$(grep '^name[ \t]*=[ \t]*\".*\"' ../Cargo.toml | cut -d'=' -f 2 | tr -d '\t "')
+crate=$(grep '^name[ \t]*=[ \t]*\".*\"' Cargo.toml | cut -d'=' -f 2 | tr -d '\t "')
 
 for platform in $@; do
     case ${platform} in
@@ -37,18 +37,18 @@ for platform in $@; do
     esac
 
     # Prepare to build
-    docker build -t ${crate}-builder .
+    docker build ${crate}-builder
 
     # Compile, link and strip
     docker run $envs --rm --user "$(id -u)":"$(id -g)" \
-        -v "$(dirname $PWD)":/build -w /build ${crate}-builder:latest sh -c "\
+        -v "$PWD":/build -w /build ${crate}-builder:latest sh -c "\
         cargo build ${target:+--target $target} $features --release && \
         $strip --strip-all target/$target/release/$crate"
 
     # Build a final release directory
     mkdir -p out
-    cp ../target/$target/release/$crate "out/${crate}${ext}"
+    cp target/$target/release/$crate "out/${crate}${ext}"
 done
 
 # Remember to throw in music, sync data, shaders, etc
-cp -r ../resources out
+cp -r resources out
