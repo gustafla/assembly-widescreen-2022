@@ -239,10 +239,7 @@ fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Res
         None,
         dispmanx::Transform::NoRotate,
     );
-    println!(
-        "update_submit_sync -> {}",
-        dispmanx::update_submit_sync(update)
-    );
+    dispmanx::update_submit_sync(update);
 
     // Fill dispmanx Window for EGL
     let mut window = dispmanx::Window {
@@ -260,11 +257,11 @@ fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Res
         khronos_egl::BLUE_SIZE,
         5,
         khronos_egl::ALPHA_SIZE,
-        8,
+        0,
         khronos_egl::DEPTH_SIZE,
-        8,
+        0,
         khronos_egl::STENCIL_SIZE,
-        8,
+        0,
         khronos_egl::SAMPLE_BUFFERS,
         0,
         khronos_egl::NONE,
