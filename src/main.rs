@@ -199,11 +199,22 @@ fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Res
         width: (internal_size.width as i32) << 16,
         height: (internal_size.height as i32) << 16,
     };
+    let internal_aspect = internal_size.width as f32 / internal_size.height as f32;
+    let display_aspect = size.width as f32 / size.height as f32;
+    let scale = if internal_aspect < display_aspect {
+        size.height as f32 / internal_size.height as f32
+    } else {
+        size.width as f32 / internal_size.width as f32
+    };
+    let to_monitor_width = internal_size.width as f32 * scale;
+    let to_monitor_height = internal_size.height as f32 * scale;
+    let remaining_width = size.width as f32 - to_monitor_width;
+    let remaining_height = size.height as f32 - to_monitor_height;
     let mut dst = image::Rect {
-        x: 0,
-        y: 0,
-        width: size.width as i32,
-        height: size.height as i32,
+        x: (remaining_width / 2.) as i32, // Center the picture if narrow or tall
+        y: (remaining_height / 2.) as i32, // Center the picture if thin or wide
+        width: to_monitor_width as i32,
+        height: to_monitor_height as i32,
     };
     let mut alpha = dispmanx::VCAlpha {
         flags: dispmanx::FlagsAlpha::FixedAllPixels,
