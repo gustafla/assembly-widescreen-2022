@@ -113,7 +113,6 @@ fn run(
     let windowed_context = ContextBuilder::new()
         .with_gl(GlRequest::Specific(Api::OpenGlEs, (2, 0)))
         .with_vsync(true)
-        .with_srgb(true)
         .with_hardware_acceleration(None)
         .with_pixel_format(24, 0)
         .with_depth_buffer(0)
