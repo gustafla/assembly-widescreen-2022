@@ -189,14 +189,14 @@ fn run(
 
 #[cfg(feature = "rpi")]
 fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Result<()> {
-    use videocore::{bcm_host, dispmanx, image};
+    use rpi_window::{bcm_host, dispmanx};
 
     // Initialize videocore rendering and get screen resolution
     bcm_host::init();
     let size = bcm_host::graphics_get_display_size(0).context("Cannot query display size")?;
 
     // Fill parameter structs
-    let mut src = image::Rect {
+    let mut src = dispmanx::Rect {
         x: 0,
         y: 0,
         width: (internal_size.width as i32) << 16,
@@ -213,7 +213,7 @@ fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Res
     let to_monitor_height = internal_size.height as f32 * scale;
     let remaining_width = size.width as f32 - to_monitor_width;
     let remaining_height = size.height as f32 - to_monitor_height;
-    let mut dst = image::Rect {
+    let mut dst = dispmanx::Rect {
         x: (remaining_width / 2.) as i32, // Center the picture if narrow or tall
         y: (remaining_height / 2.) as i32, // Center the picture if thin or wide
         width: to_monitor_width as i32,
@@ -225,31 +225,14 @@ fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Res
         mask: 0,
     };
 
-    // Open dispmanx display
-    let display = dispmanx::display_open(0);
-    let update = dispmanx::update_start(0);
-
-    // Create element to show
-    let element = dispmanx::element_add(
-        update,
-        display,
+    // Create dispmanx Window for EGL
+    let mut window = dispmanx::create_window(
         0,
         &mut dst,
-        0,
         &mut src,
-        dispmanx::DISPMANX_PROTECTION_NONE,
         &mut alpha,
-        None,
         dispmanx::Transform::NoRotate,
     );
-    dispmanx::update_submit_sync(update);
-
-    // Fill dispmanx Window for EGL
-    let mut window = dispmanx::Window {
-        element,
-        width: size.width as i32,
-        height: size.height as i32,
-    };
 
     // EGL
     let egl_attribs = [

@@ -306,10 +306,10 @@ dependencies = [
  "pkg-config",
  "rand",
  "rand_xorshift",
+ "rpi_window",
  "rust-rocket",
  "rustfft",
  "thiserror",
- "videocore",
 ]
 
 [[package]]
@@ -1055,6 +1055,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpi_window"
+version = "1.0.0"
+source = "git+https://github.com/gustafla/rpi_window#e8e71ad3842cc2d62818c56283e883dafc37ba96"
+dependencies = [
+ "pkg-config",
+]
+
+[[package]]
 name = "rust-rocket"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1265,14 +1273,6 @@ name = "version_check"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
-
-[[package]]
-name = "videocore"
-version = "0.2.0"
-source = "git+https://github.com/gustafla/rust-videocore#1e30ad1f570c5881c6d844c14ebb64038fcbb4ae"
-dependencies = [
- "pkg-config",
-]
 
 [[package]]
 name = "void"

@@ -6,12 +6,12 @@ edition = "2018"
 
 [features]
 default = ["glutin"]
-rpi = ["videocore", "khronos-egl"]
+rpi = ["rpi_window", "khronos-egl"]
 
 [dependencies]
 # Optional, for different platforms
 glutin = { version = "0.26.0", optional = true }
-videocore =  { git = "https://github.com/gustafla/rust-videocore", optional = true }
+rpi_window =  { git = "https://github.com/gustafla/rpi_window", optional = true }
 khronos-egl = { git = "https://github.com/gustafla/khronos-egl", optional = true, features = ["static", "no-pkg-config"] }
 
 # Main dependencies
