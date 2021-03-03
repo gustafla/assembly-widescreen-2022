@@ -115,6 +115,10 @@ fn run(
         .with_vsync(true)
         .with_srgb(true)
         .with_hardware_acceleration(None)
+        .with_pixel_format(24, 0)
+        .with_depth_buffer(0)
+        .with_stencil_buffer(0)
+        .with_multisampling(0)
         .build_windowed(window_builder, &event_loop)
         .context("Failed to build a window")?;
 
@@ -267,12 +271,15 @@ fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Res
         khronos_egl::NONE,
     ];
     let egl = khronos_egl::Instance::new(khronos_egl::Static);
-    let egl_display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
-    egl.initialize(egl_display).unwrap();
+    let egl_display = egl
+        .get_display(khronos_egl::DEFAULT_DISPLAY)
+        .context("Cannot get EGL display")?;
+    egl.initialize(egl_display)
+        .context("Cannot initialize EGL")?;
     let egl_config = egl
         .choose_first_config(egl_display, &egl_attribs)
-        .unwrap()
-        .unwrap();
+        .context("Cannot get EGL configurations")?
+        .context("No suitable EGL configuration available")?;
     let egl_buffer = unsafe {
         egl.create_window_surface(
             egl_display,
@@ -281,18 +288,18 @@ fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Res
             None,
         )
     }
-    .unwrap();
+    .context("Cannot create an EGL window surface buffer")?;
     let egl_context_attribs = [khronos_egl::CONTEXT_CLIENT_VERSION, 2, khronos_egl::NONE];
     let egl_context = egl
         .create_context(egl_display, egl_config, None, &egl_context_attribs)
-        .unwrap();
+        .context("Cannot create an EGL context")?;
     egl.make_current(
         egl_display,
         Some(egl_buffer),
         Some(egl_buffer),
         Some(egl_context),
     )
-    .unwrap();
+    .context("Cannot make context current")?;
 
     // Load demo content
     let mut demo = Demo::new(internal_size)?;
@@ -315,7 +322,8 @@ fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Res
         }
 
         // Display the frame
-        egl.swap_buffers(egl_display, egl_buffer).unwrap();
+        egl.swap_buffers(egl_display, egl_buffer)
+            .context("EGL buffer swap failed")?;
     }
 
     // Deinitialize videocore
