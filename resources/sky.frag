@@ -7,5 +7,5 @@ uniform vec2 u_Resolution;
 
 void main() {
     // output
-    gl_FragColor = vec4(0.4, 0.5, 0.8 - v_TexCoord.y, 1.);
+    gl_FragColor = vec4(0.5, 0.2, -0.4 + v_TexCoord.y, 1.);
 }
