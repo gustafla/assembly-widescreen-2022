@@ -1,18 +1,20 @@
 pub mod glesv2;
 mod particle_system;
 mod player;
+mod shader_quad;
 mod render_pass;
 mod resolution;
 mod sync;
 mod terrain;
 
 use glam::{Mat4, Quat, Vec2, Vec3};
-use particle_system::{
-    ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
-};
+//use particle_system::{
+//    ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
+//};
 pub use player::Player;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
+use shader_quad::ShaderQuad;
 use render_pass::RenderPass;
 pub use resolution::Resolution;
 use std::convert::TryFrom;
@@ -32,7 +34,8 @@ pub struct Demo {
     view: Mat4,
     resources: glesv2::ResourceMapper,
     rng: XorShiftRng,
-    particle_system: ParticleSystem,
+    //particle_system: ParticleSystem,
+    sky: ShaderQuad,
     terrain: Terrain,
     resolution: Resolution,
     projection: Mat4,
@@ -61,29 +64,30 @@ impl Demo {
         glesv2::enable(glesv2::CULL_FACE);
         glesv2::depth_func(glesv2::LESS);
 
-        let particle_system = ParticleSystem::new(
-            ParticleSpawner::new(
-                Vec3::new(0., 2., 0.),
-                ParticleSpawnerKind::Box((-5., 0., -5.), (5., 5., 5.)),
-                ParticleSpawnerMethod::Once(1000),
-            ),
-            30.,
-            60,
-            |pos, time| {
-                Vec3::unit_y() * f32::sin(pos.x / 4. + time) * 0.6
-                    + (Quat::from_axis_angle(Vec3::unit_y(), f32::atan2(pos.x, pos.z))
-                        * Vec3::unit_x()
-                        / Vec2::new(pos.x, pos.z).length()
-                        * (pos.y + 2.))
-                        * (5. - time).max(0.)
-            },
-        );
+        //let particle_system = ParticleSystem::new(
+        //    ParticleSpawner::new(
+        //        Vec3::new(0., 2., 0.),
+        //        ParticleSpawnerKind::Box((-5., 0., -5.), (5., 5., 5.)),
+        //        ParticleSpawnerMethod::Once(1000),
+        //    ),
+        //    30.,
+        //    60,
+        //    |pos, time| {
+        //        Vec3::unit_y() * f32::sin(pos.x / 4. + time) * 0.6
+        //            + (Quat::from_axis_angle(Vec3::unit_y(), f32::atan2(pos.x, pos.z))
+        //                * Vec3::unit_x()
+        //                / Vec2::new(pos.x, pos.z).length()
+        //                * (pos.y + 2.))
+        //                * (5. - time).max(0.)
+        //    },
+        //);
 
         let demo = Demo {
             view: Mat4::zero(),
             resources: glesv2::ResourceMapper::new("resources")?,
             rng: XorShiftRng::seed_from_u64(98341),
-            particle_system,
+            //particle_system,
+            sky: ShaderQuad::new(resolution, "sky.frag"),
             terrain: Terrain::new(200, 200, |x, z| (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.),
             resolution,
             noise_texture: {
@@ -125,7 +129,8 @@ impl Demo {
             ),
             post_pass: {
                 let pass = RenderPass::new(resolution, "post.frag", None);
-                let tex = pass.fbo.texture(glesv2::COLOR_ATTACHMENT0).unwrap();
+                let fbo = pass.fbo();
+                let tex = fbo.texture(glesv2::COLOR_ATTACHMENT0).unwrap();
                 tex.parameters(&[(glesv2::TEXTURE_MIN_FILTER, glesv2::LINEAR_MIPMAP_NEAREST)]);
                 pass
             },
@@ -169,23 +174,24 @@ impl Demo {
         // Terrain and particle system ------------------------------------------------------------
 
         self.bloom_pass
-            .fbo
+            .fbo()
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
 
-        glesv2::enable(glesv2::DEPTH_TEST);
-        glesv2::enable(glesv2::BLEND);
+        //glesv2::enable(glesv2::DEPTH_TEST);
+        //glesv2::enable(glesv2::BLEND);
 
-        let sim_time = sync.get("sim_time");
-        self.particle_system.prepare(sim_time, cam_pos);
+        //let sim_time = sync.get("sim_time");
+        //self.particle_system.prepare(sim_time, cam_pos);
+        self.sky.render(&self, &[], &[], None);
         self.terrain.render(&self);
-        self.particle_system.render(&self);
+        //self.particle_system.render(&self);
 
-        glesv2::disable(glesv2::BLEND);
-        glesv2::disable(glesv2::DEPTH_TEST);
+        //glesv2::disable(glesv2::BLEND);
+        //glesv2::disable(glesv2::DEPTH_TEST);
 
         // Bloom pass -----------------------------------------------------------------------------
 
-        self.post_pass.fbo.bind(0);
+        self.post_pass.fbo().bind(0);
         self.bloom_pass.render(&self, &[], &[], None);
 
         // Post pass ------------------------------------------------------------------------------
@@ -212,7 +218,7 @@ impl Demo {
 
         // Mipmap for blur
         self.post_pass
-            .fbo
+            .fbo()
             .texture(glesv2::COLOR_ATTACHMENT0)
             .unwrap()
             .generate_mipmaps();
@@ -221,7 +227,7 @@ impl Demo {
             &self,
             &[
                 self.bloom_pass
-                    .fbo
+                    .fbo()
                     .texture(glesv2::COLOR_ATTACHMENT0)
                     .unwrap(),
                 &self.noise_texture,
