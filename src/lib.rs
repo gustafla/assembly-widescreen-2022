@@ -6,6 +6,7 @@ mod render_pass;
 mod resolution;
 mod sync;
 mod terrain;
+mod city;
 
 use glam::{Mat4, Quat, Vec2, Vec3};
 //use particle_system::{
