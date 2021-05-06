@@ -1,23 +1,24 @@
+mod city;
 pub mod glesv2;
 mod particle_system;
 mod player;
-mod shader_quad;
 mod render_pass;
 mod resolution;
+mod shader_quad;
 mod sync;
 mod terrain;
-mod city;
 
 use glam::{Mat4, Quat, Vec2, Vec3};
 //use particle_system::{
 //    ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
 //};
+use city::City;
 pub use player::Player;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
-use shader_quad::ShaderQuad;
 use render_pass::RenderPass;
 pub use resolution::Resolution;
+use shader_quad::ShaderQuad;
 use std::convert::TryFrom;
 pub use sync::DemoSync;
 use terrain::Terrain;
@@ -38,6 +39,7 @@ pub struct Demo {
     //particle_system: ParticleSystem,
     sky: ShaderQuad,
     terrain: Terrain,
+    city: City,
     resolution: Resolution,
     projection: Mat4,
     noise_texture: glesv2::Texture,
@@ -84,12 +86,13 @@ impl Demo {
         //);
 
         let demo = Demo {
-            view: Mat4::zero(),
+            view: Mat4::ZERO,
             resources: glesv2::ResourceMapper::new("resources")?,
             rng: XorShiftRng::seed_from_u64(98341),
             //particle_system,
             sky: ShaderQuad::new(resolution, "sky.frag"),
             terrain: Terrain::new(200, 200, |x, z| (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.),
+            city: City::new(),
             resolution,
             noise_texture: {
                 let noise_texture = glesv2::Texture::new(glesv2::TEXTURE_2D);
@@ -169,7 +172,7 @@ impl Demo {
                 sync.get("cam:target.y"),
                 sync.get("cam:target.z"),
             ), // center
-            Vec3::unit_y(),
+            Vec3::Y,
         );
 
         // Terrain and particle system ------------------------------------------------------------
@@ -185,6 +188,7 @@ impl Demo {
         //self.particle_system.prepare(sim_time, cam_pos);
         self.sky.render(&self, &[], &[], None);
         self.terrain.render(&self);
+        self.city.render(&self, sync);
         //self.particle_system.render(&self);
 
         //glesv2::disable(glesv2::BLEND);

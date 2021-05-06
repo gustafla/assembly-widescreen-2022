@@ -74,6 +74,14 @@ impl Terrain {
                 program.uniform_location("u_View").unwrap(),
                 glesv2::UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
             ),
+            (
+                program.uniform_location("u_Model").unwrap(),
+                glesv2::UniformValue::Matrix4fv(1, glam::Mat4::IDENTITY.as_ref().as_ptr()),
+            ),
+            (
+                program.uniform_location("u_ModelNormal").unwrap(),
+                glesv2::UniformValue::Matrix3fv(1, glam::Mat3::IDENTITY.as_ref().as_ptr()),
+            ),
         ]));
 
         let index_pos = program.attrib_location("a_Pos").unwrap() as GLuint;
