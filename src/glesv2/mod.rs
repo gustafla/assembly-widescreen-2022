@@ -105,3 +105,9 @@ pub fn clear_color(r: f32, g: f32, b: f32, a: f32) {
         ClearColor(r, g, b, a);
     }
 }
+
+pub fn depth_mask(flag: bool) {
+    unsafe {
+        DepthMask(if flag { TRUE } else { FALSE });
+    }
+}

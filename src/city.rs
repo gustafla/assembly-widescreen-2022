@@ -1,5 +1,6 @@
 use crate::glesv2::{self, types::*};
 use crate::{Demo, DemoSync};
+use std::convert::TryFrom;
 
 struct Building {
     buffer: glesv2::Buffer,
@@ -7,80 +8,69 @@ struct Building {
 }
 
 impl Building {
-    fn new() -> Self {
+    fn new(size: glam::Vec3) -> Self {
+        // Hard coded cube coordinates
+        let coords = &[
+            -1f32, -1., 1., 1., -1., 1., 1., 1., 1., -1., -1., 1., 1., 1., 1., -1., 1., 1., 1.,
+            -1., 1., 1., -1., -1., 1., 1., -1., 1., -1., 1., 1., 1., -1., 1., 1., 1., 1., -1., -1.,
+            -1., -1., -1., -1., 1., -1., 1., -1., -1., -1., 1., -1., 1., 1., -1., -1., -1., -1.,
+            -1., -1., 1., -1., 1., 1., -1., -1., -1., -1., 1., 1., -1., 1., -1., -1., -1., -1., 1.,
+            -1., -1., 1., -1., 1., -1., -1., -1., 1., -1., 1., -1., -1., 1., -1., 1., 1., 1., 1.,
+            1., 1., 1., -1., -1., 1., 1., 1., 1., -1., -1., 1., -1.,
+        ];
+
+        // Hard coded cube normals
+        let normals = &[
+            0., 0., 1., 0., 0., 1., 0., 0., 1., 0., 0., 1., 0., 0., 1., 0., 0., 1., 1., 0., 0., 1.,
+            0., 0., 1., 0., 0., 1., 0., 0., 1., 0., 0., 1., 0., 0., 0., 0., -1., 0., 0., -1., 0.,
+            0., -1., 0., 0., -1., 0., 0., -1., 0., 0., -1., -1., 0., 0., -1., 0., 0., -1., 0., 0.,
+            -1., 0., 0., -1., 0., 0., -1., 0., 0., 0., -1., 0., 0., -1., 0., 0., -1., 0., 0., -1.,
+            0., 0., -1., 0., 0., -1., 0., 0., 1., 0., 0., 1., 0., 0., 1., 0., 0., 1., 0., 0., 1.,
+            0., 0., 1., 0.,
+        ];
+
+        let transformation =
+            // Move the foundations underground
+            glam::Mat4::from_translation(glam::vec3(0., -5., 0.)) *
+            // Scale in width, height and depth
+            glam::Mat4::from_scale(size) *
+            // Raise the cube to sit on origin
+            glam::Mat4::from_translation(glam::vec3(0., 1., 0.));
+
+        // Transform into an interleaved array (quite unoptimized)
+        let transformation_normal = glam::Mat3::from(transformation).inverse().transpose();
+        let mesh: Vec<glam::Vec3> = coords
+            .chunks(3)
+            .zip(normals.chunks(3))
+            .flat_map(|(coord, normal)| {
+                let coord: glam::Vec4 = (coord[0], coord[1], coord[2], 1.).into();
+                let normal: glam::Vec3 = (normal[0], normal[1], normal[2]).into();
+                let coord = transformation * coord;
+                let normal = transformation_normal * normal;
+                vec![coord.into(), normal]
+            })
+            .collect();
+
         let buffer = glesv2::Buffer::new(glesv2::ARRAY_BUFFER);
         buffer.bind();
         #[rustfmt::skip]
         buffer.data(
-            &[
-                // Front
-                -1f32, -1., 1., 0., 0., 1.,
-                1., -1., 1., 0., 0., 1.,
-                1., 1., 1., 0., 0., 1.,
-
-                -1., -1., 1., 0., 0., 1.,
-                1., 1., 1., 0., 0., 1.,
-                -1., 1., 1., 0., 0., 1.,
-
-                // Right
-                1., -1., 1., 1., 0., 0.,
-                1., -1., -1., 1., 0., 0.,
-                1., 1., -1., 1., 0., 0.,
-
-                1., -1., 1., 1., 0., 0.,
-                1., 1., -1., 1., 0., 0.,
-                1., 1., 1., 1., 0., 0.,
-
-                // Back
-                1., -1., -1., 0., 0., -1.,
-                -1., -1., -1., 0., 0., -1.,
-                -1., 1., -1., 0., 0., -1.,
-
-                1., -1., -1., 0., 0., -1.,
-                -1., 1., -1., 0., 0., -1.,
-                1., 1., -1., 0., 0., -1.,
-
-                // Left
-                -1., -1., -1., -1., 0., 0.,
-                -1., -1., 1., -1., 0., 0.,
-                -1., 1., 1., -1., 0., 0.,
-
-                -1., -1., -1., -1., 0., 0.,
-                -1., 1., 1., -1., 0., 0.,
-                -1., 1., -1., -1., 0., 0.,
-
-                // Bottom
-                -1., -1., -1., 0., -1., 0.,
-                1., -1., -1., 0., -1., 0.,
-                1., -1., 1., 0., -1., 0.,
-
-                -1., -1., -1., 0., -1., 0.,
-                1., -1., 1., 0., -1., 0.,
-                -1., -1., 1., 0., -1., 0.,
-
-                // Top
-                -1., 1., 1., 0., 1., 0.,
-                1., 1., 1., 0., 1., 0.,
-                1., 1., -1., 0., 1., 0.,
-
-                -1., 1., 1., 0., 1., 0.,
-                1., 1., -1., 0., 1., 0.,
-                -1., 1., -1., 0., 1., 0.,
-            ],
+            &mesh,
             glesv2::STATIC_DRAW,
         );
 
-        Self { buffer, count: 36 }
+        Self {
+            buffer,
+            count: GLint::try_from(mesh.len() / 2).unwrap(),
+        }
     }
 
-    fn render(&self, demo: &Demo, sync: &mut DemoSync) {
+    fn render(&self, demo: &Demo, sync: &mut DemoSync, model: glam::Mat4) {
         let program = demo
             .resources
             .program("gouraud.vert flatshade.frag")
             .unwrap();
 
-        let time = sync.get("sim_time");
-        let model = glam::Mat4::from_rotation_ypr(time, time * 0.7, -time * 0.44);
         let model_normal = glam::Mat3::from(model).inverse().transpose();
 
         program.bind(Some(&[
@@ -138,18 +128,43 @@ impl Building {
 
 pub struct City {
     buildings: Vec<Building>,
+    layout: Vec<(usize, glam::Mat4)>,
 }
 
 impl City {
-    pub fn new() -> Self {
-        Self {
-            buildings: vec![Building::new()],
+    pub fn new(mut rng: impl rand::Rng, num_buildings: usize) -> Self {
+        let mut buildings = Vec::with_capacity(num_buildings);
+
+        for _ in 0..num_buildings {
+            buildings.push(Building::new(glam::vec3(
+                1.,
+                5. + rng.gen::<f32>() * 4.,
+                1.,
+            )));
         }
+
+        let range = 100.;
+        let clearance = 8.;
+        let mut layout = Vec::new();
+        let mut x = -range;
+        while x < range {
+            let mut z = -range;
+            while z < range {
+                layout.push((
+                    rng.gen_range(0..20),
+                    glam::Mat4::from_translation(glam::vec3(x, 0., z)),
+                ));
+                z += clearance;
+            }
+            x += clearance;
+        }
+
+        Self { buildings, layout }
     }
 
     pub fn render(&self, demo: &Demo, sync: &mut DemoSync) {
-        for building in &self.buildings {
-            building.render(demo, sync);
+        for layout in &self.layout {
+            self.buildings[layout.0].render(demo, sync, layout.1);
         }
     }
 }

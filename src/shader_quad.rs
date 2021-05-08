@@ -23,6 +23,7 @@ impl ShaderQuad {
         uniforms: &[(&str, glesv2::UniformValue)],
         to_resolution: Option<Resolution>,
     ) {
+        glesv2::depth_mask(false);
         let program = demo.resources.program(&self.shader_path).unwrap();
 
         let mut uniforms: Vec<(GLint, glesv2::UniformValue)> = uniforms
@@ -118,5 +119,6 @@ impl ShaderQuad {
 
             glesv2::DrawArrays(glesv2::TRIANGLES, 0, 6);
         }
+        glesv2::depth_mask(true);
     }
 }

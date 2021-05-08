@@ -62,6 +62,7 @@ impl Demo {
 
     pub fn new(resolution: impl Into<Resolution>) -> Result<Self, Error> {
         let resolution = resolution.into();
+        let mut rng = XorShiftRng::seed_from_u64(98341);
 
         glesv2::blend_func(glesv2::SRC_ALPHA, glesv2::ONE_MINUS_SRC_ALPHA);
         glesv2::enable(glesv2::CULL_FACE);
@@ -85,14 +86,16 @@ impl Demo {
         //    },
         //);
 
+        let city = City::new(&mut rng, 20);
+
         let demo = Demo {
             view: Mat4::ZERO,
             resources: glesv2::ResourceMapper::new("resources")?,
-            rng: XorShiftRng::seed_from_u64(98341),
+            rng,
             //particle_system,
             sky: ShaderQuad::new(resolution, "sky.frag"),
             terrain: Terrain::new(200, 200, |x, z| (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.),
-            city: City::new(),
+            city,
             resolution,
             noise_texture: {
                 let noise_texture = glesv2::Texture::new(glesv2::TEXTURE_2D);
@@ -181,7 +184,7 @@ impl Demo {
             .fbo()
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
 
-        //glesv2::enable(glesv2::DEPTH_TEST);
+        glesv2::enable(glesv2::DEPTH_TEST);
         //glesv2::enable(glesv2::BLEND);
 
         //let sim_time = sync.get("sim_time");
