@@ -1,5 +1,6 @@
 mod city;
 pub mod glesv2;
+mod model;
 mod particle_system;
 mod player;
 mod render_pass;
@@ -13,6 +14,7 @@ use glam::{Mat4, Quat, Vec2, Vec3};
 //    ParticleSpawner, ParticleSpawnerKind, ParticleSpawnerMethod, ParticleSystem,
 //};
 use city::City;
+pub use model::Model;
 pub use player::Player;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
@@ -21,7 +23,6 @@ pub use resolution::Resolution;
 use shader_quad::ShaderQuad;
 use std::convert::TryFrom;
 pub use sync::DemoSync;
-use terrain::Terrain;
 use thiserror::Error;
 
 const NOISE_SCALE: u32 = 8;
@@ -38,7 +39,7 @@ pub struct Demo {
     rng: XorShiftRng,
     //particle_system: ParticleSystem,
     sky: ShaderQuad,
-    terrain: Terrain,
+    terrain: Model,
     city: City,
     resolution: Resolution,
     projection: Mat4,
@@ -94,7 +95,9 @@ impl Demo {
             rng,
             //particle_system,
             sky: ShaderQuad::new(resolution, "sky.frag"),
-            terrain: Terrain::new(200, 200, |x, z| (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.),
+            terrain: terrain::generate(200, 200, |x, z| {
+                (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.
+            }),
             city,
             resolution,
             noise_texture: {
@@ -190,7 +193,7 @@ impl Demo {
         //let sim_time = sync.get("sim_time");
         //self.particle_system.prepare(sim_time, cam_pos);
         self.sky.render(&self, &[], &[], None);
-        self.terrain.render(&self);
+        self.terrain.draw(&self, Mat4::IDENTITY);
         self.city.render(&self, sync);
         //self.particle_system.render(&self);
 
