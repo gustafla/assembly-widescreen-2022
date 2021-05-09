@@ -7,7 +7,6 @@ mod render_pass;
 mod resolution;
 mod shader_quad;
 mod sync;
-mod terrain;
 
 use glam::{Mat4, Quat, Vec2, Vec3};
 //use particle_system::{
@@ -39,7 +38,6 @@ pub struct Demo {
     rng: XorShiftRng,
     //particle_system: ParticleSystem,
     sky: ShaderQuad,
-    terrain: Model,
     city: City,
     resolution: Resolution,
     projection: Mat4,
@@ -95,9 +93,6 @@ impl Demo {
             rng,
             //particle_system,
             sky: ShaderQuad::new(resolution, "sky.frag"),
-            terrain: terrain::generate(200, 200, |x, z| {
-                (x * 0.2).sin() * 2. + (z * 0.4).sin() - 2.
-            }),
             city,
             resolution,
             noise_texture: {
@@ -193,7 +188,6 @@ impl Demo {
         //let sim_time = sync.get("sim_time");
         //self.particle_system.prepare(sim_time, cam_pos);
         self.sky.render(&self, &[], &[], None);
-        self.terrain.draw(&self, Mat4::IDENTITY);
         self.city.render(&self, sync);
         //self.particle_system.render(&self);
 
