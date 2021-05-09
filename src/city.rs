@@ -118,7 +118,6 @@ fn generate_building(size: glam::Vec3) -> Model {
 pub struct City {
     terrain: Model,
     buildings: Vec<Model>,
-    layout: Vec<(usize, glam::Mat4)>,
 }
 
 impl City {
@@ -133,32 +132,25 @@ impl City {
             )));
         }
 
-        let range = 100.;
-        let clearance = 8.;
-        let mut layout = Vec::new();
-        let mut x = -range;
-        while x < range {
-            let mut z = -range;
-            while z < range {
-                layout.push((
-                    rng.gen_range(0..20),
-                    glam::Mat4::from_translation(glam::vec3(x, 0., z)),
-                ));
-                z += clearance;
-            }
-            x += clearance;
-        }
-
         Self {
             terrain: generate_terrain(200, 200, |x, z| 0.),
             buildings,
-            layout,
         }
     }
 
     pub fn render(&self, demo: &Demo, sync: &mut DemoSync) {
-        for layout in &self.layout {
-            self.buildings[layout.0].draw(demo, layout.1);
+        let cam = glam::vec2(sync.get("cam:pos.x"), sync.get("cam:pos.z"));
+        let distance = 7.;
+        let radius = 200;
+        for x in 0..radius {
+            for z in 0..radius {
+                let hashpos = cam.floor() * distance
+                    + (glam::vec2(x as f32, z as f32) - glam::Vec2::splat(radius as f32) / 2.)
+                        * distance;
+                let hash = (53 + hashpos.x as usize) * 7 + hashpos.y as usize;
+                let model = glam::Mat4::from_translation(glam::vec3(hashpos.x, 0., hashpos.y));
+                self.buildings[hash % self.buildings.len()].draw(demo, model);
+            }
         }
         self.terrain.draw(demo, glam::Mat4::IDENTITY);
     }
