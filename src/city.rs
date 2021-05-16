@@ -147,17 +147,20 @@ impl City {
         for x in 0..radius {
             for z in 0..radius {
                 // World space position
-                let pos = (cam / interval + glam::vec2(x as f32, z as f32)
+                let mut pos = (cam / interval + glam::vec2(x as f32, z as f32)
                     - glam::Vec2::splat(radius as f32) / 2.)
                     .floor()
                     * interval;
-                let model = glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y));
 
                 // Hash value for this position
                 let x = pos.x as usize;
                 let z = pos.y as usize;
                 let hash = (1046527 + x as usize) * (28657 + z as usize);
 
+                // Add variation to positions
+                pos += glam::vec2((hash % 100) as f32 / 50., (hash % 1001) as f32 / 500.);
+
+                let model = glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y));
                 self.buildings[hash % self.buildings.len()].draw(demo, model);
             }
         }
