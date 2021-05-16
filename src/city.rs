@@ -85,7 +85,7 @@ fn generate_building(size: glam::Vec3) -> Model {
             // Raise the cube to sit on origin
             glam::Mat4::from_translation(glam::vec3(0., 1., 0.));
 
-    // Transform into an interleaved array (quite unoptimized)
+    // Transform into an array of structures
     let transformation_normal = glam::Mat3::from(transformation).inverse().transpose();
     let mesh: Vec<glam::Vec3> = coords
         .chunks(3)
@@ -140,18 +140,31 @@ impl City {
 
     pub fn render(&self, demo: &Demo, sync: &mut DemoSync) {
         let cam = glam::vec2(sync.get("cam:pos.x"), sync.get("cam:pos.z"));
-        let distance = 7.;
-        let radius = 200;
+
+        // Buildings
+        let interval = 7.;
+        let radius = 50;
         for x in 0..radius {
             for z in 0..radius {
-                let hashpos = cam.floor() * distance
-                    + (glam::vec2(x as f32, z as f32) - glam::Vec2::splat(radius as f32) / 2.)
-                        * distance;
-                let hash = (53 + hashpos.x as usize) * 7 + hashpos.y as usize;
-                let model = glam::Mat4::from_translation(glam::vec3(hashpos.x, 0., hashpos.y));
+                // World space position
+                let pos = (cam / interval + glam::vec2(x as f32, z as f32)
+                    - glam::Vec2::splat(radius as f32) / 2.)
+                    .floor()
+                    * interval;
+                let model = glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y));
+
+                // Hash value for this position
+                let x = pos.x as usize;
+                let z = pos.y as usize;
+                let hash = (1046527 + x as usize) * (28657 + z as usize);
+
                 self.buildings[hash % self.buildings.len()].draw(demo, model);
             }
         }
-        self.terrain.draw(demo, glam::Mat4::IDENTITY);
+
+        self.terrain.draw(
+            demo,
+            glam::Mat4::from_translation(glam::vec3(cam.x, 0., cam.y)),
+        );
     }
 }

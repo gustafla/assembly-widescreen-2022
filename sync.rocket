@@ -7,20 +7,20 @@
 		<track name="noise_amount">
 			<key interpolation="0" value="0.050000001" row="0"/>
 		</track>
-		<track name="cam:pos.x">
-			<key interpolation="0" value="-40" row="0"/>
-		</track>
+		<track name="cam:pos.x"/>
 		<track name="cam:pos.y">
-			<key interpolation="1" value="20" row="0"/>
-			<key interpolation="0" value="100" row="64"/>
+			<key interpolation="0" value="20" row="0"/>
 		</track>
 		<track name="cam:pos.z">
 			<key interpolation="1" value="-30" row="0"/>
-			<key interpolation="0" value="-100" row="64"/>
+			<key interpolation="0" value="60" row="160"/>
 		</track>
 		<track name="cam:target.x"/>
 		<track name="cam:target.y"/>
-		<track name="cam:target.z"/>
+		<track name="cam:target.z">
+			<key interpolation="1" value="0" row="0"/>
+			<key interpolation="0" value="180" row="160"/>
+		</track>
 	</tracks>
 	<bookmarks/>
 </sync>
