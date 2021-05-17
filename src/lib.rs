@@ -161,20 +161,17 @@ impl Demo {
             i32::try_from(self.resolution().height).unwrap(),
         );
 
-        let cam_pos = Vec3::new(
+        self.view = Mat4::from_translation(-Vec3::new(
             sync.get("cam:pos.x"),
             sync.get("cam:pos.y"),
             sync.get("cam:pos.z"),
-        );
-        self.view = Mat4::look_at_rh(
-            cam_pos,
-            Vec3::new(
-                sync.get("cam:target.x"),
-                sync.get("cam:target.y"),
-                sync.get("cam:target.z"),
-            ), // center
-            Vec3::Y,
-        );
+        ));
+        self.view = Mat4::from_euler(
+            glam::EulerRot::YXZ,
+            sync.get("cam:yaw") * std::f32::consts::PI,
+            sync.get("cam:pitch") * std::f32::consts::PI,
+            sync.get("cam:roll") * std::f32::consts::PI,
+        ) * self.view;
 
         // Terrain and particle system ------------------------------------------------------------
 
