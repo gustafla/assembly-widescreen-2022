@@ -118,16 +118,18 @@ fn generate_building(size: glam::Vec3) -> Model {
 pub struct City {
     terrain: Model,
     buildings: Vec<Model>,
+    noisefn: noise::Perlin,
 }
 
 impl City {
     pub fn new(mut rng: impl rand::Rng, num_buildings: usize) -> Self {
         let mut buildings = Vec::with_capacity(num_buildings);
 
-        for _ in 0..num_buildings {
+        for i in 0..num_buildings {
+            let i = i as f32 / (num_buildings - 1) as f32;
             buildings.push(generate_building(glam::vec3(
                 1.,
-                5. + rng.gen::<f32>() * 4.,
+                5. + rng.gen::<f32>() * 3. + i * 10.,
                 1.,
             )));
         }
@@ -135,10 +137,12 @@ impl City {
         Self {
             terrain: generate_terrain(200, 200, |x, z| 0.),
             buildings,
+            noisefn: noise::Perlin::new(),
         }
     }
 
     pub fn render(&self, demo: &Demo, sync: &mut DemoSync) {
+        use noise::NoiseFn;
         let cam = glam::vec2(sync.get("cam:pos.x"), sync.get("cam:pos.z"));
 
         // Buildings
@@ -152,16 +156,19 @@ impl City {
                     .floor()
                     * interval;
 
-                // Hash value for this position
-                let x = pos.x as usize;
-                let z = pos.y as usize;
-                let hash = (1046527 + x as usize) * (28657 + z as usize);
+                // noise values for this position
+                let np = pos * 10. / (radius as f32 * interval);
+                let noise = glam::vec2(
+                    self.noisefn.get([np.x as f64, np.y as f64]) as f32,
+                    self.noisefn.get([np.x as f64 - 10., np.y as f64 - 10.]) as f32,
+                );
 
                 // Add variation to positions
-                pos += glam::vec2((hash % 100) as f32 / 50., (hash % 1001) as f32 / 500.);
+                pos += noise * 2.;
 
                 let model = glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y));
-                self.buildings[hash % self.buildings.len()].draw(demo, model);
+                self.buildings[(noise.x * (self.buildings.len() - 1) as f32) as usize]
+                    .draw(demo, model);
             }
         }
 
