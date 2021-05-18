@@ -1,5 +1,6 @@
 use crate::glesv2::{self, types::*};
 use crate::Demo;
+use crate::DemoSync;
 
 pub struct Model {
     pub mode: GLenum,
@@ -9,7 +10,7 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn draw(&self, demo: &Demo, mat_model: glam::Mat4) {
+    pub fn draw(&self, demo: &Demo, sync: &mut DemoSync, mat_model: glam::Mat4) {
         let program = demo
             .resources
             .program("gouraud.vert flatshade.frag")
@@ -38,6 +39,22 @@ impl Model {
                         .as_ref()
                         .as_ptr(),
                 ),
+            ),
+            (
+                program.uniform_location("u_SunDir").unwrap(),
+                glesv2::UniformValue::Vec3f(
+                    sync.get("light:sundir.x"),
+                    sync.get("light:sundir.y"),
+                    sync.get("light:sundir.z"),
+                ),
+            ),
+            (
+                program.uniform_location("u_AmbientLevel").unwrap(),
+                glesv2::UniformValue::Float(sync.get("light:ambient")),
+            ),
+            (
+                program.uniform_location("u_SunLevel").unwrap(),
+                glesv2::UniformValue::Float(sync.get("light:sun")),
             ),
         ]));
 

@@ -10,13 +10,15 @@ uniform mat4 u_Projection;
 uniform mat4 u_View;
 uniform mat4 u_Model;
 uniform mat3 u_ModelNormal;
+uniform vec3 u_SunDir;
+uniform float u_AmbientLevel;
+uniform float u_SunLevel;
 
 void main() {
-    vec3 sundir = normalize(vec3(2., -3., 0.4));
+    float l = u_AmbientLevel;
 
-    float l = 0.01;
-
-    l += max(dot(u_ModelNormal * a_Normal, -sundir), 0.) * 0.2;
+    l += max(dot(u_ModelNormal * a_Normal, -normalize(u_SunDir)), 0.) *
+        u_SunLevel;
 
     v_Color = vec4(vec3(l), 1.);
 

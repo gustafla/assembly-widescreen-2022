@@ -1,11 +1,12 @@
 use crate::glesv2::{self, types::*};
 use crate::{Demo, DemoSync, Model};
+use noise::NoiseFn;
 use std::convert::TryFrom;
 
 pub fn generate_terrain(
     xsize: GLushort,
     zsize: GLushort,
-    height_map: fn(f32, f32) -> f32,
+    height_map: impl Fn(f32, f32) -> f32,
 ) -> Model {
     let vertex_buffer = glesv2::Buffer::new(glesv2::ARRAY_BUFFER);
     let mut geometry = Vec::with_capacity(xsize as usize * zsize as usize);
@@ -115,45 +116,68 @@ fn generate_building(size: glam::Vec3) -> Model {
     }
 }
 
+const TERRAIN_CHUNKS: u16 = 20;
+const TERRAIN_SIZE: u16 = 100;
+
 pub struct City {
-    terrain: Model,
+    terrain: Vec<Vec<Model>>,
     buildings: Vec<Model>,
     noisefn: noise::Perlin,
 }
 
 impl City {
     pub fn new(mut rng: impl rand::Rng, num_buildings: usize) -> Self {
-        let mut buildings = Vec::with_capacity(num_buildings);
+        let noisefn = noise::Perlin::new();
+        let mut terrain = Vec::with_capacity(TERRAIN_CHUNKS.into());
+        for x in 0..TERRAIN_CHUNKS {
+            if terrain.len() <= x.into() {
+                terrain.push(Vec::with_capacity(TERRAIN_CHUNKS.into()));
+            }
 
+            for z in 0..TERRAIN_CHUNKS {
+                terrain[x as usize].push(generate_terrain(
+                    TERRAIN_SIZE + 1,
+                    TERRAIN_SIZE + 1,
+                    |xx, zz| {
+                        noisefn.get([
+                            (x as f64 + xx as f64 / TERRAIN_SIZE as f64),
+                            (z as f64 + zz as f64 / TERRAIN_SIZE as f64),
+                        ]) as f32
+                            * 100.
+                    },
+                ));
+            }
+        }
+
+        let mut buildings = Vec::with_capacity(num_buildings);
         for i in 0..num_buildings {
             let i = i as f32 / (num_buildings - 1) as f32;
             buildings.push(generate_building(glam::vec3(
-                1.,
+                4. - rng.gen::<f32>() * i * 2.,
                 5. + rng.gen::<f32>() * 3. + i * 10.,
-                1.,
+                4. - rng.gen::<f32>() * i * 2.,
             )));
         }
 
         Self {
-            terrain: generate_terrain(200, 200, |x, z| 0.),
+            terrain,
             buildings,
-            noisefn: noise::Perlin::new(),
+            noisefn,
         }
     }
 
     pub fn render(&self, demo: &Demo, sync: &mut DemoSync) {
-        use noise::NoiseFn;
         let cam = glam::vec2(sync.get("cam:pos.x"), sync.get("cam:pos.z"));
 
         // Buildings
-        let interval = 7.;
-        let radius = 50;
+        let interval = 15.;
+        let radius = 30;
         for x in 0..radius {
             for z in 0..radius {
                 // World space position
                 let mut pos = (cam / interval + glam::vec2(x as f32, z as f32)
-                    - glam::Vec2::splat(radius as f32) / 2.)
-                    .floor()
+                    - glam::Vec2::splat(radius as f32 / 2.))
+                .floor()
                     * interval;
 
                 // noise values for this position
@@ -168,13 +192,30 @@ impl City {
 
                 let model = glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y));
                 self.buildings[(noise.x * (self.buildings.len() - 1) as f32) as usize]
-                    .draw(demo, model);
+                    .draw(demo, sync, model);
             }
         }
 
-        self.terrain.draw(
-            demo,
-            glam::Mat4::from_translation(glam::vec3(cam.x, 0., cam.y)),
-        );
+        // Terrain
+        let radius = 8;
+        for x in 0..radius {
+            for z in 0..radius {
+                let ts = TERRAIN_SIZE as f32;
+                let viewpos = glam::vec2(x as f32, z as f32);
+                let pos = (cam / ts + viewpos - glam::Vec2::splat(radius as f32 / 2.)).floor() * ts;
+
+                let idx = (cam / ts + viewpos) + glam::Vec2::splat(TERRAIN_CHUNKS as f32 / 2.);
+                if idx.x >= 0. && (idx.x as usize) < self.terrain.len() {
+                    let vec = &self.terrain[idx.x as usize];
+                    if idx.y >= 0. && (idx.y as usize) < vec.len() {
+                        vec[idx.y as usize].draw(
+                            demo,
+                            sync,
+                            glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y)),
+                        );
+                    }
+                }
+            }
+        }
     }
 }
