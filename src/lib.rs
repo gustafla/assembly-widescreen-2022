@@ -30,12 +30,15 @@ const NOISE_SCALE: u32 = 8;
 pub enum Error {
     #[error(transparent)]
     ResourceLoading(#[from] glesv2::resource_mapper::Error),
+    #[error(transparent)]
+    Framebuffer(#[from] glesv2::framebuffer::Error),
 }
 
 pub struct Demo {
     view: Mat4,
     resources: glesv2::ResourceMapper,
     rng: XorShiftRng,
+    shadow_fbo: glesv2::Framebuffer,
     //particle_system: ParticleSystem,
     sky: ShaderQuad,
     city: City,
@@ -91,6 +94,36 @@ impl Demo {
             view: Mat4::ZERO,
             resources: glesv2::ResourceMapper::new("resources")?,
             rng,
+            shadow_fbo: {
+                let depth_texture = glesv2::Texture::new(glesv2::TEXTURE_2D);
+                // DEPTH_COMPONENT textures are not vanilla ES 2.0 but let's try if it works
+                depth_texture.image::<u8>(
+                    0,
+                    glesv2::DEPTH_COMPONENT,
+                    2048,
+                    2048,
+                    glesv2::FLOAT,
+                    None,
+                );
+                depth_texture.parameters(&[
+                    (glesv2::TEXTURE_MIN_FILTER, glesv2::NEAREST),
+                    (glesv2::TEXTURE_MAG_FILTER, glesv2::NEAREST),
+                    (glesv2::TEXTURE_WRAP_S, glesv2::CLAMP_TO_EDGE),
+                    (glesv2::TEXTURE_WRAP_T, glesv2::CLAMP_TO_EDGE),
+                ]);
+                glesv2::Framebuffer::new(
+                    Some(vec![(
+                        glesv2::DEPTH_ATTACHMENT,
+                        glesv2::TextureAttachment {
+                            target: glesv2::TEXTURE_2D,
+                            texture: depth_texture,
+                            mipmap_level: 0,
+                        },
+                    )]),
+                    None,
+                )
+                .expect("Oops this kind of depth texture FBO isn't supported")
+            },
             //particle_system,
             sky: ShaderQuad::new(resolution, "sky.frag"),
             city,
