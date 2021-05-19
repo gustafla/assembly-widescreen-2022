@@ -121,8 +121,7 @@ impl Demo {
                         },
                     )]),
                     None,
-                )
-                .expect("Oops this kind of depth texture FBO isn't supported")
+                )?
             },
             //particle_system,
             sky: ShaderQuad::new(resolution, "sky.frag"),
@@ -200,29 +199,31 @@ impl Demo {
             sync.get("cam:pos.z"),
         ));
         self.view = Mat4::from_euler(
-            glam::EulerRot::YXZ,
-            sync.get("cam:yaw") * std::f32::consts::PI,
-            sync.get("cam:pitch") * std::f32::consts::PI,
+            glam::EulerRot::ZXY,
             sync.get("cam:roll") * std::f32::consts::PI,
+            sync.get("cam:pitch") * std::f32::consts::PI,
+            sync.get("cam:yaw") * std::f32::consts::PI,
         ) * self.view;
 
-        // Terrain and particle system ------------------------------------------------------------
+        // 3D models ------------------------------------------------------------------------------
 
+        glesv2::enable(glesv2::DEPTH_TEST);
+
+        // Render depth from the sun's perspective
+        // Generate sun's matrix etc
+        self.shadow_fbo.bind(glesv2::DEPTH_BUFFER_BIT);
+        // TODO render the city but with the sun's matrices
+
+        // Render actual image
         self.bloom_pass
             .fbo()
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
-
-        glesv2::enable(glesv2::DEPTH_TEST);
-        //glesv2::enable(glesv2::BLEND);
 
         //let sim_time = sync.get("sim_time");
         //self.particle_system.prepare(sim_time, cam_pos);
         self.sky.render(&self, &[], &[], None);
         self.city.render(&self, sync);
         //self.particle_system.render(&self);
-
-        //glesv2::disable(glesv2::BLEND);
-        //glesv2::disable(glesv2::DEPTH_TEST);
 
         // Bloom pass -----------------------------------------------------------------------------
 

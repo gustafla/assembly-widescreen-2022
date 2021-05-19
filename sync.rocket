@@ -12,7 +12,7 @@
 			<key interpolation="0" value="1000" row="160"/>
 		</track>
 		<track name="cam:pos.y">
-			<key interpolation="0" value="900" row="0"/>
+			<key interpolation="0" value="100" row="0"/>
 			<key interpolation="0" value="50" row="400"/>
 		</track>
 		<track name="cam:pos.z">
@@ -20,14 +20,20 @@
 			<key interpolation="0" value="1000" row="160"/>
 		</track>
 		<track name="cam:yaw">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="1" value="0" row="0"/>
+			<key interpolation="0" value="10" row="160"/>
 		</track>
 		<track name="cam:pitch">
-			<key interpolation="0" value="0.5" row="0"/>
+			<key interpolation="0" value="0.1" row="0"/>
 			<key interpolation="0" value="0.5" row="160"/>
 		</track>
 		<track name="cam:roll">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="2" value="0" row="0"/>
+			<key interpolation="2" value="0.2" row="8"/>
+			<key interpolation="2" value="-0.2" row="24"/>
+			<key interpolation="2" value="0.2" row="40"/>
+			<key interpolation="2" value="-0.2" row="56"/>
+			<key interpolation="0" value="0" row="64"/>
 		</track>
 		<track name="light:sundir.x">
 			<key interpolation="1" value="-1" row="0"/>
