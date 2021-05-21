@@ -123,7 +123,7 @@ impl ParticleSystem {
         }
     }
 
-    pub fn render(&self, demo: &Demo) {
+    pub fn render(&self, demo: &Demo, projection: glam::Mat4, view: glam::Mat4) {
         let program = demo
             .resources
             .program("particle.vert flatshade.frag")
@@ -139,11 +139,11 @@ impl ParticleSystem {
             ),
             (
                 program.uniform_location("u_Projection").unwrap(),
-                glesv2::UniformValue::Matrix4fv(1, demo.projection().as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, projection.as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                glesv2::UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, view.as_ref().as_ptr()),
             ),
         ]));
 

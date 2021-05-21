@@ -10,7 +10,14 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn draw(&self, demo: &Demo, sync: &mut DemoSync, mat_model: glam::Mat4) {
+    pub fn draw(
+        &self,
+        demo: &Demo,
+        sync: &mut DemoSync,
+        projection: &glam::Mat4,
+        view: &glam::Mat4,
+        model: &glam::Mat4,
+    ) {
         let program = demo
             .resources
             .program("gouraud.vert flatshade.frag")
@@ -19,21 +26,21 @@ impl Model {
         program.bind(Some(&[
             (
                 program.uniform_location("u_Projection").unwrap(),
-                glesv2::UniformValue::Matrix4fv(1, demo.projection().as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, projection.as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_View").unwrap(),
-                glesv2::UniformValue::Matrix4fv(1, demo.view().as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, view.as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_Model").unwrap(),
-                glesv2::UniformValue::Matrix4fv(1, mat_model.as_ref().as_ptr()),
+                glesv2::UniformValue::Matrix4fv(1, model.as_ref().as_ptr()),
             ),
             (
                 program.uniform_location("u_ModelNormal").unwrap(),
                 glesv2::UniformValue::Matrix3fv(
                     1,
-                    glam::Mat3::from(mat_model)
+                    glam::Mat3::from(*model)
                         .inverse()
                         .transpose()
                         .as_ref()

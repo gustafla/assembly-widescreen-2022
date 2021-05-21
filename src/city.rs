@@ -166,7 +166,13 @@ impl City {
         }
     }
 
-    pub fn render(&self, demo: &Demo, sync: &mut DemoSync) {
+    pub fn render(
+        &self,
+        demo: &Demo,
+        sync: &mut DemoSync,
+        projection: &glam::Mat4,
+        view: &glam::Mat4,
+    ) {
         let cam = glam::vec2(sync.get("cam:pos.x"), sync.get("cam:pos.z"));
 
         // Buildings
@@ -192,7 +198,7 @@ impl City {
 
                 let model = glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y));
                 self.buildings[(noise.x * (self.buildings.len() - 1) as f32) as usize]
-                    .draw(demo, sync, model);
+                    .draw(demo, sync, projection, view, &model);
             }
         }
 
@@ -211,7 +217,9 @@ impl City {
                         vec[idx.y as usize].draw(
                             demo,
                             sync,
-                            glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y)),
+                            projection,
+                            view,
+                            &glam::Mat4::from_translation(glam::vec3(pos.x, 0., pos.y)),
                         );
                     }
                 }

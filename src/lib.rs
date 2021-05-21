@@ -35,7 +35,6 @@ pub enum Error {
 }
 
 pub struct Demo {
-    view: Mat4,
     resources: glesv2::ResourceMapper,
     rng: XorShiftRng,
     shadow_fbo: glesv2::Framebuffer,
@@ -52,14 +51,6 @@ pub struct Demo {
 impl Demo {
     pub fn resolution(&self) -> Resolution {
         self.resolution
-    }
-
-    pub fn view(&self) -> Mat4 {
-        self.view
-    }
-
-    pub fn projection(&self) -> Mat4 {
-        self.projection
     }
 
     pub fn new(resolution: impl Into<Resolution>) -> Result<Self, Error> {
@@ -91,7 +82,6 @@ impl Demo {
         let city = City::new(&mut rng, 20);
 
         let demo = Demo {
-            view: Mat4::ZERO,
             resources: glesv2::ResourceMapper::new("resources")?,
             rng,
             shadow_fbo: {
@@ -193,17 +183,16 @@ impl Demo {
             i32::try_from(self.resolution().height).unwrap(),
         );
 
-        self.view = Mat4::from_translation(-Vec3::new(
-            sync.get("cam:pos.x"),
-            sync.get("cam:pos.y"),
-            sync.get("cam:pos.z"),
-        ));
-        self.view = Mat4::from_euler(
+        let view = Mat4::from_euler(
             glam::EulerRot::ZXY,
             sync.get("cam:roll") * std::f32::consts::PI,
             sync.get("cam:pitch") * std::f32::consts::PI,
             sync.get("cam:yaw") * std::f32::consts::PI,
-        ) * self.view;
+        ) * Mat4::from_translation(-Vec3::new(
+            sync.get("cam:pos.x"),
+            sync.get("cam:pos.y"),
+            sync.get("cam:pos.z"),
+        ));
 
         // 3D models ------------------------------------------------------------------------------
 
@@ -222,7 +211,7 @@ impl Demo {
         //let sim_time = sync.get("sim_time");
         //self.particle_system.prepare(sim_time, cam_pos);
         self.sky.render(&self, &[], &[], None);
-        self.city.render(&self, sync);
+        self.city.render(&self, sync, &self.projection, &view);
         //self.particle_system.render(&self);
 
         // Bloom pass -----------------------------------------------------------------------------
