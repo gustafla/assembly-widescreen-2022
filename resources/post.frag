@@ -9,6 +9,7 @@ uniform float u_Beat;
 uniform sampler2D u_InputSampler0; // Bloom
 uniform sampler2D u_InputSampler1; // Render
 uniform sampler2D u_InputSampler2; // Noise
+uniform sampler2D u_InputSampler3; // TEST TEST DEPTH
 uniform vec2 u_Resolution;
 
 float bloom(vec2 coords) {
@@ -38,8 +39,9 @@ void main() {
             vec3(bloom(distor)) + // bloom
             texture2D(u_InputSampler1, distor).rgb - // image
             length(center * 0.4), 0.) + // vignette
-        texture2D(u_InputSampler2, noisecoord).r * u_NoiseAmount; // noise
+        texture2D(u_InputSampler2, noisecoord).r;// * u_NoiseAmount; // noise
 
     // output
-    gl_FragColor = vec4(color + u_Beat * 0.01, 1.);
+    gl_FragColor = vec4(color + u_Beat * 0.01, 1.) * 0.00001;
+    gl_FragColor += texture2D(u_InputSampler3, v_TexCoord).r - u_NoiseAmount;
 }

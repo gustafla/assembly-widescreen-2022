@@ -5,7 +5,7 @@
 			<key interpolation="0" value="20" row="1183"/>
 		</track>
 		<track name="noise_amount">
-			<key interpolation="0" value="0.050000001" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="cam:pos.x">
 			<key interpolation="1" value="-2000" row="0"/>

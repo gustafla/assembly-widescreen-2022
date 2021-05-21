@@ -34,6 +34,8 @@ pub enum Error {
     Framebuffer(#[from] glesv2::framebuffer::Error),
 }
 
+const SHADOW_RESOLUTION: glesv2::GLint = 2048;
+
 pub struct Demo {
     resources: glesv2::ResourceMapper,
     rng: XorShiftRng,
@@ -90,8 +92,8 @@ impl Demo {
                 depth_texture.image::<u8>(
                     0,
                     glesv2::DEPTH_COMPONENT,
-                    2048,
-                    2048,
+                    SHADOW_RESOLUTION,
+                    SHADOW_RESOLUTION,
                     glesv2::FLOAT,
                     None,
                 );
@@ -176,13 +178,31 @@ impl Demo {
         let to_resolution = to_resolution.into();
 
         glesv2::clear_color(0., 0., 0., 1.);
+
+        // 3D models ------------------------------------------------------------------------------
+
+        glesv2::enable(glesv2::DEPTH_TEST);
+
+        // Render depth from the sun's perspective
+        glesv2::viewport(0, 0, SHADOW_RESOLUTION, SHADOW_RESOLUTION);
+        let sundir = glam::vec3(
+            sync.get("light:sundir.x"),
+            sync.get("light:sundir.y"),
+            sync.get("light:sundir.z"),
+        );
+        let light_projection = glam::Mat4::orthographic_rh_gl(-400., 400., -400., 400., 1., 1000.);
+        let light_view = glam::Mat4::look_at_rh(-sundir * 400., glam::Vec3::ZERO, glam::Vec3::Y);
+        self.shadow_fbo.bind(glesv2::DEPTH_BUFFER_BIT);
+        self.city
+            .render(&self, sync, &light_projection, &light_view);
+
+        // Render actual image
         glesv2::viewport(
             0,
             0,
             i32::try_from(self.resolution().width).unwrap(),
             i32::try_from(self.resolution().height).unwrap(),
         );
-
         let view = Mat4::from_euler(
             glam::EulerRot::ZXY,
             sync.get("cam:roll") * std::f32::consts::PI,
@@ -193,17 +213,6 @@ impl Demo {
             sync.get("cam:pos.y"),
             sync.get("cam:pos.z"),
         ));
-
-        // 3D models ------------------------------------------------------------------------------
-
-        glesv2::enable(glesv2::DEPTH_TEST);
-
-        // Render depth from the sun's perspective
-        // Generate sun's matrix etc
-        self.shadow_fbo.bind(glesv2::DEPTH_BUFFER_BIT);
-        // TODO render the city but with the sun's matrices
-
-        // Render actual image
         self.bloom_pass
             .fbo()
             .bind(glesv2::COLOR_BUFFER_BIT | glesv2::DEPTH_BUFFER_BIT);
@@ -256,6 +265,7 @@ impl Demo {
                     .texture(glesv2::COLOR_ATTACHMENT0)
                     .unwrap(),
                 &self.noise_texture,
+                &self.shadow_fbo.texture(glesv2::DEPTH_ATTACHMENT).unwrap(),
             ],
             &[
                 (
