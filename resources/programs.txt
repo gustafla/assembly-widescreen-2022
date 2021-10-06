@@ -1,5 +1,2 @@
 shader.vert bloom.frag
 shader.vert post.frag
-shader.vert sky.frag
-particle.vert flatshade.frag
-gouraud.vert flatshade.frag

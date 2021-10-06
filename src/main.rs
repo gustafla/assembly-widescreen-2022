@@ -11,12 +11,7 @@ fn print_help() {
     --benchmark         Log frametimes
     -w, --width         Set the rendering width (default 1280)
     -h, --height        Set the rendering height (default 720)
-"#
-    );
-
-    #[cfg(feature = "glutin")]
-    print!(
-        r#"    --list-monitors     List available monitors and video modes
+    --list-monitors     List available monitors and video modes
     --monitor id        Specify a monitor to use in fullscreen
     --exclusive mode    Exclusive fullscreen (see --list-monitors for modes)
     --windowed          Don't go fullscreen
@@ -27,7 +22,6 @@ WINIT_UNIX_BACKEND to x11 or wayland.
     );
 }
 
-#[cfg(feature = "glutin")]
 struct DisplayConfiguration {
     title: &'static str,
     monitor: Option<usize>,
@@ -35,7 +29,6 @@ struct DisplayConfiguration {
     windowed: bool,
 }
 
-#[cfg(feature = "glutin")]
 fn list_monitors() {
     let event_loop = glutin::event_loop::EventLoop::new();
     for (i, monitor) in event_loop.available_monitors().enumerate() {
@@ -53,7 +46,6 @@ fn list_monitors() {
     }
 }
 
-#[cfg(feature = "glutin")]
 fn run(
     internal_size: Resolution,
     mut player: Player,
@@ -187,138 +179,15 @@ fn run(
     })
 }
 
-#[cfg(feature = "rpi")]
-fn run(internal_size: Resolution, mut player: Player, mut sync: DemoSync) -> Result<()> {
-    use rpi_window::{bcm_host, dispmanx};
-
-    // Initialize videocore rendering and get screen resolution
-    bcm_host::init();
-    let size = bcm_host::graphics_get_display_size(0).context("Cannot query display size")?;
-
-    // Fill parameter structs
-    let mut src = dispmanx::Rect {
-        x: 0,
-        y: 0,
-        width: (internal_size.width as i32) << 16,
-        height: (internal_size.height as i32) << 16,
-    };
-    let internal_aspect = internal_size.width as f32 / internal_size.height as f32;
-    let display_aspect = size.width as f32 / size.height as f32;
-    let scale = if internal_aspect < display_aspect {
-        size.height as f32 / internal_size.height as f32
-    } else {
-        size.width as f32 / internal_size.width as f32
-    };
-    let to_monitor_width = internal_size.width as f32 * scale;
-    let to_monitor_height = internal_size.height as f32 * scale;
-    let remaining_width = size.width as f32 - to_monitor_width;
-    let remaining_height = size.height as f32 - to_monitor_height;
-    let mut dst = dispmanx::Rect {
-        x: (remaining_width / 2.) as i32, // Center the picture if narrow or tall
-        y: (remaining_height / 2.) as i32, // Center the picture if thin or wide
-        width: to_monitor_width as i32,
-        height: to_monitor_height as i32,
-    };
-    let mut alpha = dispmanx::VCAlpha {
-        flags: dispmanx::FlagsAlpha::FixedAllPixels,
-        opacity: 255,
-        mask: 0,
-    };
-
-    // Create dispmanx Window for EGL
-    let mut window = dispmanx::create_window(
-        0,
-        &mut dst,
-        &mut src,
-        &mut alpha,
-        dispmanx::Transform::NoRotate,
-    );
-
-    // EGL
-    let egl_attribs = [
-        khronos_egl::RED_SIZE,
-        5,
-        khronos_egl::GREEN_SIZE,
-        6,
-        khronos_egl::BLUE_SIZE,
-        5,
-        khronos_egl::ALPHA_SIZE,
-        0,
-        khronos_egl::DEPTH_SIZE,
-        0,
-        khronos_egl::STENCIL_SIZE,
-        0,
-        khronos_egl::SAMPLE_BUFFERS,
-        0,
-        khronos_egl::NONE,
-    ];
-    let egl = khronos_egl::Instance::new(khronos_egl::Static);
-    let egl_display = egl
-        .get_display(khronos_egl::DEFAULT_DISPLAY)
-        .context("Cannot get EGL display")?;
-    egl.initialize(egl_display)
-        .context("Cannot initialize EGL")?;
-    let egl_config = egl
-        .choose_first_config(egl_display, &egl_attribs)
-        .context("Cannot get EGL configurations")?
-        .context("No suitable EGL configuration available")?;
-    let egl_buffer = unsafe {
-        egl.create_window_surface(
-            egl_display,
-            egl_config,
-            &mut window as *mut dispmanx::Window as khronos_egl::NativeWindowType,
-            None,
-        )
-    }
-    .context("Cannot create an EGL window surface buffer")?;
-    let egl_context_attribs = [khronos_egl::CONTEXT_CLIENT_VERSION, 2, khronos_egl::NONE];
-    let egl_context = egl
-        .create_context(egl_display, egl_config, None, &egl_context_attribs)
-        .context("Cannot create an EGL context")?;
-    egl.make_current(
-        egl_display,
-        Some(egl_buffer),
-        Some(egl_buffer),
-        Some(egl_context),
-    )
-    .context("Cannot make context current")?;
-
-    // Load demo content
-    let mut demo = Demo::new(internal_size)?;
-
-    // If release build, start the music
-    #[cfg(not(debug_assertions))]
-    {
-        player.play();
-    }
-
-    loop {
-        // Update sync, timing and audio related frame parameters
-        if sync.update(&mut player) {
-            break;
-        }
-
-        // Render the frame
-        if let Err(e) = demo.render(&mut sync, internal_size) {
-            panic!("{}", e);
-        }
-
-        // Display the frame
-        egl.swap_buffers(egl_display, egl_buffer)
-            .context("EGL buffer swap failed")?;
-    }
-
-    // Deinitialize videocore
-    bcm_host::deinit();
-
-    Ok(())
-}
-
 fn main() -> Result<()> {
     // Process CLI
     let mut pargs = Arguments::from_env();
     if pargs.contains("--help") {
         print_help();
+        return Ok(());
+    }
+    if pargs.contains("--list-monitors") {
+        list_monitors();
         return Ok(());
     }
     let benchmark = pargs.contains("--benchmark");
@@ -331,17 +200,8 @@ fn main() -> Result<()> {
             return Err(anyhow!("Size cannot be {}", size));
         }
     }
+    eprintln!("See --help if the default options don't work for you");
 
-    // Process glutin-specific args
-    #[cfg(feature = "glutin")]
-    {
-        if pargs.contains("--list-monitors") {
-            list_monitors();
-            return Ok(());
-        }
-        eprintln!("See --help if the default options don't work for you");
-    }
-    #[cfg(feature = "glutin")]
     let disp = DisplayConfiguration {
         title: "Demo",
         monitor: pargs.opt_value_from_str("--monitor")?,
@@ -367,10 +227,7 @@ fn main() -> Result<()> {
     // Initialize rocket
     let sync = DemoSync::new(120., 8., benchmark || cfg!(debug_assertions));
 
-    #[cfg(feature = "glutin")]
     run(internal_size, player, sync, disp)?;
-    #[cfg(feature = "rpi")]
-    run(internal_size, player, sync)?;
 
     Ok(())
 }

@@ -6,33 +6,6 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
-    #[cfg(all(feature = "glutin", feature = "rpi"))]
-    {
-        println!();
-        println!();
-        println!();
-        println!("------------------------------------------------------------------------------");
-        println!("glutin and rpi aren't supported at the same time (use --no-default-features)");
-        println!("------------------------------------------------------------------------------");
-        println!();
-        println!();
-        println!();
-        panic!();
-    }
-    #[cfg(not(any(feature = "glutin", feature = "rpi")))]
-    {
-        println!();
-        println!();
-        println!();
-        println!("------------------------------------------------------------------------------");
-        println!("Please select either glutin or rpi. (use --features \"glutin\" or \"rpi\")");
-        println!("------------------------------------------------------------------------------");
-        println!();
-        println!();
-        println!();
-        panic!();
-    }
-
     // Generate GL ES 2.0 bindings
     let dest = Path::new(&env::var("OUT_DIR").unwrap()).join("gles2_bindings.rs");
     let mut file = fs::File::create(&dest).unwrap();
@@ -42,13 +15,5 @@ fn main() {
 
     // Link GL ES 2.0
     let pkg_config = pkg_config::Config::new();
-    #[cfg(feature = "glutin")]
-    {
-        pkg_config.probe("glesv2").unwrap();
-    }
-    #[cfg(feature = "rpi")]
-    {
-        pkg_config.probe("brcmegl").unwrap();
-        pkg_config.probe("brcmglesv2").unwrap();
-    }
+    pkg_config.probe("glesv2").unwrap();
 }
