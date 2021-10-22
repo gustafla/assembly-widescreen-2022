@@ -1,4 +1,5 @@
 pub mod glesv2;
+mod scene;
 mod player;
 mod render_pass;
 mod resolution;
