@@ -2,7 +2,6 @@ use crate::glesv2::{self, types::*};
 use crate::shader_quad::ShaderQuad;
 use crate::Demo;
 use crate::Resolution;
-use std::convert::TryFrom;
 
 pub struct RenderPass {
     fbo: glesv2::Framebuffer,

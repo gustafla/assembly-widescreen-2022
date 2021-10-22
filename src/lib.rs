@@ -10,7 +10,6 @@ use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use render_pass::RenderPass;
 pub use resolution::Resolution;
-use std::convert::TryFrom;
 pub use sync::DemoSync;
 use thiserror::Error;
 

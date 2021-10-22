@@ -1,7 +1,6 @@
 use crate::glesv2::{self, types::*};
 use crate::Demo;
 use crate::Resolution;
-use std::convert::TryFrom;
 
 pub struct ShaderQuad {
     shader_path: String,
