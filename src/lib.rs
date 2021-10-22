@@ -13,7 +13,7 @@ pub use resolution::Resolution;
 pub use sync::DemoSync;
 use thiserror::Error;
 
-const NOISE_SCALE: u32 = 12;
+const NOISE_SCALE: u32 = 16;
 
 #[derive(Error, Debug)]
 pub enum Error {
