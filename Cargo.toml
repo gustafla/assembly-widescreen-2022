@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 log = { version = "0.4.17", features = ["release_max_level_info"] }
+bytemuck = { version = "1.9.1", features = ["derive"] }
 anyhow = "1.0.58"
 thiserror = "1.0.31"
 lewton = "0.10.2"
@@ -16,6 +17,8 @@ pico-args = "0.5.0"
 alsa = "0.6.0"
 glam = "0.21.2"
 winit = "0.26.1"
+wgpu = "0.13.1"
+pollster = "0.2.5"
 
 [profile.dev]
 opt-level = 1
