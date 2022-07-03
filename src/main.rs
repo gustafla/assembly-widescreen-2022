@@ -1,8 +1,15 @@
 mod logger;
 
 use anyhow::{anyhow, Context, Result};
-use demo::{Demo, DemoSync, Player, Resolution};
+use demo::{Demo, DemoSync, Player};
 use pico_args::Arguments;
+use winit::{
+    dpi::PhysicalSize,
+    event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    platform::unix::WindowBuilderExtUnix,
+    window::{Fullscreen, WindowBuilder},
+};
 
 fn print_help() {
     print!(
@@ -30,7 +37,7 @@ struct DisplayConfiguration {
 }
 
 fn list_monitors() {
-    let event_loop = glutin::event_loop::EventLoop::new();
+    let event_loop = winit::event_loop::EventLoop::new();
     for (i, monitor) in event_loop.available_monitors().enumerate() {
         println!("Monitor {}", i);
         for (j, mode) in monitor.video_modes().enumerate() {
@@ -47,19 +54,11 @@ fn list_monitors() {
 }
 
 fn run(
-    internal_size: Resolution,
+    internal_size: PhysicalSize<u32>,
     mut player: Player,
     mut sync: DemoSync,
     disp: DisplayConfiguration,
 ) -> Result<()> {
-    use glutin::{
-        event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-        event_loop::{ControlFlow, EventLoop},
-        platform::unix::WindowBuilderExtUnix,
-        window::{Fullscreen, WindowBuilder},
-        Api, ContextBuilder, GlRequest,
-    };
-
     // Initialize winit
     let event_loop = EventLoop::new();
 
@@ -102,28 +101,14 @@ fn run(
         .with_inner_size(internal_size)
         .with_fullscreen(fullscreen)
         .with_decorations(false);
-    let windowed_context = ContextBuilder::new()
-        .with_gl(GlRequest::Specific(Api::OpenGlEs, (2, 0)))
-        .with_vsync(true)
-        .with_hardware_acceleration(None)
-        .with_pixel_format(24, 0)
-        .with_depth_buffer(0)
-        .with_stencil_buffer(0)
-        .with_multisampling(0)
-        .build_windowed(window_builder, &event_loop)
-        .context("Failed to build a window")?;
-
-    // Make OpenGL context current
-    let windowed_context = unsafe { windowed_context.make_current() }
-        .map_err(|e| anyhow!("Failed to make context current: {:?}", e))?;
 
     // Load demo content
-    let mut demo = Demo::new(internal_size)?;
+    let mut demo = Demo::new();
 
     // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]
     {
-        windowed_context.window().set_cursor_visible(false);
+        window.set_cursor_visible(false);
         player.play();
     }
 
@@ -145,15 +130,15 @@ fn run(
                     #[cfg(debug_assertions)]
                     VirtualKeyCode::R => demo
                         .reload()
-                        .map_err(|e| {
+                        /*.map_err(|e| {
                             log::error!("Failed to reload: {}", e);
                             e
-                        })
+                        })*/
                         .unwrap(),
                     _ => (),
                 },
                 WindowEvent::Resized(size) => {
-                    windowed_context.resize(size);
+                    //windowed_context.resize(size);
                 }
                 _ => (),
             },
@@ -165,14 +150,14 @@ fn run(
                 }
 
                 // Render the frame
-                if let Err(e) = demo.render(&mut sync, windowed_context.window().inner_size()) {
+                /*if let Err(e) = demo.render(&mut sync, windowed_context.window().inner_size()) {
                     panic!("{}", e);
-                }
+                }*/
 
                 // Display the frame
-                windowed_context
-                    .swap_buffers()
-                    .expect("Failed to swap buffers");
+                /*windowed_context
+                .swap_buffers()
+                .expect("Failed to swap buffers");*/
             }
             _ => (),
         }
@@ -191,10 +176,10 @@ fn main() -> Result<()> {
         return Ok(());
     }
     let benchmark = pargs.contains("--benchmark");
-    let internal_size = Resolution {
-        width: pargs.opt_value_from_str(["-w", "--width"])?.unwrap_or(1280),
-        height: pargs.opt_value_from_str(["-h", "--height"])?.unwrap_or(720),
-    };
+    let internal_size = PhysicalSize::new(
+        pargs.opt_value_from_str(["-w", "--width"])?.unwrap_or(1280),
+        pargs.opt_value_from_str(["-h", "--height"])?.unwrap_or(720),
+    );
     for &size in &[internal_size.width, internal_size.height] {
         if size < 1 || size > 2u32.pow(14) {
             return Err(anyhow!("Size cannot be {}", size));

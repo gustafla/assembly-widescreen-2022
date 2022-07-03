@@ -129,14 +129,13 @@ impl Player {
                     Ok(n) => n,
                     Err(e) => {
                         log::error!("{}", e);
-                        if let Some(errno) = e.errno() {
-                            pcm.recover(errno as std::os::raw::c_int, true)
-                                .map_err(|e| {
-                                    log::error!("Cannot recover");
-                                    e
-                                })
-                                .unwrap();
-                        }
+                        let errno = e.errno();
+                        pcm.recover(errno as std::os::raw::c_int, true)
+                            .map_err(|e| {
+                                log::error!("Cannot recover");
+                                e
+                            })
+                            .unwrap();
                         error_sync_flag.store(true, Ordering::Relaxed);
                         pcm.avail_update().unwrap()
                     }
