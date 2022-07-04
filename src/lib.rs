@@ -4,6 +4,7 @@ mod sync;
 
 use include_dir::{include_dir, Dir};
 pub use player::Player;
+pub use renderer::Renderer;
 pub use sync::DemoSync;
 
 pub static RESOURCES_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources");

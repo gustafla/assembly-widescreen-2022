@@ -1,7 +1,7 @@
 mod logger;
 
 use anyhow::{anyhow, Context, Result};
-use demo::{Demo, DemoSync, Player};
+use demo::{Demo, DemoSync, Player, Renderer};
 use pico_args::Arguments;
 #[cfg(target_family = "unix")]
 use winit::platform::unix::WindowBuilderExtUnix;
@@ -111,6 +111,9 @@ fn run(
     let window = window_builder
         .build(&event_loop)
         .context("Failed to build a window")?;
+
+    // Initialize Renderer for window
+    let renderer = pollster::block_on(Renderer::new(&window))?;
 
     // Load demo content
     let mut demo = Demo::new();
