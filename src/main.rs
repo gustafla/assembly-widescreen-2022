@@ -3,11 +3,12 @@ mod logger;
 use anyhow::{anyhow, Context, Result};
 use demo::{Demo, DemoSync, Player};
 use pico_args::Arguments;
+#[cfg(target_family = "unix")]
+use winit::platform::unix::WindowBuilderExtUnix;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    platform::unix::WindowBuilderExtUnix,
     window::{Fullscreen, WindowBuilder},
 };
 
@@ -94,13 +95,22 @@ fn run(
         None
     };
 
-    // Build a window with an OpenGL context
+    // Build a Window
     let window_builder = WindowBuilder::new()
         .with_title(disp.title)
-        .with_app_id("demo".into())
         .with_inner_size(internal_size)
         .with_fullscreen(fullscreen)
         .with_decorations(false);
+
+    #[cfg(not(debug_assertions))]
+    let window_builder = window_builder.with_resizable(false);
+
+    #[cfg(target_family = "unix")]
+    let window_builder = window_builder.with_app_id("demo".into());
+
+    let window = window_builder
+        .build(&event_loop)
+        .context("Failed to build a window")?;
 
     // Load demo content
     let mut demo = Demo::new();
@@ -108,36 +118,25 @@ fn run(
     // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]
     {
-        window.set_cursor_visible(false);
         player.play();
+        window.set_cursor_visible(false);
     }
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
         match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput {
+            Event::WindowEvent { event, window_id } if window_id == window.id() => match event {
+                WindowEvent::CloseRequested
+                | WindowEvent::KeyboardInput {
                     input:
                         KeyboardInput {
-                            virtual_keycode: Some(keycode),
+                            virtual_keycode: Some(VirtualKeyCode::Escape | VirtualKeyCode::Q),
                             ..
                         },
                     ..
-                } => match keycode {
-                    VirtualKeyCode::Escape | VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
-                    #[cfg(debug_assertions)]
-                    VirtualKeyCode::R => demo
-                        .reload()
-                        /*.map_err(|e| {
-                            log::error!("Failed to reload: {}", e);
-                            e
-                        })*/
-                        .unwrap(),
-                    _ => (),
-                },
-                WindowEvent::Resized(size) => {
+                } => *control_flow = ControlFlow::Exit,
+                WindowEvent::Resized(_size) => {
                     //windowed_context.resize(size);
                 }
                 _ => (),
@@ -207,7 +206,7 @@ fn main() -> Result<()> {
     log::set_max_level(log::LevelFilter::max());
 
     // Load music
-    let player = Player::new("resources/music.ogg").context("Failed to load music")?;
+    let player = Player::new("music.ogg").context("Failed to load music")?;
 
     // Initialize rocket
     let sync = DemoSync::new(120., 8., benchmark || cfg!(debug_assertions));

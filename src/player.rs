@@ -6,8 +6,7 @@ use lewton::inside_ogg::OggStreamReader;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{
     convert::TryFrom,
-    fs::File,
-    io::{BufReader, Read, Seek},
+    io::{Cursor, Read, Seek},
     path::Path,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -182,8 +181,12 @@ impl Player {
         log::info!("Loading {}", ogg_path.as_ref().display());
 
         // Read and decode ogg file
-        let ogg_file = File::open(ogg_path)?;
-        let ogg_reader = BufReader::new(ogg_file);
+        let ogg_reader = Cursor::new(
+            crate::RESOURCES_DIR
+                .get_file(ogg_path)
+                .expect("File not present in binary. This is a bug.")
+                .contents(),
+        );
         let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader)?;
         let sample_rate_channels = (sample_rate * u32::from(channels)) as f32;
         let len_secs = audio_data.len() as f32 / sample_rate_channels;

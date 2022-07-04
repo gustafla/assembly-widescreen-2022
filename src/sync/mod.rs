@@ -3,7 +3,7 @@ mod frame_counter;
 use crate::Player;
 use frame_counter::FrameCounter;
 
-const TRACKS_FILE: &str = "resources/tracks.bin";
+const TRACKS_FILE: &str = "tracks.bin";
 
 pub struct DemoSync {
     row: f32,
@@ -38,8 +38,11 @@ impl DemoSync {
         #[cfg(not(debug_assertions))]
         let rocket = {
             log::info!("Loading {}", TRACKS_FILE);
-            let file = std::fs::File::open(TRACKS_FILE).expect("Cannot open track file");
-            let tracks = bincode::deserialize_from(file).expect("Failed to deserialize tracks");
+            let file = crate::RESOURCES_DIR
+                .get_file(TRACKS_FILE)
+                .expect("File not present in binary. This is a bug.");
+            let tracks =
+                bincode::deserialize_from(file.contents()).expect("Failed to deserialize tracks");
             rust_rocket::RocketPlayer::new(tracks)
         };
 
@@ -170,7 +173,7 @@ impl DemoSync {
             .write(true)
             .create(true)
             .truncate(true)
-            .open(TRACKS_FILE)
+            .open(crate::RESOURCES_DIR.path().join(TRACKS_FILE))
             .expect("Cannot open track file");
         bincode::serialize_into(file, &tracks).expect("Cannot serialize tracks");
     }

@@ -19,6 +19,7 @@ glam = "0.21.2"
 winit = "0.26.1"
 wgpu = "0.13.1"
 pollster = "0.2.5"
+include_dir = "0.7.2"
 
 [profile.dev]
 opt-level = 1

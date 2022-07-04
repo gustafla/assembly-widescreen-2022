@@ -1,8 +1,11 @@
 mod player;
 mod sync;
 
+use include_dir::{include_dir, Dir};
 pub use player::Player;
 pub use sync::DemoSync;
+
+pub static RESOURCES_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources");
 
 pub struct Demo {}
 
@@ -86,12 +89,6 @@ impl Demo {
         );
 
         glesv2::check()*/
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn reload(&mut self) -> Result<(), ()> {
-        //self.resources = glesv2::ResourceMapper::new("resources")?;
-        Ok(())
     }
 }
 
