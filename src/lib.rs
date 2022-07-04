@@ -1,4 +1,5 @@
 mod player;
+mod renderer;
 mod sync;
 
 use include_dir::{include_dir, Dir};

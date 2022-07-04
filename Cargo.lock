@@ -370,7 +370,6 @@ dependencies = [
  "pollster",
  "rust-rocket",
  "rustfft",
- "thiserror",
  "wgpu",
  "winit",
 ]

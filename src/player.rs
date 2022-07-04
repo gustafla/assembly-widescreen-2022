@@ -14,15 +14,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error(transparent)]
-    FileAccess(#[from] std::io::Error),
-    #[error("Failed to decode ogg vorbis file")]
-    Decode(#[from] lewton::VorbisError),
-}
 
 // Playback buffering/latency size in frames
 const BUF_SIZE: usize = 4096;
@@ -47,8 +38,9 @@ pub struct Player {
 }
 
 impl Player {
-    fn decode_ogg(reader: impl Read + Seek) -> Result<(Arc<Vec<i16>>, u32, u8), Error> {
-        let mut ogg_stream_reader = OggStreamReader::new(reader)?;
+    fn decode_ogg(reader: impl Read + Seek) -> (Arc<Vec<i16>>, u32, u8) {
+        let mut ogg_stream_reader =
+            OggStreamReader::new(reader).expect("Failed to decode ogg stream. This is a bug.");
 
         // Because lewton doesn't have time seek at the time of writing,
         // I'm gonna waste memory with full uncompressed audio
@@ -61,16 +53,17 @@ impl Player {
                     break;
                 }
                 Err(e) => {
-                    return Err(e.into());
+                    log::error!("{}", e);
+                    panic!("Failed to decode ogg stream. This is a bug.");
                 }
             }
         }
 
-        Ok((
+        (
             Arc::new(audio_data),
             ogg_stream_reader.ident_hdr.audio_sample_rate,
             ogg_stream_reader.ident_hdr.audio_channels,
-        ))
+        )
     }
 
     fn start_alsa(
@@ -177,7 +170,7 @@ impl Player {
         })
     }
 
-    pub fn new(ogg_path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn new(ogg_path: impl AsRef<Path>) -> Self {
         log::info!("Loading {}", ogg_path.as_ref().display());
 
         // Read and decode ogg file
@@ -187,7 +180,7 @@ impl Player {
                 .expect("File not present in binary. This is a bug.")
                 .contents(),
         );
-        let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader)?;
+        let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader);
         let sample_rate_channels = (sample_rate * u32::from(channels)) as f32;
         let len_secs = audio_data.len() as f32 / sample_rate_channels;
 
@@ -211,7 +204,7 @@ impl Player {
 
         let time = Instant::now();
 
-        Ok(Self {
+        Self {
             audio_data,
             sample_rate,
             channels,
@@ -226,7 +219,7 @@ impl Player {
             time_offset: Duration::new(0, 0),
             fft,
             fft_scratch,
-        })
+        }
     }
 
     pub fn len_secs(&self) -> f32 {
