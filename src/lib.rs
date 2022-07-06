@@ -1,5 +1,6 @@
 mod player;
 mod renderer;
+pub mod scene;
 mod sync;
 
 use include_dir::{include_dir, Dir};

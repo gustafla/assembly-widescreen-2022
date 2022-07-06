@@ -1,3 +1,4 @@
+use crate::scene::Scene;
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::*;
@@ -52,7 +53,6 @@ pub struct Renderer {
     vertex_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
     vertex_uniform_buffer: wgpu::Buffer,
-    num_vertices: u32,
 }
 
 impl Renderer {
@@ -249,7 +249,32 @@ impl Renderer {
             vertex_buffer,
             uniform_bind_group,
             vertex_uniform_buffer,
-            num_vertices,
         })
+    }
+
+    pub fn render(&self, scene: &Scene) -> Result<(), wgpu::SurfaceError> {
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        // TODO can this be created more smartly
+        let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: self.surface_configuration.width,
+                height: self.surface_configuration.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24Plus,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            label: Some("Depth Texture"),
+        });
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // TODO commands go here
+
+        Ok(())
     }
 }

@@ -1,14 +1,17 @@
 use glam::Vec3;
 
 pub struct Object {
-    tris: Vec<[f32; 3]>,
+    vertices: Vec<Vec3>,
+    normals: Vec<Vec3>,
     color_hsv: (f32, f32, f32),
+    translation: Vec3,
+    scale: Vec3,
 }
 
 pub struct Camera {
     fov: f32,
     position: Vec3,
-    direction: Vec3,
+    target: Vec3,
 }
 
 pub struct Scene {
