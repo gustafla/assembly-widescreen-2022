@@ -1,0 +1,30 @@
+<sync rows="128">
+	<tracks>
+		<track name="rotation.y">
+			<key interpolation="1" value="0" row="0"/>
+			<key interpolation="0" value="5" row="72"/>
+		</track>
+		<track name="camera0:fov">
+			<key interpolation="0" value="1" row="0"/>
+		</track>
+		<track name="camera0:pos.x">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
+		<track name="camera0:pos.y">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
+		<track name="camera0:pos.z">
+			<key interpolation="0" value="-7" row="0"/>
+		</track>
+		<track name="camera0:target.x">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
+		<track name="camera0:target.y">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
+		<track name="camera0:target.z">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
+	</tracks>
+	<bookmarks/>
+</sync>

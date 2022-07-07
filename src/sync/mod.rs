@@ -167,13 +167,17 @@ impl DemoSync {
 
     #[cfg(debug_assertions)]
     fn save_tracks(&mut self) {
-        log::info!("Saving {}", TRACKS_FILE);
+        log::info!("Saving {}/{}", crate::RESOURCES_PATH, TRACKS_FILE);
         let tracks = self.rocket.save_tracks();
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
-            .open(crate::RESOURCES_DIR.path().join(TRACKS_FILE))
+            .open(
+                [crate::RESOURCES_PATH, TRACKS_FILE]
+                    .into_iter()
+                    .collect::<std::path::PathBuf>(),
+            )
             .expect("Cannot open track file");
         bincode::serialize_into(file, &tracks).expect("Cannot serialize tracks");
     }

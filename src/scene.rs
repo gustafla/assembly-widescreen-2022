@@ -1,21 +1,22 @@
-use glam::Vec3;
+use glam::*;
 
 pub struct Object {
-    vertices: Vec<Vec3>,
-    normals: Vec<Vec3>,
-    color_hsv: (f32, f32, f32),
-    translation: Vec3,
-    scale: Vec3,
+    pub positions: Vec<Vec3>,
+    pub normals: Vec<Vec3>,
+    pub color_hsv: (f32, f32, f32), // Not implemented
+    pub scale: Vec3,
+    pub rotation: Quat,
+    pub translation: Vec3,
 }
 
 pub struct Camera {
-    fov: f32,
-    position: Vec3,
-    target: Vec3,
+    pub fov: f32,
+    pub position: Vec3,
+    pub target: Vec3,
 }
 
 pub struct Scene {
-    objects: Vec<Object>,
-    cameras: Vec<Camera>,
-    bg_color_hsv: (f32, f32, f32),
+    pub objects: Vec<Object>,          // Only one supported in Renderer
+    pub cameras: Vec<Camera>,          // Only one supported in Renderer
+    pub bg_color_hsv: (f32, f32, f32), // Not implemented
 }

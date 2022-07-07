@@ -151,15 +151,11 @@ fn run(
                     return;
                 }
 
-                // Render the frame
-                /*if let Err(e) = demo.render(&mut sync, windowed_context.window().inner_size()) {
-                    panic!("{}", e);
-                }*/
+                // Create the frame scene
+                let scene = demo.update(&mut sync);
 
-                // Display the frame
-                /*windowed_context
-                .swap_buffers()
-                .expect("Failed to swap buffers");*/
+                // Render the scene
+                renderer.render(&scene).unwrap();
             }
             _ => (),
         }
