@@ -237,9 +237,13 @@ impl Renderer {
         if new_size.width > 0 && new_size.height > 0 {
             self.surface_configuration.width = new_size.width;
             self.surface_configuration.height = new_size.height;
-            self.surface
-                .configure(&self.device, &self.surface_configuration);
+            self.configure_surface();
         }
+    }
+
+    pub fn configure_surface(&self) {
+        self.surface
+            .configure(&self.device, &self.surface_configuration);
     }
 
     pub fn render(&self, scene: &Scene) -> Result<(), wgpu::SurfaceError> {

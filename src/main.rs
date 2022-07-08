@@ -158,7 +158,12 @@ fn run(
                 let scene = demo.update(&mut sync);
 
                 // Render the scene
-                renderer.render(&scene).unwrap();
+                match renderer.render(&scene) {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost) => renderer.configure_surface(),
+                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                    Err(e) => log::error!("{:?}", e),
+                }
             }
             _ => (),
         }
