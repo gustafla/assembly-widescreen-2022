@@ -2,7 +2,7 @@ use crate::scene::Scene;
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::*;
-use winit::window::Window;
+use winit::{dpi::PhysicalSize, window::Window};
 
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -231,6 +231,15 @@ impl Renderer {
             fragment_uniform_buffer,
             vertex_buffer,
         })
+    }
+
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.surface_configuration.width = new_size.width;
+            self.surface_configuration.height = new_size.height;
+            self.surface
+                .configure(&self.device, &self.surface_configuration);
+        }
     }
 
     pub fn render(&self, scene: &Scene) -> Result<(), wgpu::SurfaceError> {

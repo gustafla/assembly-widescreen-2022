@@ -113,7 +113,7 @@ fn run(
         .context("Failed to build a window")?;
 
     // Initialize Renderer for window
-    let renderer = pollster::block_on(Renderer::new(&window))?;
+    let mut renderer = pollster::block_on(Renderer::new(&window))?;
 
     // Load demo content
     let mut demo = Demo::new();
@@ -139,8 +139,11 @@ fn run(
                         },
                     ..
                 } => *control_flow = ControlFlow::Exit,
-                WindowEvent::Resized(_size) => {
-                    //windowed_context.resize(size);
+                WindowEvent::Resized(physical_size) => {
+                    renderer.resize(physical_size);
+                }
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    renderer.resize(*new_inner_size);
                 }
                 _ => (),
             },
