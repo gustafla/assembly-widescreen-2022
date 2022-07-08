@@ -292,9 +292,6 @@ impl Renderer {
             bytemuck::cast_slice(vertex_data.as_slice()),
         );
 
-        // Submit data writes
-        self.queue.submit(None);
-
         // Get and create output textures
         let output = self.surface.get_current_texture()?;
         let view = output
