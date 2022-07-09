@@ -1,7 +1,10 @@
+mod shader_quad;
+
 use crate::scene::Scene;
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::*;
+use shader_quad::ShaderQuad;
 use winit::{dpi::PhysicalSize, window::Window};
 
 #[repr(C, align(16))]
@@ -23,7 +26,7 @@ pub struct FragmentUniforms {
     pad: f32,
 }
 
-#[repr(C, align(16))]
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
     pub position: Vec4,
@@ -55,10 +58,11 @@ pub struct Renderer {
     fragment_uniform_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
     depth_texture: Option<wgpu::Texture>,
+    output_quad: ShaderQuad,
 }
 
 impl Renderer {
-    pub async fn new(window: &Window) -> Result<Self> {
+    pub async fn new(internal_size: PhysicalSize<u32>, window: &Window) -> Result<Self> {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(&window) };
@@ -218,6 +222,25 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
+        let output_quad = ShaderQuad::new(
+            &device,
+            &queue,
+            internal_size,
+            surface_configuration.format,
+            size,
+            wgpu::ShaderModuleDescriptor {
+                label: Some("Output Quad Shader Module"),
+                source: wgpu::ShaderSource::Wgsl(
+                    crate::RESOURCES_DIR
+                        .get_file("output.wgsl")
+                        .unwrap()
+                        .contents_utf8()
+                        .unwrap()
+                        .into(),
+                ),
+            },
+        );
+
         let mut renderer = Self {
             surface,
             device,
@@ -229,6 +252,7 @@ impl Renderer {
             fragment_uniform_buffer,
             vertex_buffer,
             depth_texture: None,
+            output_quad,
         };
 
         renderer.resize(size);
@@ -253,6 +277,8 @@ impl Renderer {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 label: Some("Depth Texture"),
             }));
+            self.output_quad
+                .set_target_resolution(&self.queue, new_size);
         }
     }
 
@@ -371,6 +397,8 @@ impl Renderer {
         }
 
         self.queue.submit(Some(encoder.finish()));
+
+        self.output_quad.render(&self.device, &self.queue, &view);
         output.present();
 
         Ok(())

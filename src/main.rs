@@ -113,7 +113,7 @@ fn run(
         .context("Failed to build a window")?;
 
     // Initialize Renderer for window
-    let mut renderer = pollster::block_on(Renderer::new(&window))?;
+    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window))?;
 
     // Load demo content
     let mut demo = Demo::new();
