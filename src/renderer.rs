@@ -54,6 +54,7 @@ pub struct Renderer {
     vertex_uniform_buffer: wgpu::Buffer,
     fragment_uniform_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
+    depth_texture: Option<wgpu::Texture>,
 }
 
 impl Renderer {
@@ -99,7 +100,6 @@ impl Renderer {
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
         };
-        surface.configure(&device, &surface_configuration);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -113,7 +113,6 @@ impl Renderer {
             ),
         });
 
-        dbg!(std::mem::size_of::<VertexUniforms>());
         let vertex_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Uniform Buffer"),
             size: std::mem::size_of::<VertexUniforms>() as u64,
@@ -121,7 +120,6 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        dbg!(std::mem::size_of::<FragmentUniforms>());
         let fragment_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Fragment Uniform Buffer"),
             size: std::mem::size_of::<FragmentUniforms>() as u64,
@@ -220,7 +218,7 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        Ok(Self {
+        let mut renderer = Self {
             surface,
             device,
             queue,
@@ -230,7 +228,11 @@ impl Renderer {
             vertex_uniform_buffer,
             fragment_uniform_buffer,
             vertex_buffer,
-        })
+            depth_texture: None,
+        };
+
+        renderer.resize(size);
+        Ok(renderer)
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -238,6 +240,19 @@ impl Renderer {
             self.surface_configuration.width = new_size.width;
             self.surface_configuration.height = new_size.height;
             self.configure_surface();
+            self.depth_texture = Some(self.device.create_texture(&wgpu::TextureDescriptor {
+                size: wgpu::Extent3d {
+                    width: self.surface_configuration.width,
+                    height: self.surface_configuration.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth24Plus,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                label: Some("Depth Texture"),
+            }));
         }
     }
 
@@ -305,26 +320,15 @@ impl Renderer {
             bytemuck::cast_slice(vertex_data.as_slice()),
         );
 
-        // Get and create output textures
+        // Create output views
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        // TODO can this be created more smartly
-        let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: self.surface_configuration.width,
-                height: self.surface_configuration.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth24Plus,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            label: Some("Depth Texture"),
-        });
-        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view = self
+            .depth_texture
+            .as_ref()
+            .map(|t| t.create_view(&wgpu::TextureViewDescriptor::default()));
 
         // Render commands
         let mut encoder = self
@@ -348,13 +352,15 @@ impl Renderer {
                         store: true,
                     },
                 })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.),
-                        store: false,
-                    }),
-                    stencil_ops: None,
+                depth_stencil_attachment: depth_view.as_ref().map(|view| {
+                    wgpu::RenderPassDepthStencilAttachment {
+                        view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.),
+                            store: false,
+                        }),
+                        stencil_ops: None,
+                    }
                 }),
             });
 
