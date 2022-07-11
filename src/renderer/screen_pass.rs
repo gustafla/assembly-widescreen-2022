@@ -2,7 +2,6 @@ use super::shader_quad::ShaderQuad;
 use winit::dpi::PhysicalSize;
 
 pub struct ScreenPass {
-    resolution: PhysicalSize<u32>,
     color_texture: wgpu::Texture,
     depth_texture: wgpu::Texture,
     texture_bind_group: wgpu::BindGroup,
@@ -10,6 +9,9 @@ pub struct ScreenPass {
 }
 
 impl ScreenPass {
+    pub const COLOR_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+    pub const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -29,7 +31,7 @@ impl ScreenPass {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
+            format: Self::COLOR_TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: Some("Screen Pass Color Texture"),
         });
@@ -39,7 +41,7 @@ impl ScreenPass {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth24Plus,
+            format: Self::DEPTH_TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("Screen Pass Depth Texture"),
         });
@@ -96,7 +98,6 @@ impl ScreenPass {
         });
 
         Self {
-            resolution,
             color_texture,
             depth_texture,
             texture_bind_group,
