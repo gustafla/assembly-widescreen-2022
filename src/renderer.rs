@@ -97,6 +97,11 @@ impl Renderer {
                 "No surface format available for adapter {}",
                 adapter_name
             ))?;
+        if format.describe().srgb {
+            log::info!("Preferred surface is sRGB");
+        } else {
+            log::warn!("Preferred surface is not sRGB!");
+        }
         let surface_configuration = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
