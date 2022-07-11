@@ -81,7 +81,7 @@ impl Renderer {
                 &wgpu::DeviceDescriptor {
                     label: Some("Device Descriptor"),
                     features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::downlevel_defaults(),
+                    limits: wgpu::Limits::default(),
                 },
                 None,
             )
