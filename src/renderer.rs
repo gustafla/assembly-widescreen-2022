@@ -1,10 +1,11 @@
+mod screen_pass;
 mod shader_quad;
 
 use crate::scene::Scene;
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::*;
-use shader_quad::ShaderQuad;
+use screen_pass::ScreenPass;
 use winit::{dpi::PhysicalSize, window::Window};
 
 #[repr(C, align(16))]
@@ -57,8 +58,7 @@ pub struct Renderer {
     vertex_uniform_buffer: wgpu::Buffer,
     fragment_uniform_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
-    depth_texture: Option<wgpu::Texture>,
-    output_quad: ShaderQuad,
+    output_screen: ScreenPass,
 }
 
 impl Renderer {
@@ -209,7 +209,7 @@ impl Renderer {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_configuration.format,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent::REPLACE,
                         alpha: wgpu::BlendComponent::REPLACE,
@@ -227,7 +227,7 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        let output_quad = ShaderQuad::new(
+        let output_screen = ScreenPass::new(
             &device,
             &queue,
             internal_size,
@@ -256,8 +256,7 @@ impl Renderer {
             vertex_uniform_buffer,
             fragment_uniform_buffer,
             vertex_buffer,
-            depth_texture: None,
-            output_quad,
+            output_screen,
         };
 
         renderer.resize(size);
@@ -269,20 +268,7 @@ impl Renderer {
             self.surface_configuration.width = new_size.width;
             self.surface_configuration.height = new_size.height;
             self.configure_surface();
-            self.depth_texture = Some(self.device.create_texture(&wgpu::TextureDescriptor {
-                size: wgpu::Extent3d {
-                    width: self.surface_configuration.width,
-                    height: self.surface_configuration.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Depth24Plus,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                label: Some("Depth Texture"),
-            }));
-            self.output_quad
+            self.output_screen
                 .set_target_resolution(&self.queue, new_size);
         }
     }
@@ -294,12 +280,13 @@ impl Renderer {
 
     pub fn render(&self, scene: &Scene) -> Result<(), wgpu::SurfaceError> {
         // Update uniforms
+        let resolution = self.output_screen.resolution();
         let camera_position = Vec4::from((scene.cameras[0].position, 1.));
         let view_mat =
             Mat4::look_at_rh(scene.cameras[0].position, scene.cameras[0].target, Vec3::Y);
         let project_mat = Mat4::perspective_rh(
             scene.cameras[0].fov,
-            self.surface_configuration.width as f32 / self.surface_configuration.height as f32,
+            resolution.width as f32 / resolution.height as f32,
             0.1,
             100.,
         );
@@ -351,15 +338,10 @@ impl Renderer {
             bytemuck::cast_slice(vertex_data.as_slice()),
         );
 
-        // Create output views
-        let output = self.surface.get_current_texture()?;
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let depth_view = self
-            .depth_texture
-            .as_ref()
-            .map(|t| t.create_view(&wgpu::TextureViewDescriptor::default()));
+        // Create output screen views
+        let (color_texture, depth_texture) = self.output_screen.textures();
+        let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Render commands
         let mut encoder = self
@@ -371,7 +353,7 @@ impl Renderer {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: &color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -383,15 +365,13 @@ impl Renderer {
                         store: true,
                     },
                 })],
-                depth_stencil_attachment: depth_view.as_ref().map(|view| {
-                    wgpu::RenderPassDepthStencilAttachment {
-                        view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.),
-                            store: false,
-                        }),
-                        stencil_ops: None,
-                    }
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.),
+                        store: false,
+                    }),
+                    stencil_ops: None,
                 }),
             });
 
@@ -403,7 +383,13 @@ impl Renderer {
 
         self.queue.submit(Some(encoder.finish()));
 
-        self.output_quad.render(&self.device, &self.queue, &view);
+        // Create window surface output view
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        self.output_screen.render(&self.device, &self.queue, &view);
         output.present();
 
         Ok(())

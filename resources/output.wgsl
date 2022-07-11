@@ -16,7 +16,12 @@ fn vs_main(in: VertInput) -> VertOutput {
     return out;
 }
 
+@group(0) @binding(0)
+var t_color: texture_2d<f32>;
+@group(0) @binding(1)
+var s_color: sampler;
+
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(1., 1., 1., 1.);
+    return textureSample(t_color, s_color, in.v_uv);
 }

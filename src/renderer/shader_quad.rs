@@ -36,12 +36,13 @@ impl ShaderQuad {
         target_format: wgpu::TextureFormat,
         target_resolution: PhysicalSize<u32>,
         shader: wgpu::ShaderModuleDescriptor,
+        texture_bind_group_layout: wgpu::BindGroupLayout,
     ) -> Self {
         let shader = device.create_shader_module(shader);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Shader Quad Pipeline Layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&texture_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -123,15 +124,19 @@ impl ShaderQuad {
 
         #[rustfmt::skip]
         let quad = [
-            Vertex{position: vec2(left, down),  uv: vec2(0., 0.)},
-            Vertex{position: vec2(right, down), uv: vec2(1., 0.)},
-            Vertex{position: vec2(right, up),   uv: vec2(1., 1.)},
-            Vertex{position: vec2(left, down),  uv: vec2(0., 0.)},
-            Vertex{position: vec2(right, up),   uv: vec2(1., 1.)},
-            Vertex{position: vec2(left, up),    uv: vec2(0., 1.)},
+            Vertex{position: vec2(left, down),  uv: vec2(0., 1.)},
+            Vertex{position: vec2(right, down), uv: vec2(1., 1.)},
+            Vertex{position: vec2(right, up),   uv: vec2(1., 0.)},
+            Vertex{position: vec2(left, down),  uv: vec2(0., 1.)},
+            Vertex{position: vec2(right, up),   uv: vec2(1., 0.)},
+            Vertex{position: vec2(left, up),    uv: vec2(0., 0.)},
         ];
 
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&quad));
+    }
+
+    pub fn resolution(&self) -> PhysicalSize<u32> {
+        self.resolution
     }
 
     pub fn render(
@@ -139,7 +144,7 @@ impl ShaderQuad {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         target: &wgpu::TextureView,
-        //textures: &[&wgpu::TextureView],
+        textures: &wgpu::BindGroup,
         //uniforms: &wgpu::Buffer,
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -165,6 +170,7 @@ impl ShaderQuad {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, textures, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..6, 0..1);
         }
