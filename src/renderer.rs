@@ -92,7 +92,7 @@ fn get_shader<'a>(path: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
 impl Renderer {
     pub async fn new(internal_size: PhysicalSize<u32>, window: &Window) -> Result<Self> {
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
+        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
         let surface = unsafe { instance.create_surface(&window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
