@@ -17,8 +17,7 @@ fn print_help() {
         r#"List of available options:
     --help              Print this help
     --benchmark         Log frametimes
-    -w, --width         Set the rendering width (default 1280)
-    -h, --height        Set the rendering height (default 720)
+    -s, --scale         Set the rendering scale (default 1.0)
     --list-monitors     List available monitors and video modes
     --monitor id        Specify a monitor to use in fullscreen
     --exclusive mode    Exclusive fullscreen (see --list-monitors for modes)
@@ -55,7 +54,8 @@ fn list_monitors() {
 }
 
 fn run(
-    internal_size: PhysicalSize<u32>,
+    size: PhysicalSize<u32>,
+    scale: f32,
     mut player: Player,
     mut sync: DemoSync,
     disp: DisplayConfiguration,
@@ -98,7 +98,7 @@ fn run(
     // Build a Window
     let window_builder = WindowBuilder::new()
         .with_title(disp.title)
-        .with_inner_size(internal_size)
+        .with_inner_size(size)
         .with_fullscreen(fullscreen)
         .with_decorations(false);
 
@@ -113,6 +113,10 @@ fn run(
         .context("Failed to build a window")?;
 
     // Initialize Renderer for window
+    let internal_size = PhysicalSize::new(
+        (size.width as f32 * scale) as u32,
+        (size.height as f32 * scale) as u32,
+    );
     let mut renderer = pollster::block_on(Renderer::new(internal_size, &window))?;
 
     // Load demo content
@@ -191,17 +195,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
     let benchmark = pargs.contains("--benchmark");
-    let internal_size = PhysicalSize::new(
-        pargs.opt_value_from_str(["-w", "--width"])?.unwrap_or(1280),
-        pargs.opt_value_from_str(["-h", "--height"])?.unwrap_or(720),
-    );
-    for &size in &[internal_size.width, internal_size.height] {
-        if size < 1 || size > 2u32.pow(14) {
-            return Err(anyhow!("Size cannot be {}", size));
-        }
+    let scale = pargs.opt_value_from_str(["-s", "--scale"])?.unwrap_or(1.);
+    if scale < 0.1 || scale > 8. {
+        return Err(anyhow!("Scale must be from 0.1 to 8.0"));
     }
     eprintln!("See --help if the default options don't work for you");
 
+    let size = PhysicalSize::new(3840, 768);
     let disp = DisplayConfiguration {
         title: "Demo",
         monitor: pargs.opt_value_from_str("--monitor")?,
@@ -227,7 +227,7 @@ fn main() -> Result<()> {
     // Initialize rocket
     let sync = DemoSync::new(120., 8., benchmark || cfg!(debug_assertions));
 
-    run(internal_size, player, sync, disp)?;
+    run(size, scale, player, sync, disp)?;
 
     Ok(())
 }
