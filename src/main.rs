@@ -130,15 +130,24 @@ fn run(
 
         match event {
             Event::WindowEvent { event, window_id } if window_id == window.id() => match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::KeyboardInput {
                     input:
                         KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Escape | VirtualKeyCode::Q),
-                            ..
+                            virtual_keycode, ..
                         },
                     ..
-                } => *control_flow = ControlFlow::Exit,
+                } => match virtual_keycode {
+                    Some(VirtualKeyCode::Q | VirtualKeyCode::Escape) => {
+                        *control_flow = ControlFlow::Exit
+                    }
+                    #[cfg(debug_assertions)]
+                    Some(VirtualKeyCode::R) => {
+                        renderer =
+                            pollster::block_on(Renderer::new(internal_size, &window)).unwrap();
+                    }
+                    _ => {}
+                },
                 WindowEvent::Resized(physical_size) => {
                     renderer.resize(physical_size);
                 }

@@ -61,6 +61,34 @@ pub struct Renderer {
     output_screen: ScreenPass,
 }
 
+fn get_shader<'a>(path: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
+    #[cfg(debug_assertions)]
+    {
+        wgpu::ShaderModuleDescriptor {
+            label: Some(path),
+            source: wgpu::ShaderSource::Wgsl(
+                std::fs::read_to_string(std::path::PathBuf::from(crate::RESOURCES_PATH).join(path))
+                    .unwrap()
+                    .into(),
+            ),
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        wgpu::ShaderModuleDescriptor {
+            label: Some(path),
+            source: wgpu::ShaderSource::Wgsl(
+                crate::RESOURCES_DIR
+                    .get_file(path)
+                    .unwrap()
+                    .contents_utf8()
+                    .unwrap()
+                    .into(),
+            ),
+        }
+    }
+}
+
 impl Renderer {
     pub async fn new(internal_size: PhysicalSize<u32>, window: &Window) -> Result<Self> {
         let size = window.inner_size();
@@ -110,17 +138,7 @@ impl Renderer {
             present_mode: wgpu::PresentMode::Fifo,
         };
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(
-                crate::RESOURCES_DIR
-                    .get_file("shader.wgsl")
-                    .unwrap()
-                    .contents_utf8()
-                    .unwrap()
-                    .into(),
-            ),
-        });
+        let shader = device.create_shader_module(get_shader("shader.wgsl"));
 
         let vertex_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Uniform Buffer"),
@@ -233,17 +251,7 @@ impl Renderer {
             internal_size,
             surface_configuration.format,
             size,
-            wgpu::ShaderModuleDescriptor {
-                label: Some("Output Quad Shader Module"),
-                source: wgpu::ShaderSource::Wgsl(
-                    crate::RESOURCES_DIR
-                        .get_file("output.wgsl")
-                        .unwrap()
-                        .contents_utf8()
-                        .unwrap()
-                        .into(),
-                ),
-            },
+            get_shader("output.wgsl"),
         );
 
         let mut renderer = Self {
