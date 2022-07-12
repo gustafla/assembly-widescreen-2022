@@ -19,6 +19,7 @@ impl ScreenPass {
         target_format: wgpu::TextureFormat,
         target_resolution: PhysicalSize<u32>,
         shader: wgpu::ShaderModuleDescriptor,
+        input_bind_group_layouts: &[&wgpu::BindGroupLayout],
     ) -> Self {
         let size = wgpu::Extent3d {
             width: resolution.width,
@@ -42,7 +43,7 @@ impl ScreenPass {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_TEXTURE_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: Some("Screen Pass Depth Texture"),
         });
 
@@ -62,7 +63,7 @@ impl ScreenPass {
                 label: Some("Screen Pass Texture Bind Group Layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
-                        binding: 0,
+                        binding: 0, // Color
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -72,7 +73,17 @@ impl ScreenPass {
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
-                        binding: 1,
+                        binding: 1, // Depth
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2, // Sampler
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
@@ -92,10 +103,19 @@ impl ScreenPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: wgpu::BindingResource::TextureView(
+                        &depth_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
         });
+
+        let mut bgls = vec![&texture_bind_group_layout];
+        bgls.extend_from_slice(input_bind_group_layouts);
 
         Self {
             color_texture,
@@ -108,7 +128,7 @@ impl ScreenPass {
                 target_format,
                 target_resolution,
                 shader,
-                texture_bind_group_layout,
+                &bgls,
             ),
         }
     }
@@ -135,9 +155,11 @@ impl ScreenPass {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         target: &wgpu::TextureView,
-        //uniforms: &[(&str, glesv2::UniformValue)],
+        input_bind_groups: &[&wgpu::BindGroup],
     ) {
-        self.shader_quad
-            .render(device, queue, target, &self.texture_bind_group);
+        let mut bgs = vec![&self.texture_bind_group];
+        bgs.extend_from_slice(input_bind_groups);
+
+        self.shader_quad.render(device, queue, target, &bgs);
     }
 }

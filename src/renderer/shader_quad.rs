@@ -36,13 +36,13 @@ impl ShaderQuad {
         target_format: wgpu::TextureFormat,
         target_resolution: PhysicalSize<u32>,
         shader: wgpu::ShaderModuleDescriptor,
-        texture_bind_group_layout: wgpu::BindGroupLayout,
+        bind_group_layouts: &[&wgpu::BindGroupLayout],
     ) -> Self {
         let shader = device.create_shader_module(shader);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Shader Quad Pipeline Layout"),
-            bind_group_layouts: &[&texture_bind_group_layout],
+            bind_group_layouts,
             push_constant_ranges: &[],
         });
 
@@ -144,8 +144,7 @@ impl ShaderQuad {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         target: &wgpu::TextureView,
-        textures: &wgpu::BindGroup,
-        //uniforms: &wgpu::Buffer,
+        bind_groups: &[&wgpu::BindGroup],
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Shader Quad Command Encoder"),
@@ -170,7 +169,9 @@ impl ShaderQuad {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, textures, &[]);
+            for (i, bind_group) in bind_groups.iter().enumerate() {
+                render_pass.set_bind_group(i as u32, bind_group, &[]);
+            }
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..6, 0..1);
         }

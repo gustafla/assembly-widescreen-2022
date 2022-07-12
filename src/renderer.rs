@@ -252,6 +252,7 @@ impl Renderer {
             surface_configuration.format,
             size,
             get_shader("output.wgsl"),
+            &[],
         );
 
         let mut renderer = Self {
@@ -397,7 +398,8 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        self.output_screen.render(&self.device, &self.queue, &view);
+        self.output_screen
+            .render(&self.device, &self.queue, &view, &[]);
         output.present();
 
         Ok(())
