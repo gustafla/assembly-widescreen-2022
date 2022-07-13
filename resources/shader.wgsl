@@ -31,25 +31,16 @@ fn vs_main(in: VertInput) -> VertOutput {
     return out;
 }
 
-struct FragUniforms {
-    light_position: vec4<f32>,
-    camera_position: vec4<f32>,
-    ambient: f32,
-    diffuse: f32,
-    specular: f32,
-};
-@group(0) @binding(1)
-var<uniform> fs_uniforms: FragUniforms;
-
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
-    let normal = normalize(in.v_normal.xyz);
-    let to_light = normalize(fs_uniforms.light_position.xyz - in.v_position.xyz);
-    let to_camera = normalize(fs_uniforms.camera_position.xyz - in.v_position.xyz);
-    let half = normalize(to_light + to_camera);
+    //let normal = normalize(in.v_normal.xyz);
+    //let to_light = normalize(fs_uniforms.light_position.xyz - in.v_position.xyz);
+    //let to_camera = normalize(fs_uniforms.camera_position.xyz - in.v_position.xyz);
+    //let half = normalize(to_light + to_camera);
 
-    var diffuse = fs_uniforms.diffuse * max(dot(normal, to_light), 0.0);
-    var specular = fs_uniforms.specular * pow(max(dot(normal, half), 0.0), 32.0);
+    //var diffuse = fs_uniforms.diffuse * max(dot(normal, to_light), 0.0);
+    //var specular = fs_uniforms.specular * pow(max(dot(normal, half), 0.0), 32.0);
 
-    return in.v_color * (fs_uniforms.ambient + diffuse) + specular;
+    //return in.v_color * (fs_uniforms.ambient + diffuse) + specular;
+    return in.v_color;
 }

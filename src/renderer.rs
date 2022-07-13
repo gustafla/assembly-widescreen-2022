@@ -17,7 +17,8 @@ pub struct VertexUniforms {
 
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct FragmentUniforms {
+pub struct PostUniforms {
+    inverse_view_projection_mat: Mat4,
     light_position: Vec4,
     camera_position: Vec4,
     ambient: f32,
@@ -61,9 +62,9 @@ pub struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
     uniform_bind_group: wgpu::BindGroup,
     vertex_uniform_buffer: wgpu::Buffer,
-    fragment_uniform_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
     internal_size: PhysicalSize<u32>,
+    post_pass_uniform_buffer: wgpu::Buffer,
     post_pass: Pass,
     output_pass: Pass,
 }
@@ -245,7 +246,7 @@ impl Renderer {
                 format: post_pass_color_format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
-                label: Some("Output Pass Color Texture"),
+                label: Some("Post Pass Color Texture"),
             }),
             device.create_texture(&wgpu::TextureDescriptor {
                 size,
@@ -255,21 +256,38 @@ impl Renderer {
                 format: post_pass_depth_format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
-                label: Some("Output Pass Depth Texture"),
+                label: Some("Post Pass Depth Texture"),
             }),
         ];
 
+        let post_pass_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Post Pass Uniform Buffer"),
+            size: std::mem::size_of::<PostUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Output Pass Bind Group Layout"),
+            label: Some("Post Pass Bind Group Layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
-                    binding: 1,
+                    binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -279,7 +297,7 @@ impl Renderer {
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
-                    binding: 2,
+                    binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Depth,
@@ -292,11 +310,15 @@ impl Renderer {
         });
 
         let bind_groups = vec![device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Output Pass Bind Group"),
+            label: Some("Post Pass Bind Group"),
             layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
+                    resource: post_pass_uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
                     resource: wgpu::BindingResource::Sampler(&device.create_sampler(
                         &wgpu::SamplerDescriptor {
                             label: Some("Output Pass Sampler"),
@@ -311,13 +333,13 @@ impl Renderer {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 1,
+                    binding: 2,
                     resource: wgpu::BindingResource::TextureView(
                         &textures[0].create_view(&wgpu::TextureViewDescriptor::default()),
                     ),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 2,
+                    binding: 3,
                     resource: wgpu::BindingResource::TextureView(
                         &textures[1].create_view(&wgpu::TextureViewDescriptor::default()),
                     ),
@@ -350,53 +372,28 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        let fragment_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Fragment Uniform Buffer"),
-            size: std::mem::size_of::<FragmentUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Uniform Bind Group Layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
+                    count: None,
+                }],
             });
 
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Uniform Bind Group"),
             layout: &uniform_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: vertex_uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: fragment_uniform_buffer.as_entire_binding(),
-                },
-            ],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: vertex_uniform_buffer.as_entire_binding(),
+            }],
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -456,9 +453,9 @@ impl Renderer {
             render_pipeline,
             uniform_bind_group,
             vertex_uniform_buffer,
-            fragment_uniform_buffer,
             vertex_buffer,
             internal_size,
+            post_pass_uniform_buffer,
             post_pass,
             output_pass,
         };
@@ -509,19 +506,6 @@ impl Renderer {
                 model_mat,
                 view_projection_mat,
                 normal_mat,
-            }]),
-        );
-
-        self.queue.write_buffer(
-            &self.fragment_uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[FragmentUniforms {
-                light_position: camera_position,
-                camera_position,
-                ambient: 0.2,
-                diffuse: 0.5,
-                specular: 0.3,
-                pad: 0.,
             }]),
         );
 
@@ -588,7 +572,22 @@ impl Renderer {
 
         self.queue.submit(Some(encoder.finish()));
 
-        // Post process to output pass
+        // Post process to output pass ------------------------------------------------------------
+
+        self.queue.write_buffer(
+            &self.post_pass_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[PostUniforms {
+                inverse_view_projection_mat: view_projection_mat.inverse(),
+                light_position: camera_position,
+                camera_position,
+                ambient: 0.2,
+                diffuse: 0.5,
+                specular: 0.3,
+                pad: 0.,
+            }]),
+        );
+
         let view =
             self.output_pass.textures[0].create_view(&wgpu::TextureViewDescriptor::default());
         self.post_pass.shader_quad.render(
@@ -598,7 +597,8 @@ impl Renderer {
             &self.post_pass.bind_groups,
         );
 
-        // Output (scaling) to window pass
+        // Output (scaling) to window pass --------------------------------------------------------
+
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
