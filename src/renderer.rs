@@ -224,8 +224,8 @@ impl Renderer {
                 &device,
                 &queue,
                 internal_size,
-                surface_format,
                 surface_size,
+                surface_format,
                 get_shader("output.wgsl"),
                 &[&bind_group_layout],
             ),
@@ -332,8 +332,8 @@ impl Renderer {
                 &device,
                 &queue,
                 internal_size,
-                output_pass_color_format,
                 internal_size,
+                output_pass_color_format,
                 get_shader("post.wgsl"),
                 &[&bind_group_layout],
             ),
@@ -474,7 +474,7 @@ impl Renderer {
             self.configure_surface();
             self.output_pass
                 .shader_quad
-                .set_target_resolution(&self.queue, new_size);
+                .resize(&self.queue, self.internal_size, new_size);
         }
     }
 

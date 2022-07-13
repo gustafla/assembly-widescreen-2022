@@ -196,8 +196,8 @@ fn main() -> Result<()> {
     }
     let benchmark = pargs.contains("--benchmark");
     let scale = pargs.opt_value_from_str(["-s", "--scale"])?.unwrap_or(1.);
-    if scale < 0.1 || scale > 8. {
-        return Err(anyhow!("Scale must be from 0.1 to 8.0"));
+    if scale < 0.1 || scale > 2. {
+        return Err(anyhow!("Scale must be from 0.1 to 2.0"));
     }
     eprintln!("See --help if the default options don't work for you");
 

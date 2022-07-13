@@ -23,7 +23,6 @@ impl Vertex {
 }
 
 pub struct ShaderQuad {
-    resolution: PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
 }
@@ -32,9 +31,9 @@ impl ShaderQuad {
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        resolution: PhysicalSize<u32>,
+        internal_size: PhysicalSize<u32>,
+        target_size: PhysicalSize<u32>,
         target_format: wgpu::TextureFormat,
-        target_resolution: PhysicalSize<u32>,
         shader: wgpu::ShaderModuleDescriptor,
         bind_group_layouts: &[&wgpu::BindGroupLayout],
     ) -> Self {
@@ -84,20 +83,20 @@ impl ShaderQuad {
         });
 
         let mut quad = Self {
-            resolution,
             vertex_buffer,
             render_pipeline,
         };
 
-        quad.set_target_resolution(queue, target_resolution);
+        quad.resize(queue, internal_size, target_size);
 
         quad
     }
 
-    pub fn set_target_resolution(
+    pub fn resize(
         &mut self,
         queue: &wgpu::Queue,
-        target_resolution: PhysicalSize<u32>,
+        internal_size: PhysicalSize<u32>,
+        target_size: PhysicalSize<u32>,
     ) {
         let mut left = -1.;
         let mut right = 1.;
@@ -105,10 +104,10 @@ impl ShaderQuad {
         let mut up = 1.;
 
         // Letterbox the aspect ratio difference
-        let from_w = self.resolution.width as f32;
-        let from_h = self.resolution.height as f32;
-        let to_w = target_resolution.width as f32;
-        let to_h = target_resolution.height as f32;
+        let from_w = internal_size.width as f32;
+        let from_h = internal_size.height as f32;
+        let to_w = target_size.width as f32;
+        let to_h = target_size.height as f32;
         let from_aspect_ratio = from_w / from_h;
         let to_aspect_ratio = to_w / to_h;
         let h_scale = from_h / to_h;
@@ -133,10 +132,6 @@ impl ShaderQuad {
         ];
 
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&quad));
-    }
-
-    pub fn resolution(&self) -> PhysicalSize<u32> {
-        self.resolution
     }
 
     pub fn render(
