@@ -58,6 +58,7 @@ pub struct Renderer {
     vertex_uniform_buffer: wgpu::Buffer,
     fragment_uniform_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
+    post_screen: ScreenPass,
     output_screen: ScreenPass,
 }
 
@@ -245,6 +246,16 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
+        let post_screen = ScreenPass::new(
+            &device,
+            &queue,
+            internal_size,
+            ScreenPass::COLOR_TEXTURE_FORMAT,
+            internal_size,
+            get_shader("post.wgsl"),
+            &[],
+        );
+
         let output_screen = ScreenPass::new(
             &device,
             &queue,
@@ -265,6 +276,7 @@ impl Renderer {
             vertex_uniform_buffer,
             fragment_uniform_buffer,
             vertex_buffer,
+            post_screen,
             output_screen,
         };
 
@@ -347,8 +359,8 @@ impl Renderer {
             bytemuck::cast_slice(vertex_data.as_slice()),
         );
 
-        // Create output screen views
-        let (color_texture, depth_texture) = self.output_screen.textures();
+        // Create post processing screen texture views
+        let (color_texture, depth_texture) = self.post_screen.textures();
         let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -378,7 +390,7 @@ impl Renderer {
                     view: &depth_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.),
-                        store: false,
+                        store: true,
                     }),
                     stencil_ops: None,
                 }),
@@ -392,12 +404,17 @@ impl Renderer {
 
         self.queue.submit(Some(encoder.finish()));
 
-        // Create window surface output view
+        // Post process to output pass
+        let (color_texture, _) = self.output_screen.textures();
+        let view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.post_screen
+            .render(&self.device, &self.queue, &view, &[]);
+
+        // Output (scaling) to window pass
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-
         self.output_screen
             .render(&self.device, &self.queue, &view, &[]);
         output.present();
