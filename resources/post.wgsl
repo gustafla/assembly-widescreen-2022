@@ -24,9 +24,10 @@ var s: sampler;
 @group(0) @binding(1)
 var t_color: texture_2d<f32>;
 @group(0) @binding(2)
-var t_depth: texture_2d<f32>;
+var t_depth: texture_depth_2d;
 
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
+    let ndc = vec4<f32>(in.v_pos, textureSample(t_depth, s, in.v_uv), 1.);
     return textureSample(t_color, s, in.v_uv);
 }
