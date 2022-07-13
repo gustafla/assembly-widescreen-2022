@@ -20,11 +20,11 @@ fn vs_main(in: VertInput) -> VertOutput {
 }
 
 @group(0) @binding(0)
-var t_color: texture_2d<f32>;
-@group(0) @binding(1)
-var t_depth: texture_2d<f32>;
-@group(0) @binding(2)
 var s: sampler;
+@group(0) @binding(1)
+var t_color: texture_2d<f32>;
+@group(0) @binding(2)
+var t_depth: texture_2d<f32>;
 
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {

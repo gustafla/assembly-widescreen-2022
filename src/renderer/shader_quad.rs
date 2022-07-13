@@ -144,7 +144,7 @@ impl ShaderQuad {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         target: &wgpu::TextureView,
-        bind_groups: &[&wgpu::BindGroup],
+        bind_groups: &[wgpu::BindGroup],
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Shader Quad Command Encoder"),
