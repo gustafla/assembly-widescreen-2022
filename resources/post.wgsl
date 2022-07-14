@@ -34,12 +34,14 @@ var s: sampler;
 @group(0) @binding(2)
 var t_color: texture_2d<f32>;
 @group(0) @binding(3)
+var t_normal: texture_2d<f32>;
+@group(0) @binding(4)
 var t_depth: texture_depth_2d;
 
 fn frag_world_pos(in: VertOutput) -> vec3<f32> {
     let ndc = vec4<f32>(in.v_pos, textureSample(t_depth, s, in.v_uv), 1.);
-    let homogenous_pos = fs_uniforms.inverse_view_projection_mat * ndc;
-    return homogenous_pos.xyz / homogenous_pos.w;
+    let pos = fs_uniforms.inverse_view_projection_mat * ndc;
+    return pos.xyz / pos.w;
 }
 
 fn scene(pos: vec3<f32>) -> f32 {
@@ -72,13 +74,16 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     let rast_t = distance(rast_pos, cam_pos);
     let direction = (rast_pos - cam_pos) / rast_t;
 
+    var pos: vec3<f32> = rast_pos;
+    var normal: vec3<f32> = textureSample(t_normal, s, in.v_uv).rgb;
     var color: vec3<f32> = textureSample(t_color, s, in.v_uv).rgb;
     let march_t = march(cam_pos, direction);
     if (march_t < rast_t) {
-        let pos = cam_pos + direction * march_t;
-        let normal = normalize(grad(pos));
-        color = vec3<f32>(1.0, 0.5, 0.1) * max(dot(normal, normalize(fs_uniforms.light_position.xyz - pos)), 0.);
+        pos = cam_pos + direction * march_t;
+        normal = normalize(grad(pos));
+        color = vec3<f32>(1.0, 0.5, 0.1);
     }
 
-    return vec4<f32>(color, 1.);
+    let diffuse = max(dot(normal, normalize(fs_uniforms.light_position.xyz - pos)), 0.);
+    return vec4<f32>(color * diffuse, 1.);
 }

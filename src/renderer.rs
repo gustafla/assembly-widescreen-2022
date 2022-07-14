@@ -235,6 +235,7 @@ impl Renderer {
         // Post Pass ----------------------------------------------------------------------------
 
         let post_pass_color_format = wgpu::TextureFormat::Rgba16Float;
+        let post_pass_normal_format = wgpu::TextureFormat::Rgba16Float;
         let post_pass_depth_format = wgpu::TextureFormat::Depth32Float;
 
         let textures = vec![
@@ -247,6 +248,16 @@ impl Renderer {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 label: Some("Post Pass Color Texture"),
+            }),
+            device.create_texture(&wgpu::TextureDescriptor {
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: post_pass_normal_format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                label: Some("Post Pass Normal Texture"),
             }),
             device.create_texture(&wgpu::TextureDescriptor {
                 size,
@@ -300,6 +311,16 @@ impl Renderer {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Depth,
                         view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
@@ -344,6 +365,12 @@ impl Renderer {
                         &textures[1].create_view(&wgpu::TextureViewDescriptor::default()),
                     ),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(
+                        &textures[2].create_view(&wgpu::TextureViewDescriptor::default()),
+                    ),
+                },
             ],
         })];
 
@@ -363,7 +390,7 @@ impl Renderer {
 
         // Scene ----------------------------------------------------------------------------------
 
-        let shader = device.create_shader_module(get_shader("shader.wgsl"));
+        let shader = device.create_shader_module(get_shader("defer.wgsl"));
 
         let vertex_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Uniform Buffer"),
@@ -426,14 +453,24 @@ impl Renderer {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: post_pass_color_format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
+                targets: &[
+                    Some(wgpu::ColorTargetState {
+                        format: post_pass_color_format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent::REPLACE,
+                            alpha: wgpu::BlendComponent::REPLACE,
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
                     }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                    Some(wgpu::ColorTargetState {
+                        format: post_pass_normal_format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent::REPLACE,
+                            alpha: wgpu::BlendComponent::REPLACE,
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                ],
             }),
             multiview: None,
         });
@@ -529,8 +566,10 @@ impl Renderer {
         // Create post processing texture views
         let color_view =
             self.post_pass.textures[0].create_view(&wgpu::TextureViewDescriptor::default());
-        let depth_view =
+        let normal_view =
             self.post_pass.textures[1].create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view =
+            self.post_pass.textures[2].create_view(&wgpu::TextureViewDescriptor::default());
 
         // Render commands
         let mut encoder = self
@@ -541,19 +580,34 @@ impl Renderer {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &color_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.,
-                            b: 0.,
-                            g: 0.,
-                            a: 1.,
-                        }),
-                        store: true,
-                    },
-                })],
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &color_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.,
+                                b: 0.,
+                                g: 0.,
+                                a: 1.,
+                            }),
+                            store: true,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &normal_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.,
+                                b: 0.,
+                                g: 0.,
+                                a: 0.,
+                            }),
+                            store: true,
+                        },
+                    }),
+                ],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &depth_view,
                     depth_ops: Some(wgpu::Operations {
