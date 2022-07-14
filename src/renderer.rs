@@ -516,7 +516,7 @@ impl Renderer {
             .zip(scene.objects[0].normals.iter())
             .map(|(p, n)| Vertex {
                 position: Vec4::from((*p, 1.)),
-                normal: Vec4::from((*n, 1.)),
+                normal: Vec4::from((*n, 0.)),
                 color: Vec4::ONE,
             })
             .collect();
