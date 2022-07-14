@@ -1,6 +1,6 @@
 mod shader_quad;
 
-use crate::scene::Scene;
+use crate::scene::{Model, Scene};
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::*;
@@ -98,7 +98,11 @@ fn get_shader<'a>(path: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
 }
 
 impl Renderer {
-    pub async fn new(internal_size: PhysicalSize<u32>, window: &Window) -> Result<Self> {
+    pub async fn new(
+        internal_size: PhysicalSize<u32>,
+        window: &Window,
+        _models: Vec<Model>,
+    ) -> Result<Self> {
         // Init & surface -------------------------------------------------------------------------
 
         let surface_size = window.inner_size();
@@ -547,7 +551,7 @@ impl Renderer {
         );
 
         // Update Vertex Buffer
-        let vertex_data: Vec<Vertex> = scene.objects[0]
+        /*let vertex_data: Vec<Vertex> = scene.objects[0]
             .positions
             .iter()
             .zip(scene.objects[0].normals.iter())
@@ -561,7 +565,7 @@ impl Renderer {
             &self.vertex_buffer,
             0,
             bytemuck::cast_slice(vertex_data.as_slice()),
-        );
+        );*/
 
         // Create post processing texture views
         let color_view =
@@ -621,7 +625,7 @@ impl Renderer {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            render_pass.draw(0..vertex_data.len() as u32, 0..1);
+            //render_pass.draw(0..vertex_data.len() as u32, 0..1);
         }
 
         self.queue.submit(Some(encoder.finish()));

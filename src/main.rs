@@ -1,7 +1,7 @@
 mod logger;
 
 use anyhow::{anyhow, Context, Result};
-use demo::{Demo, DemoSync, Player, Renderer};
+use demo::{DemoSync, Player, Renderer};
 use pico_args::Arguments;
 #[cfg(target_family = "unix")]
 use winit::platform::unix::WindowBuilderExtUnix;
@@ -112,15 +112,15 @@ fn run(
         .build(&event_loop)
         .context("Failed to build a window")?;
 
+    // Initialize demo render data
+    let models = demo::init();
+
     // Initialize Renderer for window
     let internal_size = PhysicalSize::new(
         (size.width as f32 * scale) as u32,
         (size.height as f32 * scale) as u32,
     );
-    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window))?;
-
-    // Load demo content
-    let mut demo = Demo::new();
+    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window, models))?;
 
     // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]
@@ -148,7 +148,8 @@ fn run(
                     #[cfg(debug_assertions)]
                     Some(VirtualKeyCode::R) => {
                         renderer =
-                            pollster::block_on(Renderer::new(internal_size, &window)).unwrap();
+                            pollster::block_on(Renderer::new(internal_size, &window, demo::init()))
+                                .unwrap();
                     }
                     _ => {}
                 },
@@ -168,7 +169,7 @@ fn run(
                 }
 
                 // Create the frame scene
-                let scene = demo.update(&mut sync);
+                let scene = demo::update(&mut sync);
 
                 // Render the scene
                 match renderer.render(&scene) {
