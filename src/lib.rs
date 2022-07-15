@@ -16,6 +16,7 @@ pub static RESOURCES_PATH: &str = "resources";
 pub static RESOURCES_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources");
 
 fn cylinder_position(r: f32, u: f32, v: f32) -> Vec3 {
+    let u = u * std::f32::consts::TAU;
     let x = r * u.cos();
     let y = v;
     let z = r * u.sin();
@@ -23,13 +24,12 @@ fn cylinder_position(r: f32, u: f32, v: f32) -> Vec3 {
 }
 
 fn trunk_segment(r0: f32, r1: f32, start: f32, end: f32, n: usize) -> VertexData {
-    use std::f32::consts::TAU;
-    let mut vertices = VertexData::default();
-
+    let mut positions = Vec::new();
+    let mut texcoords = Vec::new();
     for i in 0..n - 1 {
-        let u0 = i as f32 * TAU / (n - 1) as f32;
+        let u0 = i as f32 / (n - 1) as f32;
         let v0 = start;
-        let u1 = (i + 1) as f32 * TAU / (n - 1) as f32;
+        let u1 = (i + 1) as f32 / (n - 1) as f32;
         let v1 = end;
 
         let p0 = cylinder_position(r0, u0, v0);
@@ -37,37 +37,22 @@ fn trunk_segment(r0: f32, r1: f32, start: f32, end: f32, n: usize) -> VertexData
         let p2 = cylinder_position(r1, u1, v1);
         let p3 = cylinder_position(r1, u0, v1);
 
-        vertices.positions.push(p0);
-        vertices.positions.push(p1);
-        vertices.positions.push(p2);
-        vertices.positions.push(p2);
-        vertices.positions.push(p3);
-        vertices.positions.push(p0);
+        positions.push(p0);
+        positions.push(p1);
+        positions.push(p2);
+        positions.push(p2);
+        positions.push(p3);
+        positions.push(p0);
 
-        vertices.texcoords.push(vec2(u0 / TAU, v0));
-        vertices.texcoords.push(vec2(u1 / TAU, v0));
-        vertices.texcoords.push(vec2(u1 / TAU, v1));
-        vertices.texcoords.push(vec2(u1 / TAU, v1));
-        vertices.texcoords.push(vec2(u0 / TAU, v1));
-        vertices.texcoords.push(vec2(u0 / TAU, v0));
-
-        let tangent = (p3 - p0).normalize();
-        let bitangent = (p1 - p0).normalize();
-
-        let normal = tangent.cross(bitangent).normalize();
-        vertices.normals.extend(std::iter::repeat(normal).take(6));
-        vertices.tangents.extend(std::iter::repeat(tangent).take(6));
-
-        #[cfg(debug_assertions)]
-        {
-            let bt_assert = normal.cross(tangent) - bitangent;
-            assert!(bt_assert.x.abs() < 0.001);
-            assert!(bt_assert.y.abs() < 0.001);
-            assert!(bt_assert.z.abs() < 0.001);
-        }
+        texcoords.push(vec2(u0, v0));
+        texcoords.push(vec2(u1, v0));
+        texcoords.push(vec2(u1, v1));
+        texcoords.push(vec2(u1, v1));
+        texcoords.push(vec2(u0, v1));
+        texcoords.push(vec2(u0, v0));
     }
 
-    vertices
+    VertexData::from_triangles(positions, texcoords)
 }
 
 fn generate_tree() -> VertexData {
