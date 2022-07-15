@@ -47,17 +47,9 @@ impl VertexData {
 
             let f = 1. / (dtxc0.x * dtxc1.y - dtxc1.x * dtxc0.y);
 
-            let tangent = vec3(
-                f * (dtxc1.y * edge0.x - dtxc0.y * edge1.x),
-                f * (dtxc1.y * edge0.y - dtxc0.y * edge1.y),
-                f * (dtxc1.y * edge0.z - dtxc0.y * edge1.z),
-            );
+            let tangent = ((dtxc1.y * edge0 - dtxc0.y * edge1) * f).normalize();
             tangents.extend(std::iter::repeat(tangent).take(3));
-            let bitangent = vec3(
-                f * (-dtxc1.x * edge0.x + dtxc0.x * edge1.x),
-                f * (-dtxc1.x * edge0.y + dtxc0.x * edge1.y),
-                f * (-dtxc1.x * edge0.z + dtxc0.x * edge1.z),
-            );
+            let bitangent = ((dtxc0.x * edge1 - dtxc1.x * edge0) * f).normalize();
             bitangents.extend(std::iter::repeat(bitangent).take(3));
         }
 
