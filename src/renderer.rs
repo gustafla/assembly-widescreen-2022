@@ -1,18 +1,17 @@
 mod shader_quad;
 
-use crate::scene::{Model, Scene};
+use crate::scene;
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::*;
 use shader_quad::ShaderQuad;
+use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
 
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct VertexUniforms {
-    model_mat: Mat4,
     view_projection_mat: Mat4,
-    normal_mat: Mat4,
 }
 
 #[repr(C, align(16))]
@@ -29,10 +28,10 @@ pub struct PostUniforms {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct Vertex {
-    pub position: Vec4,
-    pub normal: Vec4,
-    pub color: Vec4,
+struct Vertex {
+    position: Vec4,
+    color_roughness: Vec4,
+    normal: Vec4,
 }
 
 impl Vertex {
@@ -48,13 +47,37 @@ impl Vertex {
     }
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+struct Instance {
+    model: Mat4,
+    normal: Mat4,
+}
+
+impl Instance {
+    const ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![8=>Float32x4, 9=>Float32x4, 10=>Float32x4, 11=>Float32x4, 12=>Float32x4, 13=>Float32x4, 14=>Float32x4, 15=>Float32x4];
+    fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &Self::ATTRIBUTES,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Model {
+    vertex_buffer: wgpu::Buffer,
+    num_vertices: u32,
+}
+
 struct Pass {
     textures: Vec<wgpu::Texture>,
     bind_groups: Vec<wgpu::BindGroup>,
     shader_quad: ShaderQuad,
 }
 
-pub struct Renderer {
+pub struct Renderer<const M: usize> {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -62,8 +85,9 @@ pub struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
     uniform_bind_group: wgpu::BindGroup,
     vertex_uniform_buffer: wgpu::Buffer,
-    vertex_buffer: wgpu::Buffer,
     internal_size: PhysicalSize<u32>,
+    models: [Model; M],
+    instance_buffer: wgpu::Buffer,
     post_pass_uniform_buffer: wgpu::Buffer,
     post_pass: Pass,
     output_pass: Pass,
@@ -97,11 +121,37 @@ fn get_shader<'a>(path: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
     }
 }
 
-impl Renderer {
+impl<const M: usize> Renderer<M> {
+    fn load_model(device: &wgpu::Device, model: scene::Model) -> Model {
+        let vert = model.vertices;
+        let vertices: Vec<Vertex> = vert
+            .positions
+            .into_iter()
+            .zip(vert.color_roughness.into_iter())
+            .zip(vert.normals.into_iter())
+            .map(|((position, color_roughness), normal)| Vertex {
+                position: Vec4::from((position, 1.)),
+                color_roughness,
+                normal: Vec4::from((normal, 0.)),
+            })
+            .collect();
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Object Vertex Buffer"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        Model {
+            vertex_buffer,
+            num_vertices: vertices.len() as u32,
+        }
+    }
+
     pub async fn new(
         internal_size: PhysicalSize<u32>,
         window: &Window,
-        _models: Vec<Model>,
+        models: [scene::Model; M],
     ) -> Result<Self> {
         // Init & surface -------------------------------------------------------------------------
 
@@ -251,7 +301,7 @@ impl Renderer {
                 format: post_pass_color_format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
-                label: Some("Post Pass Color Texture"),
+                label: Some("Post Pass Color and Roughness Texture"),
             }),
             device.create_texture(&wgpu::TextureDescriptor {
                 size,
@@ -403,24 +453,23 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        let uniform_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Uniform Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Bind Group Layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
 
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Uniform Bind Group"),
-            layout: &uniform_bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: vertex_uniform_buffer.as_entire_binding(),
@@ -429,7 +478,7 @@ impl Renderer {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&uniform_bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -439,17 +488,17 @@ impl Renderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[Vertex::desc()],
+                buffers: &[Vertex::desc(), Instance::desc()],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
-                cull_mode: Some(wgpu::Face::Back),
+                //cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: post_pass_depth_format,
                 depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
+                depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
@@ -479,9 +528,16 @@ impl Renderer {
             multiview: None,
         });
 
-        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Vertex Buffer"),
-            size: std::mem::size_of::<Vertex>() as u64 * 4096 * 3,
+        let models = models
+            .into_iter()
+            .map(|m| Self::load_model(&device, m))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: std::mem::size_of::<Instance>() as u64 * 1024,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -494,8 +550,9 @@ impl Renderer {
             render_pipeline,
             uniform_bind_group,
             vertex_uniform_buffer,
-            vertex_buffer,
             internal_size,
+            models,
+            instance_buffer,
             post_pass_uniform_buffer,
             post_pass,
             output_pass,
@@ -521,51 +578,42 @@ impl Renderer {
             .configure(&self.device, &self.surface_configuration);
     }
 
-    pub fn render(&self, scene: &Scene) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&self, scene: &scene::Scene<M>) -> Result<(), wgpu::SurfaceError> {
         // Update uniforms
-        let camera_position = Vec4::from((scene.cameras[0].position, 1.));
-        let view_mat =
-            Mat4::look_at_rh(scene.cameras[0].position, scene.cameras[0].target, Vec3::Y);
+        let camera_position = Vec4::from((scene.camera.position, 1.));
+        let view_mat = Mat4::look_at_rh(scene.camera.position, scene.camera.target, Vec3::Y);
         let project_mat = Mat4::perspective_rh(
-            scene.cameras[0].fov,
+            scene.camera.fov,
             self.internal_size.width as f32 / self.internal_size.height as f32,
             0.1,
             100.,
         );
         let view_projection_mat = project_mat * view_mat;
-        let model_mat = Mat4::from_scale_rotation_translation(
-            scene.objects[0].scale,
-            scene.objects[0].rotation,
-            scene.objects[0].translation,
-        );
-        let normal_mat = model_mat.inverse().transpose();
-
         self.queue.write_buffer(
             &self.vertex_uniform_buffer,
             0,
             bytemuck::cast_slice(&[VertexUniforms {
-                model_mat,
                 view_projection_mat,
-                normal_mat,
             }]),
         );
 
-        // Update Vertex Buffer
-        /*let vertex_data: Vec<Vertex> = scene.objects[0]
-            .positions
+        // Update instances
+        let instances: Vec<Instance> = scene
+            .instances_by_model
             .iter()
-            .zip(scene.objects[0].normals.iter())
-            .map(|(p, n)| Vertex {
-                position: Vec4::from((*p, 1.)),
-                normal: Vec4::from((*n, 0.)),
-                color: Vec4::ONE,
+            .map(|inst| inst.iter())
+            .flatten()
+            .map(|i| {
+                let model =
+                    Mat4::from_scale_rotation_translation(i.scale, i.rotation, i.translation);
+                Instance {
+                    model,
+                    normal: model.inverse().transpose(),
+                }
             })
             .collect();
-        self.queue.write_buffer(
-            &self.vertex_buffer,
-            0,
-            bytemuck::cast_slice(vertex_data.as_slice()),
-        );*/
+        self.queue
+            .write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&instances));
 
         // Create post processing texture views
         let color_view =
@@ -593,7 +641,7 @@ impl Renderer {
                                 r: 0.,
                                 b: 0.,
                                 g: 0.,
-                                a: 1.,
+                                a: 0.,
                             }),
                             store: true,
                         },
@@ -623,9 +671,20 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            //render_pass.draw(0..vertex_data.len() as u32, 0..1);
+
+            let mut instance_offset = 0;
+            for (model_id, instances) in scene.instances_by_model.iter().enumerate() {
+                // Draw instances of current model
+                render_pass.set_vertex_buffer(0, self.models[model_id].vertex_buffer.slice(..));
+                render_pass.draw(
+                    0..self.models[model_id].num_vertices,
+                    instance_offset..(instance_offset + instances.len() as u32),
+                );
+                // Bump instance buffer slice offset for next model
+                instance_offset += instances.len() as u32;
+            }
         }
 
         self.queue.submit(Some(encoder.finish()));

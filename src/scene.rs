@@ -1,36 +1,19 @@
-use bytemuck::{Pod, Zeroable};
 use glam::*;
-
-pub trait Texel: Pod + Zeroable {}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct Srgbu8(pub [u8; 3]);
-impl Texel for Srgbu8 {}
-impl Texel for Vec3 {}
-impl Texel for f32 {}
-
-pub struct Texture<F: Texel> {
-    pub width: u32,
-    pub height: u32,
-    pub data: Vec<F>,
-}
 
 #[derive(Default)]
 pub struct VertexData {
     pub positions: Vec<Vec3>,
-    pub texcoords: Vec<Vec2>,
-    pub tangents: Vec<Vec3>,
-    pub bitangents: Vec<Vec3>,
+    pub color_roughness: Vec<Vec4>,
+    pub normals: Vec<Vec3>,
 }
 
 impl VertexData {
-    pub fn from_triangles(positions: Vec<Vec3>, texcoords: Vec<Vec2>) -> Self {
-        assert!(positions.len() == texcoords.len());
+    pub fn from_triangles(positions: Vec<Vec3>, color_roughness: Vec<Vec4>) -> Self {
+        assert!(positions.len() == color_roughness.len());
         assert!(positions.len() % 3 == 0);
 
         // Compute texcoord-aligned tangents and bitangents
-        let mut tangents = Vec::with_capacity(positions.len());
+        /*let mut tangents = Vec::with_capacity(positions.len());
         let mut bitangents = Vec::with_capacity(positions.len());
         for i in (0..positions.len()).step_by(3) {
             let pos0 = positions[i + 0];
@@ -51,34 +34,40 @@ impl VertexData {
             tangents.extend(std::iter::repeat(tangent).take(3));
             let bitangent = ((dtxc0.x * edge1 - dtxc1.x * edge0) * f).normalize();
             bitangents.extend(std::iter::repeat(bitangent).take(3));
+        }*/
+        let mut normals = Vec::with_capacity(positions.len());
+        for i in (0..positions.len()).step_by(3) {
+            let pos0 = positions[i + 0];
+            let pos1 = positions[i + 1];
+            let pos2 = positions[i + 2];
+
+            let edge0 = pos1 - pos0;
+            let edge1 = pos2 - pos0;
+            let normal = edge0.cross(edge1).normalize();
+
+            normals.extend(std::iter::repeat(normal).take(3));
         }
 
         Self {
             positions,
-            texcoords,
-            tangents,
-            bitangents,
+            color_roughness,
+            normals,
         }
     }
 
     pub fn push(&mut self, data: VertexData) {
-        self.positions.copy_from_slice(&data.positions);
-        self.texcoords.copy_from_slice(&data.texcoords);
-        self.tangents.copy_from_slice(&data.tangents);
-        self.bitangents.copy_from_slice(&data.bitangents);
+        self.positions.extend_from_slice(&data.positions);
+        self.color_roughness
+            .extend_from_slice(&data.color_roughness);
+        self.normals.extend_from_slice(&data.normals);
     }
 }
 
 pub struct Model {
     pub vertices: VertexData,
-    pub albedo: Texture<Srgbu8>,
-    pub normal: Texture<Vec3>,
-    pub roughness: Texture<f32>,
-    pub ao: Texture<f32>,
 }
 
-pub struct Object {
-    pub model: usize,
+pub struct Instance {
     pub scale: Vec3,
     pub rotation: Quat,
     pub translation: Vec3,
@@ -90,7 +79,7 @@ pub struct Camera {
     pub target: Vec3,
 }
 
-pub struct Scene {
-    pub objects: Vec<Object>, // Only one supported in Renderer
-    pub cameras: Vec<Camera>, // Only one supported in Renderer
+pub struct Scene<const M: usize> {
+    pub instances_by_model: [Vec<Instance>; M],
+    pub camera: Camera,
 }

@@ -1,26 +1,25 @@
-<sync rows="128">
+<sync rows="1024">
 	<tracks>
 		<track name="rotation.y">
 			<key interpolation="1" value="2" row="0"/>
-			<key interpolation="0" value="5" row="72"/>
+			<key interpolation="0" value="20" row="376"/>
 		</track>
 		<track name="camera0:fov">
-			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="1" value="0.40000001" row="0"/>
 		</track>
 		<track name="camera0:pos.x">
 			<key interpolation="1" value="0" row="0"/>
-			<key interpolation="0" value="1" row="24"/>
+			<key interpolation="0" value="0" row="24"/>
 		</track>
 		<track name="camera0:pos.y">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="1" value="-40" row="0"/>
 		</track>
 		<track name="camera0:pos.z">
-			<key interpolation="1" value="-7" row="0"/>
-			<key interpolation="0" value="0" row="24"/>
+			<key interpolation="0" value="60" row="0"/>
 		</track>
 		<track name="camera0:target.x">
 			<key interpolation="1" value="0" row="0"/>
-			<key interpolation="0" value="-1" row="24"/>
+			<key interpolation="0" value="0" row="24"/>
 		</track>
 		<track name="camera0:target.y">
 			<key interpolation="0" value="0" row="0"/>

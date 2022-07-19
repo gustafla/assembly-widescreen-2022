@@ -1,50 +1,63 @@
 struct VertUniforms {
-    model_mat: mat4x4<f32>,
     view_projection_mat: mat4x4<f32>,
-    normal_mat: mat4x4<f32>,
 };
 @group(0) @binding(0)
 var<uniform> vs_uniforms: VertUniforms;
 
 struct VertInput {
-    @location(0) pos: vec4<f32>,
-    @location(1) normal: vec4<f32>,
-    @location(2) color: vec4<f32>,
+    @location(0) local_position: vec4<f32>,
+    @location(1) color_roughness: vec4<f32>,
+    @location(2) normal: vec4<f32>,
+};
+
+struct InstanceInput {
+    @location(8)  model_0:  vec4<f32>,
+    @location(9)  model_1:  vec4<f32>,
+    @location(10) model_2:  vec4<f32>,
+    @location(11) model_3:  vec4<f32>,
+    @location(12) normal_0: vec4<f32>,
+    @location(13) normal_1: vec4<f32>,
+    @location(14) normal_2: vec4<f32>,
+    @location(15) normal_3: vec4<f32>,
 };
 
 struct VertOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) v_normal: vec4<f32>,
-    @location(1) v_color: vec4<f32>,
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) v_color_roughness: vec4<f32>,
+    @location(1) v_normal: vec4<f32>,
 };
 
 @vertex
-fn vs_main(in: VertInput) -> VertOutput {
+fn vs_main(vert: VertInput, inst: InstanceInput) -> VertOutput {
+    let model_mat = mat4x4<f32>(
+        inst.model_0,
+        inst.model_1,
+        inst.model_2,
+        inst.model_3,
+    );
+    let normal_mat = mat4x4<f32>(
+        inst.normal_0,
+        inst.normal_1,
+        inst.normal_2,
+        inst.normal_3,
+    );
+
     var out: VertOutput;
-    out.position = vs_uniforms.view_projection_mat * vs_uniforms.model_mat * in.pos;
-    out.v_normal = vs_uniforms.normal_mat * in.normal;
-    out.v_color = in.color;
+    out.clip_position = vs_uniforms.view_projection_mat * model_mat * vert.local_position;
+    out.v_color_roughness = vert.color_roughness;
+    out.v_normal = normal_mat * vert.normal;
     return out;
 }
 
 struct FragOutput {
-    @location(0) color: vec4<f32>,
+    @location(0) color_roughness: vec4<f32>,
     @location(1) normal: vec4<f32>,
 };
 
 @fragment
 fn fs_main(in: VertOutput) -> FragOutput {
-    //let normal = normalize(in.v_normal.xyz);
-    //let to_light = normalize(fs_uniforms.light_position.xyz - in.v_position.xyz);
-    //let to_camera = normalize(fs_uniforms.camera_position.xyz - in.v_position.xyz);
-    //let half = normalize(to_light + to_camera);
-
-    //var diffuse = fs_uniforms.diffuse * max(dot(normal, to_light), 0.0);
-    //var specular = fs_uniforms.specular * pow(max(dot(normal, half), 0.0), 32.0);
-
-    //return in.v_color * (fs_uniforms.ambient + diffuse) + specular;
     var out: FragOutput;
-    out.color = in.v_color;
+    out.color_roughness = in.v_color_roughness;
     out.normal = in.v_normal;
     return out;
 }

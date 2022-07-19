@@ -7,10 +7,8 @@ use glam::*;
 use include_dir::{include_dir, Dir};
 pub use player::Player;
 pub use renderer::Renderer;
-use scene::{Camera, Model, Object, Scene, VertexData};
+use scene::{Camera, Instance, Model, Scene, VertexData};
 pub use sync::DemoSync;
-
-use crate::scene::{Srgbu8, Texture};
 
 pub static RESOURCES_PATH: &str = "resources";
 pub static RESOURCES_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources");
@@ -25,7 +23,7 @@ fn cylinder_position(r: f32, u: f32, v: f32) -> Vec3 {
 
 fn trunk_segment(r0: f32, r1: f32, start: f32, end: f32, n: usize) -> VertexData {
     let mut positions = Vec::new();
-    let mut texcoords = Vec::new();
+    let mut color_roughness = Vec::new();
     for i in 0..n - 1 {
         let u0 = i as f32 / (n - 1) as f32;
         let v0 = start;
@@ -44,68 +42,90 @@ fn trunk_segment(r0: f32, r1: f32, start: f32, end: f32, n: usize) -> VertexData
         positions.push(p3);
         positions.push(p0);
 
-        texcoords.push(vec2(u0, v0));
+        color_roughness.extend(std::iter::repeat(Vec4::ONE).take(6));
+
+        /*texcoords.push(vec2(u0, v0));
         texcoords.push(vec2(u1, v0));
         texcoords.push(vec2(u1, v1));
         texcoords.push(vec2(u1, v1));
         texcoords.push(vec2(u0, v1));
-        texcoords.push(vec2(u0, v0));
+        texcoords.push(vec2(u0, v0));*/
     }
 
-    VertexData::from_triangles(positions, texcoords)
+    VertexData::from_triangles(positions, color_roughness)
 }
 
-fn generate_tree() -> VertexData {
+fn generate_tree(nu: usize, nv: usize) -> VertexData {
     let mut vertices = VertexData::default();
 
-    vertices.push(trunk_segment(1., 0.5, 0., 1., 8));
-    vertices.push(trunk_segment(0.5, 0.1, 1., 2., 8));
-    vertices.push(trunk_segment(0.1, 0.0, 2., 2.1, 8));
+    for v in 0..nv {
+        let v0 = v as f32;
+        let v1 = (v + 1) as f32;
+        vertices.push(trunk_segment(1. / v0, 1. / v1, v0, v1, nu));
+    }
 
     vertices
 }
 
-pub fn init() -> Vec<Model> {
-    let mut models = Vec::new();
+fn generate_plane() -> VertexData {
+    VertexData::from_triangles(
+        vec![
+            vec3(-0.5, 0., -0.5),
+            vec3(0.5, 0., -0.5),
+            vec3(0.5, 0., 0.5),
+            vec3(0.5, 0., 0.5),
+            vec3(-0.5, 0., 0.5),
+            vec3(-0.5, 0., -0.5),
+        ],
+        vec![
+            Vec4::ONE * 0.5,
+            Vec4::ONE * 0.5,
+            Vec4::ONE * 0.5,
+            Vec4::ONE * 0.5,
+            Vec4::ONE * 0.5,
+            Vec4::ONE * 0.5,
+        ],
+    )
+}
 
-    models.push(Model {
-        vertices: generate_tree(),
-        albedo: Texture {
-            width: 1,
-            height: 1,
-            data: vec![Srgbu8([255, 255, 255])],
+const MODELS: usize = 2;
+
+pub fn init() -> [Model; MODELS] {
+    let models = [
+        Model {
+            vertices: generate_tree(8, 5),
         },
-        normal: Texture {
-            width: 1,
-            height: 1,
-            data: vec![vec3(0., 0., 1.)],
+        Model {
+            vertices: generate_plane(),
         },
-        roughness: Texture {
-            width: 1,
-            height: 1,
-            data: vec![0.],
-        },
-        ao: Texture {
-            width: 1,
-            height: 1,
-            data: vec![0.],
-        },
-    });
+    ];
 
     log::trace!("Models initialized");
 
     models
 }
 
-pub fn update(sync: &mut DemoSync) -> Scene {
+pub fn update(sync: &mut DemoSync) -> Scene<MODELS> {
+    let mut test = Vec::new();
+    for i in -10i32..=10 {
+        let i = i as f32 / 10.;
+        test.push(Instance {
+            scale: Vec3::ONE * (2. + i),
+            rotation: Quat::from_axis_angle(Vec3::Y, sync.get("rotation.y")),
+            translation: vec3(i * 60., 0., 0.),
+        });
+    }
+
     Scene {
-        objects: vec![Object {
-            model: 0,
-            scale: Vec3::ONE,
-            rotation: Quat::from_rotation_x(sync.get("rotation.x")),
-            translation: Vec3::ZERO,
-        }],
-        cameras: vec![Camera {
+        instances_by_model: [
+            test,
+            vec![Instance {
+                scale: Vec3::ONE * 30.,
+                rotation: Quat::default(),
+                translation: vec3(0., 0., 0.),
+            }],
+        ],
+        camera: Camera {
             fov: sync.get("camera0:fov"),
             position: vec3(
                 sync.get("camera0:pos.x"),
@@ -117,6 +137,6 @@ pub fn update(sync: &mut DemoSync) -> Scene {
                 sync.get("camera0:target.y"),
                 sync.get("camera0:target.z"),
             ),
-        }],
+        },
     }
 }
