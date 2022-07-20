@@ -33,7 +33,7 @@ impl ShaderQuad {
         queue: &wgpu::Queue,
         internal_size: PhysicalSize<u32>,
         target_size: PhysicalSize<u32>,
-        target_format: wgpu::TextureFormat,
+        targets: &[Option<wgpu::ColorTargetState>],
         shader: wgpu::ShaderModuleDescriptor,
         bind_group_layouts: &[&wgpu::BindGroupLayout],
     ) -> Self {
@@ -63,14 +63,7 @@ impl ShaderQuad {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                targets,
             }),
             multiview: None,
         });
@@ -138,7 +131,7 @@ impl ShaderQuad {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        target: &wgpu::TextureView,
+        color_attachments: &[Option<wgpu::RenderPassColorAttachment>],
         bind_groups: &[wgpu::BindGroup],
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -147,19 +140,7 @@ impl ShaderQuad {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Shader Quad Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.,
-                            g: 0.,
-                            b: 0.,
-                            a: 1.,
-                        }),
-                        store: true,
-                    },
-                })],
+                color_attachments,
                 depth_stencil_attachment: None,
             });
 
