@@ -45,7 +45,7 @@ fn vs_main(vert: VertInput, inst: InstanceInput) -> VertOutput {
     var out: VertOutput;
     out.clip_position = vs_uniforms.view_projection_mat * model_mat * vert.local_position;
     out.v_color_roughness = vert.color_roughness;
-    out.v_normal = normal_mat * vert.normal;
+    out.v_normal = normalize(normal_mat * vert.normal);
     return out;
 }
 

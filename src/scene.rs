@@ -43,7 +43,7 @@ impl VertexData {
 
             let edge0 = pos1 - pos0;
             let edge1 = pos2 - pos0;
-            let normal = edge0.cross(edge1).normalize();
+            let normal = (edge0.cross(edge1)).normalize();
 
             normals.extend(std::iter::repeat(normal).take(3));
         }

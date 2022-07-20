@@ -492,7 +492,7 @@ impl<const M: usize> Renderer<M> {
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
-                //cull_mode: Some(wgpu::Face::Back),
+                cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -582,13 +582,13 @@ impl<const M: usize> Renderer<M> {
         // Update uniforms
         let camera_position = Vec4::from((scene.camera.position, 1.));
         let view_mat = Mat4::look_at_rh(scene.camera.position, scene.camera.target, Vec3::Y);
-        let project_mat = Mat4::perspective_rh(
+        let projection_mat = Mat4::perspective_rh(
             scene.camera.fov,
             self.internal_size.width as f32 / self.internal_size.height as f32,
             0.1,
             100.,
         );
-        let view_projection_mat = project_mat * view_mat;
+        let view_projection_mat = projection_mat * view_mat;
         self.queue.write_buffer(
             &self.vertex_uniform_buffer,
             0,

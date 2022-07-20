@@ -17,7 +17,7 @@ fn cylinder_position(r: f32, u: f32, v: f32) -> Vec3 {
     let u = u * std::f32::consts::TAU;
     let x = r * u.cos();
     let y = v;
-    let z = r * u.sin();
+    let z = -r * u.sin();
     vec3(x, y, z)
 }
 
@@ -70,20 +70,20 @@ fn generate_tree(nu: usize, nv: usize) -> VertexData {
 fn generate_plane() -> VertexData {
     VertexData::from_triangles(
         vec![
-            vec3(-0.5, 0., -0.5),
-            vec3(0.5, 0., -0.5),
-            vec3(0.5, 0., 0.5),
-            vec3(0.5, 0., 0.5),
             vec3(-0.5, 0., 0.5),
+            vec3(0.5, 0., 0.5),
+            vec3(0.5, 0., -0.5),
+            vec3(0.5, 0., -0.5),
             vec3(-0.5, 0., -0.5),
+            vec3(-0.5, 0., 0.5),
         ],
         vec![
-            Vec4::ONE * 0.5,
-            Vec4::ONE * 0.5,
-            Vec4::ONE * 0.5,
-            Vec4::ONE * 0.5,
-            Vec4::ONE * 0.5,
-            Vec4::ONE * 0.5,
+            Vec4::ONE * 1.,
+            Vec4::ONE * 1.,
+            Vec4::ONE * 1.,
+            Vec4::ONE * 1.,
+            Vec4::ONE * 1.,
+            Vec4::ONE * 1.,
         ],
     )
 }
@@ -120,8 +120,8 @@ pub fn update(sync: &mut DemoSync) -> Scene<MODELS> {
         instances_by_model: [
             test,
             vec![Instance {
-                scale: Vec3::ONE * 30.,
-                rotation: Quat::default(),
+                scale: Vec3::ONE * 60.,
+                rotation: Quat::IDENTITY,
                 translation: vec3(0., 0., 0.),
             }],
         ],
