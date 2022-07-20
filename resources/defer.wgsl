@@ -24,7 +24,7 @@ struct InstanceInput {
 struct VertOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) v_color_roughness: vec4<f32>,
-    @location(1) v_normal: vec4<f32>,
+    @location(1) v_normal: vec3<f32>,
 };
 
 @vertex
@@ -45,7 +45,7 @@ fn vs_main(vert: VertInput, inst: InstanceInput) -> VertOutput {
     var out: VertOutput;
     out.clip_position = vs_uniforms.view_projection_mat * model_mat * vert.local_position;
     out.v_color_roughness = vert.color_roughness;
-    out.v_normal = normalize(normal_mat * vert.normal);
+    out.v_normal = (normal_mat * vert.normal).xyz;
     return out;
 }
 
@@ -58,6 +58,6 @@ struct FragOutput {
 fn fs_main(in: VertOutput) -> FragOutput {
     var out: FragOutput;
     out.color_roughness = in.v_color_roughness;
-    out.normal = in.v_normal;
+    out.normal = vec4<f32>(in.v_normal, 0.); // Can store AO from texture in alpha here
     return out;
 }

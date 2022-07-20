@@ -77,14 +77,7 @@ fn generate_plane() -> VertexData {
             vec3(-0.5, 0., -0.5),
             vec3(-0.5, 0., 0.5),
         ],
-        vec![
-            Vec4::ONE * 1.,
-            Vec4::ONE * 1.,
-            Vec4::ONE * 1.,
-            Vec4::ONE * 1.,
-            Vec4::ONE * 1.,
-            Vec4::ONE * 1.,
-        ],
+        std::iter::repeat(Vec4::ONE).take(6).collect(),
     )
 }
 

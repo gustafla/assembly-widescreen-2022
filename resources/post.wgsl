@@ -123,10 +123,10 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     let march_t = march(cam_pos, direction);
     if (march_t < rast_t) {
         pos = cam_pos + direction * march_t;
-        normal = normalize(grad(pos));
+        normal = grad(pos);
         color = vec3<f32>(1.0, 0.5, 0.1);
     }
 
-    let diffuse = max(dot(normal, normalize(fs_uniforms.light_position.xyz - pos)), 0.);
+    let diffuse = max(dot(normalize(normal), normalize(fs_uniforms.light_position.xyz - pos)), 0.);
     return vec4<f32>(aces_fitted(color * diffuse), 1.);
 }
