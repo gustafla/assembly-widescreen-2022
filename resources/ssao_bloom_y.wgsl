@@ -35,6 +35,15 @@ var t_bloom_ao: texture_2d<f32>;
 
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
-    let bloom_ao = textureSample(t_bloom_ao, s, in.v_uv);
-    return bloom_ao; // TODO compute blurs
+    var weight: array<f32, 5> = array<f32, 5>(0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+    let pixel = 1. / uniforms.size.y;
+
+    var result: vec3<f32> = textureSample(t_bloom_ao, s, in.v_uv).rgb * weight[0];
+    for (var i: i32 = 1; i < 5; i+=1) {
+        let offset = vec2<f32>(0., pixel * f32(i));
+        result += textureSample(t_bloom_ao, s, in.v_uv + offset).rgb * weight[i];
+        result += textureSample(t_bloom_ao, s, in.v_uv - offset).rgb * weight[i];
+    }
+
+    return vec4<f32>(result, 1.); // TODO compute SSAO blur
 }

@@ -31,6 +31,7 @@ fn vs_main(in: VertInput) -> VertOutput {
     out.v_pos = (in.uv - 0.5) * vec2<f32>(2., -2.);
     return out;
 }
+
 @group(0) @binding(1)
 var s: sampler;
 @group(0) @binding(2)
@@ -44,13 +45,23 @@ fn frag_world_pos(in: VertOutput, depth: f32) -> vec3<f32> {
     return pos.xyz / pos.w;
 }
 
+fn light(uv: vec2<f32>) -> vec3<f32> {
+    return clamp(pow(textureSample(t_lit_ao, s, uv).rgb, vec3<f32>(16.)), vec3<f32>(0.), vec3<f32>(1.));
+}
+
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
-    let lit_ao = textureSample(t_lit_ao, s, in.v_uv);
-    let normal_depth = textureSample(t_normal_depth, s, in.v_uv);
-    let world_pos = frag_world_pos(in, normal_depth.a);
-    
-    // TODO compute SSAO and bloom
+    var weight: array<f32, 5> = array<f32, 5>(0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+    let pixel = 1. / uniforms.size.x;
 
-    return vec4<f32>(lit_ao.rgb, 1.);
+    var result: vec3<f32> = light(in.v_uv) * weight[0];
+    for (var i: i32 = 1; i < 5; i+=1) {
+        let offset = vec2<f32>(pixel * f32(i), 0.);
+        result += light(in.v_uv + offset) * weight[i];
+        result += light(in.v_uv - offset) * weight[i];
+    }
+    
+    // TODO compute SSAO
+
+    return vec4<f32>(result, 1.);
 }

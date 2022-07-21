@@ -70,5 +70,6 @@ fn reinhard_jodie(v: vec3<f32>) -> vec3<f32> {
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     let bloom_ao = textureSample(t_bloom_ao, s, in.v_uv);
     let color = textureSample(t_lit, s, in.v_uv).rgb * bloom_ao.a + bloom_ao.rgb;
+    //let color = bloom_ao.rgb;
     return vec4<f32>(aces_fitted(color), 1.);
 }
