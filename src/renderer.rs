@@ -8,31 +8,19 @@ use shader_quad::ShaderQuad;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
 
-#[repr(C, align(16))]
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct VertexUniforms {
-    view_projection_mat: Mat4,
-}
-
-#[repr(C, align(16))]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct LightUniforms {
+pub struct Uniforms {
     inverse_view_projection_mat: Mat4,
+    view_projection_mat: Mat4,
     light_position: Vec4,
     camera_position: Vec4,
+    size: Vec2,
     ambient: f32,
     diffuse: f32,
     specular: f32,
-    pad: f32,
+    pad: Vec3,
 }
-
-#[repr(C, align(16))]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct SsaoBloomYUniforms {}
-
-#[repr(C, align(16))]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct SsaoBloomXUniforms {}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -92,11 +80,10 @@ pub struct Renderer<const M: usize> {
     surface_configuration: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
     uniform_bind_group: wgpu::BindGroup,
-    vertex_uniform_buffer: wgpu::Buffer,
+    uniform_buffer: wgpu::Buffer,
     internal_size: PhysicalSize<u32>,
     models: [Model; M],
     instance_buffer: wgpu::Buffer,
-    light_pass_uniform_buffer: wgpu::Buffer,
     light_pass: Pass,
     ssao_bloom_x_pass: Pass,
     ssao_bloom_y_pass: Pass,
@@ -212,6 +199,14 @@ impl<const M: usize> Renderer<M> {
             height: surface_size.height,
             present_mode: wgpu::PresentMode::Fifo,
         };
+
+        // Uniform buffer for every pass
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Uniform Buffer"),
+            size: std::mem::size_of::<Uniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         // Output Pass ----------------------------------------------------------------------------
 
@@ -431,13 +426,6 @@ impl<const M: usize> Renderer<M> {
             label: Some("SSAO & Bloom Y Pass Color and AO Texture"),
         })];
 
-        let ssao_bloom_y_pass_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("SSAO & Bloom Y Pass Uniform Buffer"),
-            size: std::mem::size_of::<SsaoBloomYUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("SSAO & Bloom Y Pass Bind Group Layout"),
             entries: &[
@@ -476,7 +464,7 @@ impl<const M: usize> Renderer<M> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: ssao_bloom_y_pass_uniform_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -541,13 +529,6 @@ impl<const M: usize> Renderer<M> {
             }),
         ];
 
-        let ssao_bloom_x_pass_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("SSAO & Bloom X Pass Uniform Buffer"),
-            size: std::mem::size_of::<SsaoBloomXUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("SSAO & Bloom X Pass Bind Group Layout"),
             entries: &[
@@ -596,7 +577,7 @@ impl<const M: usize> Renderer<M> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: ssao_bloom_x_pass_uniform_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -688,13 +669,6 @@ impl<const M: usize> Renderer<M> {
             }),
         ];
 
-        let light_pass_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Light Pass Uniform Buffer"),
-            size: std::mem::size_of::<LightUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Light Pass Bind Group Layout"),
             entries: &[
@@ -753,7 +727,7 @@ impl<const M: usize> Renderer<M> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: light_pass_uniform_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -826,13 +800,6 @@ impl<const M: usize> Renderer<M> {
 
         let shader = device.create_shader_module(get_shader("defer.wgsl"));
 
-        let vertex_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Vertex Uniform Buffer"),
-            size: std::mem::size_of::<VertexUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Bind Group Layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -852,7 +819,7 @@ impl<const M: usize> Renderer<M> {
             layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: vertex_uniform_buffer.as_entire_binding(),
+                resource: uniform_buffer.as_entire_binding(),
             }],
         });
 
@@ -929,11 +896,10 @@ impl<const M: usize> Renderer<M> {
             surface_configuration,
             render_pipeline,
             uniform_bind_group,
-            vertex_uniform_buffer,
+            uniform_buffer,
             internal_size,
             models,
             instance_buffer,
-            light_pass_uniform_buffer,
             light_pass,
             ssao_bloom_x_pass,
             ssao_bloom_y_pass,
@@ -973,10 +939,21 @@ impl<const M: usize> Renderer<M> {
         );
         let view_projection_mat = projection_mat * view_mat;
         self.queue.write_buffer(
-            &self.vertex_uniform_buffer,
+            &self.uniform_buffer,
             0,
-            bytemuck::cast_slice(&[VertexUniforms {
+            bytemuck::cast_slice(&[Uniforms {
+                inverse_view_projection_mat: view_projection_mat.inverse(),
                 view_projection_mat,
+                light_position: camera_position,
+                camera_position,
+                size: vec2(
+                    self.internal_size.width as f32,
+                    self.internal_size.height as f32,
+                ),
+                ambient: 0.2,
+                diffuse: 0.5,
+                specular: 0.3,
+                pad: Vec3::ZERO,
             }]),
         );
 
@@ -1074,20 +1051,6 @@ impl<const M: usize> Renderer<M> {
 
         // Render deferred lighting ---------------------------------------------------------------
 
-        self.queue.write_buffer(
-            &self.light_pass_uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[LightUniforms {
-                inverse_view_projection_mat: view_projection_mat.inverse(),
-                light_position: camera_position,
-                camera_position,
-                ambient: 0.2,
-                diffuse: 0.5,
-                specular: 0.3,
-                pad: 0.,
-            }]),
-        );
-
         let color_ao_view = &self.ssao_bloom_x_pass.textures[0]
             .create_view(&wgpu::TextureViewDescriptor::default());
         let normal_depth_view = &self.ssao_bloom_x_pass.textures[1]
@@ -1128,20 +1091,6 @@ impl<const M: usize> Renderer<M> {
 
         // Render SSAO & Bloom X ------------------------------------------------------------------
 
-        //self.queue.write_buffer(
-        //    &self.light_pass_uniform_buffer,
-        //    0,
-        //    bytemuck::cast_slice(&[LightUniforms {
-        //        inverse_view_projection_mat: view_projection_mat.inverse(),
-        //        light_position: camera_position,
-        //        camera_position,
-        //        ambient: 0.2,
-        //        diffuse: 0.5,
-        //        specular: 0.3,
-        //        pad: 0.,
-        //    }]),
-        //);
-
         let color_ao_view = &self.ssao_bloom_y_pass.textures[0]
             .create_view(&wgpu::TextureViewDescriptor::default());
         self.ssao_bloom_x_pass.shader_quad.render(
@@ -1165,20 +1114,6 @@ impl<const M: usize> Renderer<M> {
 
         // Render SSAO & Bloom Y ------------------------------------------------------------------
 
-        //self.queue.write_buffer(
-        //    &self.light_pass_uniform_buffer,
-        //    0,
-        //    bytemuck::cast_slice(&[LightUniforms {
-        //        inverse_view_projection_mat: view_projection_mat.inverse(),
-        //        light_position: camera_position,
-        //        camera_position,
-        //        ambient: 0.2,
-        //        diffuse: 0.5,
-        //        specular: 0.3,
-        //        pad: 0.,
-        //    }]),
-        //);
-
         let color_ao_view =
             &self.post_pass.textures[0].create_view(&wgpu::TextureViewDescriptor::default());
         self.ssao_bloom_y_pass.shader_quad.render(
@@ -1201,20 +1136,6 @@ impl<const M: usize> Renderer<M> {
         );
 
         // Render Post Processing -----------------------------------------------------------------
-
-        //self.queue.write_buffer(
-        //    &self.light_pass_uniform_buffer,
-        //    0,
-        //    bytemuck::cast_slice(&[LightUniforms {
-        //        inverse_view_projection_mat: view_projection_mat.inverse(),
-        //        light_position: camera_position,
-        //        camera_position,
-        //        ambient: 0.2,
-        //        diffuse: 0.5,
-        //        specular: 0.3,
-        //        pad: 0.,
-        //    }]),
-        //);
 
         let view =
             &self.output_pass.textures[0].create_view(&wgpu::TextureViewDescriptor::default());
