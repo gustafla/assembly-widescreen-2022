@@ -19,3 +19,10 @@ the yesterday's instanced draws work and I added 3 more full screen
 render passes to lay the groundwork for SSAO and bloom.
 
 Tomorrow I need to write the SSAO and bloom implementations in WGSL.
+
+## 2022-07-21
+
+I've written bloom and SSAO implementation based on learnopengl.org
+However, it does not work as expected yet. It might be that I have
+transformations wrong, a mistake in the shaders, or that my buffer's
+precision is not sufficient.
