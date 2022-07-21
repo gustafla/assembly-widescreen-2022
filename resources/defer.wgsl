@@ -1,9 +1,11 @@
 struct Uniforms {
-    inverse_view_projection_mat: mat4x4<f32>,
-    view_projection_mat: mat4x4<f32>,
+    view_mat: mat4x4<f32>,
+    inverse_view_mat: mat4x4<f32>,
+    projection_mat: mat4x4<f32>,
+    inverse_projection_mat: mat4x4<f32>,
     light_position: vec4<f32>,
     camera_position: vec4<f32>,
-    size: vec2<f32>,
+    screen_size: vec2<f32>,
     ambient: f32,
     diffuse: f32,
     specular: f32,
@@ -50,7 +52,7 @@ fn vs_main(vert: VertInput, inst: InstanceInput) -> VertOutput {
     );
 
     var out: VertOutput;
-    out.clip_position = uniforms.view_projection_mat * model_mat * vert.local_position;
+    out.clip_position = uniforms.projection_mat * uniforms.view_mat * model_mat * vert.local_position;
     out.v_color_roughness = vert.color_roughness;
     out.v_normal = (normal_mat * vert.normal).xyz;
     return out;

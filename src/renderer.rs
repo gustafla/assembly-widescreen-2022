@@ -4,22 +4,31 @@ use crate::scene;
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::*;
+use rand::prelude::*;
+use rand_xoshiro::Xoshiro128Plus;
 use shader_quad::ShaderQuad;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
 
+const SSAO_KERNEL_SIZE: usize = 64;
+const SSAO_NOISE_SIZE: usize = 4;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Uniforms {
-    inverse_view_projection_mat: Mat4,
-    view_projection_mat: Mat4,
+    view_mat: Mat4,
+    inverse_view_mat: Mat4,
+    projection_mat: Mat4,
+    inverse_projection_mat: Mat4,
     light_position: Vec4,
     camera_position: Vec4,
-    size: Vec2,
+    screen_size: Vec2,
     ambient: f32,
     diffuse: f32,
     specular: f32,
-    pad: Vec3,
+    ssao_noise_size: f32,
+    _pad: Vec2,
+    ssao_kernel: [Vec4; SSAO_KERNEL_SIZE],
 }
 
 #[repr(C)]
@@ -74,6 +83,7 @@ struct Pass {
 }
 
 pub struct Renderer<const M: usize> {
+    rng: Xoshiro128Plus,
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -84,6 +94,7 @@ pub struct Renderer<const M: usize> {
     internal_size: PhysicalSize<u32>,
     models: [Model; M],
     instance_buffer: wgpu::Buffer,
+    ssao_noise_texture: wgpu::Texture,
     light_pass: Pass,
     ssao_bloom_x_pass: Pass,
     ssao_bloom_y_pass: Pass,
@@ -91,35 +102,53 @@ pub struct Renderer<const M: usize> {
     output_pass: Pass,
 }
 
-fn get_shader<'a>(path: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
-    #[cfg(debug_assertions)]
-    {
-        wgpu::ShaderModuleDescriptor {
-            label: Some(path),
-            source: wgpu::ShaderSource::Wgsl(
-                std::fs::read_to_string(std::path::PathBuf::from(crate::RESOURCES_PATH).join(path))
-                    .unwrap()
-                    .into(),
-            ),
-        }
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        wgpu::ShaderModuleDescriptor {
-            label: Some(path),
-            source: wgpu::ShaderSource::Wgsl(
-                crate::RESOURCES_DIR
-                    .get_file(path)
-                    .unwrap()
-                    .contents_utf8()
-                    .unwrap()
-                    .into(),
-            ),
-        }
-    }
-}
-
 impl<const M: usize> Renderer<M> {
+    fn get_shader<'a>(path: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
+        #[cfg(debug_assertions)]
+        {
+            wgpu::ShaderModuleDescriptor {
+                label: Some(path),
+                source: wgpu::ShaderSource::Wgsl(
+                    std::fs::read_to_string(
+                        std::path::PathBuf::from(crate::RESOURCES_PATH).join(path),
+                    )
+                    .unwrap()
+                    .into(),
+                ),
+            }
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            wgpu::ShaderModuleDescriptor {
+                label: Some(path),
+                source: wgpu::ShaderSource::Wgsl(
+                    crate::RESOURCES_DIR
+                        .get_file(path)
+                        .unwrap()
+                        .contents_utf8()
+                        .unwrap()
+                        .into(),
+                ),
+            }
+        }
+    }
+
+    fn ssao_kernel<const N: usize>(rng: &mut impl Rng) -> [Vec4; N] {
+        let mut kernel = [Vec4::ZERO; N];
+        for i in 0..N {
+            let sample = vec3(
+                rng.gen::<f32>() * 2. - 1.,
+                rng.gen::<f32>() * 2. - 1.,
+                rng.gen::<f32>(),
+            );
+            let sample = sample.normalize() * rng.gen::<f32>();
+            let scale = i as f32 / N as f32;
+            let scale = 0.1 + scale.powi(2) * 0.9;
+            kernel[i] = Vec4::from((sample * scale, 0.));
+        }
+        kernel
+    }
+
     fn load_model(device: &wgpu::Device, model: scene::Model) -> Model {
         let vert = model.vertices;
         let vertices: Vec<Vertex> = vert
@@ -151,6 +180,8 @@ impl<const M: usize> Renderer<M> {
         window: &Window,
         models: [scene::Model; M],
     ) -> Result<Self> {
+        let mut rng = Xoshiro128Plus::seed_from_u64(0);
+
         // Init & surface -------------------------------------------------------------------------
 
         let surface_size = window.inner_size();
@@ -294,7 +325,7 @@ impl<const M: usize> Renderer<M> {
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                get_shader("output.wgsl"),
+                Self::get_shader("output.wgsl"),
                 &[&bind_group_layout],
             ),
         };
@@ -407,7 +438,7 @@ impl<const M: usize> Renderer<M> {
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                get_shader("post.wgsl"),
+                Self::get_shader("post.wgsl"),
                 &[&bind_group_layout],
             ),
         };
@@ -506,7 +537,7 @@ impl<const M: usize> Renderer<M> {
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                get_shader("ssao_bloom_y.wgsl"),
+                Self::get_shader("ssao_bloom_y.wgsl"),
                 &[&bind_group_layout],
             ),
         };
@@ -529,6 +560,27 @@ impl<const M: usize> Renderer<M> {
             }),
         ];
 
+        let ssao_noise: Vec<Vec2> = (0..SSAO_NOISE_SIZE.pow(2))
+            .map(|_| vec2(rng.gen::<f32>() * 2. - 1., rng.gen::<f32>() * 2. - 1.))
+            .collect();
+        let ssao_noise_texture = device.create_texture_with_data(
+            &queue,
+            &wgpu::TextureDescriptor {
+                label: Some("SSAO Noise Texture"),
+                size: wgpu::Extent3d {
+                    width: SSAO_NOISE_SIZE as u32,
+                    height: SSAO_NOISE_SIZE as u32,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rg32Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            },
+            bytemuck::cast_slice(&ssao_noise),
+        );
+
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("SSAO & Bloom X Pass Bind Group Layout"),
             entries: &[
@@ -545,7 +597,7 @@ impl<const M: usize> Renderer<M> {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
@@ -563,6 +615,16 @@ impl<const M: usize> Renderer<M> {
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
                         view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },
@@ -584,9 +646,9 @@ impl<const M: usize> Renderer<M> {
                     resource: wgpu::BindingResource::Sampler(&device.create_sampler(
                         &wgpu::SamplerDescriptor {
                             label: Some("SSAO & Bloom X Pass Sampler"),
-                            address_mode_u: wgpu::AddressMode::ClampToEdge,
-                            address_mode_v: wgpu::AddressMode::ClampToEdge,
-                            address_mode_w: wgpu::AddressMode::ClampToEdge,
+                            address_mode_u: wgpu::AddressMode::Repeat,
+                            address_mode_v: wgpu::AddressMode::Repeat,
+                            address_mode_w: wgpu::AddressMode::Repeat,
                             mag_filter: wgpu::FilterMode::Nearest,
                             min_filter: wgpu::FilterMode::Nearest,
                             mipmap_filter: wgpu::FilterMode::Nearest,
@@ -604,6 +666,12 @@ impl<const M: usize> Renderer<M> {
                     binding: 3,
                     resource: wgpu::BindingResource::TextureView(
                         &textures[1].create_view(&wgpu::TextureViewDescriptor::default()),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(
+                        &ssao_noise_texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     ),
                 },
             ],
@@ -625,7 +693,7 @@ impl<const M: usize> Renderer<M> {
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                get_shader("ssao_bloom_x.wgsl"),
+                Self::get_shader("ssao_bloom_x.wgsl"),
                 &[&bind_group_layout],
             ),
         };
@@ -791,14 +859,14 @@ impl<const M: usize> Renderer<M> {
                         write_mask: wgpu::ColorWrites::ALL,
                     }),
                 ],
-                get_shader("light.wgsl"),
+                Self::get_shader("light.wgsl"),
                 &[&bind_group_layout],
             ),
         };
 
         // Scene ----------------------------------------------------------------------------------
 
-        let shader = device.create_shader_module(get_shader("defer.wgsl"));
+        let shader = device.create_shader_module(Self::get_shader("defer.wgsl"));
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Bind Group Layout"),
@@ -900,11 +968,13 @@ impl<const M: usize> Renderer<M> {
             internal_size,
             models,
             instance_buffer,
+            ssao_noise_texture,
             light_pass,
             ssao_bloom_x_pass,
             ssao_bloom_y_pass,
             post_pass,
             output_pass,
+            rng,
         };
 
         renderer.resize(surface_size);
@@ -927,7 +997,7 @@ impl<const M: usize> Renderer<M> {
             .configure(&self.device, &self.surface_configuration);
     }
 
-    pub fn render(&self, scene: &scene::Scene<M>) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, scene: &scene::Scene<M>) -> Result<(), wgpu::SurfaceError> {
         // Update uniforms
         let camera_position = Vec4::from((scene.camera.position, 1.));
         let view_mat = Mat4::look_at_rh(scene.camera.position, scene.camera.target, Vec3::Y);
@@ -937,23 +1007,26 @@ impl<const M: usize> Renderer<M> {
             0.1,
             100.,
         );
-        let view_projection_mat = projection_mat * view_mat;
         self.queue.write_buffer(
             &self.uniform_buffer,
             0,
             bytemuck::cast_slice(&[Uniforms {
-                inverse_view_projection_mat: view_projection_mat.inverse(),
-                view_projection_mat,
+                view_mat,
+                inverse_view_mat: view_mat.inverse(),
+                projection_mat,
+                inverse_projection_mat: projection_mat.inverse(),
                 light_position: camera_position,
                 camera_position,
-                size: vec2(
+                screen_size: vec2(
                     self.internal_size.width as f32,
                     self.internal_size.height as f32,
                 ),
+                ssao_noise_size: SSAO_NOISE_SIZE as f32,
                 ambient: 0.2,
                 diffuse: 0.5,
                 specular: 0.3,
-                pad: Vec3::ZERO,
+                _pad: Vec2::ZERO,
+                ssao_kernel: Self::ssao_kernel(&mut self.rng),
             }]),
         );
 

@@ -1,9 +1,11 @@
 struct Uniforms {
-    inverse_view_projection_mat: mat4x4<f32>,
-    view_projection_mat: mat4x4<f32>,
+    view_mat: mat4x4<f32>,
+    inverse_view_mat: mat4x4<f32>,
+    projection_mat: mat4x4<f32>,
+    inverse_projection_mat: mat4x4<f32>,
     light_position: vec4<f32>,
     camera_position: vec4<f32>,
-    size: vec2<f32>,
+    screen_size: vec2<f32>,
     ambient: f32,
     diffuse: f32,
     specular: f32,
@@ -36,7 +38,7 @@ var t_bloom_ao: texture_2d<f32>;
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     var weight: array<f32, 5> = array<f32, 5>(0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
-    let pixel = 1. / uniforms.size.y;
+    let pixel = 1. / uniforms.screen_size.y;
 
     var result: vec3<f32> = textureSample(t_bloom_ao, s, in.v_uv).rgb * weight[0];
     for (var i: i32 = 1; i < 5; i+=1) {
@@ -44,6 +46,6 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         result += textureSample(t_bloom_ao, s, in.v_uv + offset).rgb * weight[i];
         result += textureSample(t_bloom_ao, s, in.v_uv - offset).rgb * weight[i];
     }
-
-    return vec4<f32>(result, 1.); // TODO compute SSAO blur
+    
+    return vec4<f32>(result, textureSample(t_bloom_ao, s, in.v_uv).a); // TODO compute SSAO blur
 }
