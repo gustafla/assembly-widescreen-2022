@@ -26,3 +26,11 @@ I've written bloom and SSAO implementation based on learnopengl.org
 However, it does not work as expected yet. It might be that I have
 transformations wrong, a mistake in the shaders, or that my buffer's
 precision is not sufficient.
+
+## 2022-07-22
+
+I'm pretty sure that the SSAO issue was caused by lack of depth precision.
+I decided to remove it entirely from current iteration, as I don't yet
+have a solid lighting model and anything resembing my intended look.
+
+I refactored the pass system for readability and vram savings.
