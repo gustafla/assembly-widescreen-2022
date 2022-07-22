@@ -239,16 +239,47 @@ impl<const M: usize> Renderer<M> {
             mapped_at_creation: false,
         });
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Pass Sampler"),
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            address_mode_w: wgpu::AddressMode::Repeat,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
+        let sampler = (
+            wgpu::SamplerBindingType::NonFiltering,
+            &device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("Pass Sampler"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            }),
+        );
+
+        let filtering_sampler = (
+            wgpu::SamplerBindingType::Filtering,
+            &device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("Pass Sampler"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            }),
+        );
+
+        let repeating_sampler = (
+            wgpu::SamplerBindingType::NonFiltering,
+            &device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("Pass Sampler"),
+                address_mode_u: wgpu::AddressMode::Repeat,
+                address_mode_v: wgpu::AddressMode::Repeat,
+                address_mode_w: wgpu::AddressMode::Repeat,
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            }),
+        );
 
         let size = wgpu::Extent3d {
             width: internal_size.width,
@@ -402,7 +433,7 @@ impl<const M: usize> Renderer<M> {
             &device,
             &queue,
             &uniform_buffer,
-            &sampler,
+            sampler,
             Some(&depth_texture),
             &[&rgba_textures[0], &rgba_textures[1]],
             vec![pass::Target::Texture(2)],
@@ -414,7 +445,7 @@ impl<const M: usize> Renderer<M> {
             &device,
             &queue,
             &uniform_buffer,
-            &sampler,
+            sampler,
             None,
             &[&rgba_textures[2]],
             vec![pass::Target::Texture(0)],
@@ -426,7 +457,7 @@ impl<const M: usize> Renderer<M> {
             &device,
             &queue,
             &uniform_buffer,
-            &sampler,
+            sampler,
             None,
             &[&rgba_textures[0]],
             vec![pass::Target::Texture(1)],
@@ -438,7 +469,7 @@ impl<const M: usize> Renderer<M> {
             &device,
             &queue,
             &uniform_buffer,
-            &sampler,
+            repeating_sampler,
             None,
             &[
                 &rgba_textures[2],
@@ -454,7 +485,7 @@ impl<const M: usize> Renderer<M> {
             &device,
             &queue,
             &uniform_buffer,
-            &sampler,
+            filtering_sampler,
             None,
             &[&rgba_textures[0]],
             vec![pass::Target::Surface(surface_format)],

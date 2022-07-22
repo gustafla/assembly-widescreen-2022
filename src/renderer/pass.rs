@@ -17,7 +17,7 @@ impl Pass {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         uniform_buffer: &wgpu::Buffer,
-        sampler: &wgpu::Sampler,
+        sampler: (wgpu::SamplerBindingType, &wgpu::Sampler),
         depth_texture: Option<&wgpu::TextureView>,
         textures_in: &[&wgpu::TextureView],
         targets: Vec<Target>,
@@ -37,7 +37,7 @@ impl Pass {
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                ty: wgpu::BindingType::Sampler(sampler.0),
                 count: None,
             },
         ];
@@ -79,7 +79,7 @@ impl Pass {
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(sampler),
+                resource: wgpu::BindingResource::Sampler(sampler.1),
             },
         ];
         if let Some(depth_texture) = depth_texture {
