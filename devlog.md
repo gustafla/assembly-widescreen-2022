@@ -34,3 +34,6 @@ I decided to remove it entirely from current iteration, as I don't yet
 have a solid lighting model and anything resembing my intended look.
 
 I refactored the pass system for readability and vram savings.
+
+Next I need to make my scene/models good, and implement a non-placeholder
+lighting system.
