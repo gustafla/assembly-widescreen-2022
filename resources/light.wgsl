@@ -1,8 +1,6 @@
 struct Uniforms {
-    view_mat: mat4x4<f32>,
-    inverse_view_mat: mat4x4<f32>,
-    projection_mat: mat4x4<f32>,
-    inverse_projection_mat: mat4x4<f32>,
+    view_projection_mat: mat4x4<f32>,
+    inverse_view_projection_mat: mat4x4<f32>,
     light_position: vec4<f32>,
     camera_position: vec4<f32>,
     screen_size: vec2<f32>,
@@ -37,26 +35,16 @@ fn vs_main(in: VertInput) -> VertOutput {
 @group(0) @binding(1)
 var s: sampler;
 @group(0) @binding(2)
-var t_color_roughness: texture_2d<f32>;
-@group(0) @binding(3)
-var t_normal: texture_2d<f32>;
-@group(0) @binding(4)
 var t_depth: texture_depth_2d;
+@group(0) @binding(3)
+var t_color_roughness: texture_2d<f32>;
+@group(0) @binding(4)
+var t_normal: texture_2d<f32>;
 
-struct FragOutput {
-    @location(0) lit_ao: vec4<f32>,
-    @location(1) normal_depth: vec4<f32>,
-};
-
-fn ndc_to_camera_pos(in: VertOutput) -> vec4<f32> {
+fn ndc_to_world_pos(in: VertOutput) -> vec3<f32> {
     let ndc = vec4<f32>(in.v_pos, textureSample(t_depth, s, in.v_uv), 1.);
-    let pos = uniforms.inverse_projection_mat * ndc;
-    return vec4<f32>(pos.xyz / pos.w, 1.);
-}
-
-fn world_to_ndc_pos(world_pos: vec3<f32>) -> vec3<f32> {
-    let clip = uniforms.projection_mat * uniforms.view_mat * vec4<f32>(world_pos, 1.);
-    return clip.xyz / clip.w;
+    let pos = uniforms.inverse_view_projection_mat * ndc;
+    return pos.xyz / pos.w;
 }
 
 fn scene(pos: vec3<f32>) -> f32 {
@@ -83,26 +71,24 @@ fn march(origin: vec3<f32>, direction: vec3<f32>) -> f32 {
 }
 
 @fragment
-fn fs_main(in: VertOutput) -> FragOutput {
-    let rast_cam_pos = ndc_to_camera_pos(in);
-    let rast_t = length(rast_cam_pos.xyz);
-    let direction = rast_cam_pos.xyz / rast_t;
+fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
+    let frag_pos = ndc_to_world_pos(in);
+    let cam_pos = uniforms.camera_position.xyz;
+    let to_frag = frag_pos - cam_pos;
+    let rast_t = length(to_frag);
+    let direction = to_frag / rast_t;
 
-    let origin = uniforms.camera_position.xyz;
-    var pos: vec3<f32> = (uniforms.inverse_view_mat * rast_cam_pos).xyz;
+    var pos: vec3<f32> = frag_pos;
     var normal: vec3<f32> = textureSample(t_normal, s, in.v_uv).rgb;
     var color: vec3<f32> = textureSample(t_color_roughness, s, in.v_uv).rgb;
-    let march_t = march(origin, direction);
+    let march_t = march(cam_pos, direction);
     if (march_t < rast_t) {
-        pos = origin + direction * march_t;
+        pos = cam_pos + direction * march_t;
         normal = grad(pos);
         color = vec3<f32>(1.0, 0.5, 0.1);
     }
     
     let normal = normalize(normal);
     let diffuse = max(dot(normal, normalize(uniforms.light_position.xyz - pos)), 0.);
-    return FragOutput(
-        vec4<f32>(color * diffuse, 1.),
-        vec4<f32>(normal, world_to_ndc_pos(pos).z),
-    );
+    return vec4<f32>(color * diffuse, 1.);
 }

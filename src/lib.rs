@@ -105,7 +105,7 @@ pub fn update(sync: &mut DemoSync) -> Scene<MODELS> {
         test.push(Instance {
             scale: Vec3::ONE * (2. + i),
             rotation: Quat::from_axis_angle(Vec3::Y, sync.get("rotation.y")),
-            translation: vec3(i * 60., 0., 0.),
+            translation: vec3(i * 60., (i + sync.get("rotation.y")).sin() * 3., 0.),
         });
     }
 

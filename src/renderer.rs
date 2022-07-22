@@ -1,34 +1,35 @@
-mod shader_quad;
+mod pass;
+mod screen_quad;
 
 use crate::scene;
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::*;
+use pass::Pass;
 use rand::prelude::*;
 use rand_xoshiro::Xoshiro128Plus;
-use shader_quad::ShaderQuad;
+use screen_quad::ScreenQuad;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
 
-const SSAO_KERNEL_SIZE: usize = 64;
-const SSAO_NOISE_SIZE: usize = 4;
+const POST_NOISE_SIZE: u32 = 128;
+const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+const PASS_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+const PASS_TEXTURES: usize = 3;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Uniforms {
-    view_mat: Mat4,
-    inverse_view_mat: Mat4,
-    projection_mat: Mat4,
-    inverse_projection_mat: Mat4,
+    view_projection_mat: Mat4,
+    inverse_view_projection_mat: Mat4,
     light_position: Vec4,
     camera_position: Vec4,
     screen_size: Vec2,
     ambient: f32,
     diffuse: f32,
     specular: f32,
-    ssao_noise_size: f32,
+    post_noise_size: f32,
     _pad: Vec2,
-    ssao_kernel: [Vec4; SSAO_KERNEL_SIZE],
 }
 
 #[repr(C)]
@@ -76,12 +77,6 @@ struct Model {
     num_vertices: u32,
 }
 
-struct Pass {
-    textures: Vec<wgpu::Texture>,
-    bind_groups: Vec<wgpu::BindGroup>,
-    shader_quad: ShaderQuad,
-}
-
 pub struct Renderer<const M: usize> {
     rng: Xoshiro128Plus,
     surface: wgpu::Surface,
@@ -94,10 +89,14 @@ pub struct Renderer<const M: usize> {
     internal_size: PhysicalSize<u32>,
     models: [Model; M],
     instance_buffer: wgpu::Buffer,
-    ssao_noise_texture: wgpu::Texture,
+    pass_quad: ScreenQuad,
+    surface_quad: ScreenQuad,
+    post_noise_texture: wgpu::Texture,
+    depth_texture: wgpu::TextureView,
+    rgba_textures: [wgpu::TextureView; PASS_TEXTURES],
     light_pass: Pass,
-    ssao_bloom_x_pass: Pass,
-    ssao_bloom_y_pass: Pass,
+    bloom_x_pass: Pass,
+    bloom_y_pass: Pass,
     post_pass: Pass,
     output_pass: Pass,
 }
@@ -180,7 +179,7 @@ impl<const M: usize> Renderer<M> {
         window: &Window,
         models: [scene::Model; M],
     ) -> Result<Self> {
-        let mut rng = Xoshiro128Plus::seed_from_u64(0);
+        let rng = Xoshiro128Plus::seed_from_u64(0);
 
         // Init & surface -------------------------------------------------------------------------
 
@@ -231,7 +230,8 @@ impl<const M: usize> Renderer<M> {
             present_mode: wgpu::PresentMode::Fifo,
         };
 
-        // Uniform buffer for every pass
+        // Common Resources -----------------------------------------------------------------------
+
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Uniform Buffer"),
             size: std::mem::size_of::<Uniforms>() as u64,
@@ -239,7 +239,16 @@ impl<const M: usize> Renderer<M> {
             mapped_at_creation: false,
         });
 
-        // Output Pass ----------------------------------------------------------------------------
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Pass Sampler"),
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
 
         let size = wgpu::Extent3d {
             width: internal_size.width,
@@ -247,622 +256,51 @@ impl<const M: usize> Renderer<M> {
             depth_or_array_layers: 1,
         };
 
-        let output_pass_color_format = wgpu::TextureFormat::Rgba16Float;
-
-        let textures = vec![device.create_texture(&wgpu::TextureDescriptor {
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: output_pass_color_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            label: Some("Output Pass Color Texture"),
-        })];
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Output Pass Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let bind_groups = vec![device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Output Pass Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Sampler(&device.create_sampler(
-                        &wgpu::SamplerDescriptor {
-                            label: Some("Output Pass Color Sampler"),
-                            address_mode_u: wgpu::AddressMode::ClampToEdge,
-                            address_mode_v: wgpu::AddressMode::ClampToEdge,
-                            address_mode_w: wgpu::AddressMode::ClampToEdge,
-                            mag_filter: wgpu::FilterMode::Linear,
-                            min_filter: wgpu::FilterMode::Linear,
-                            mipmap_filter: wgpu::FilterMode::Nearest,
-                            ..Default::default()
-                        },
-                    )),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(
-                        &textures[0].create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-            ],
-        })];
-
-        let output_pass = Pass {
-            textures,
-            bind_groups,
-            shader_quad: ShaderQuad::new(
-                &device,
-                &queue,
-                internal_size,
-                surface_size,
-                &[Some(wgpu::ColorTargetState {
-                    format: surface_format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                Self::get_shader("output.wgsl"),
-                &[&bind_group_layout],
-            ),
-        };
-
-        // Post Pass ------------------------------------------------------------------------------
-
-        let ssao_bloom_x_pass_color_ao_format = wgpu::TextureFormat::Rgba16Float;
-        let post_pass_color_format = wgpu::TextureFormat::Rgba16Float;
-
-        let ssao_bloom_x_pass_color_ao_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: ssao_bloom_x_pass_color_ao_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            label: Some("SSAO & Bloom X Pass Color and AO Texture"),
-        });
-
-        let textures = vec![device.create_texture(&wgpu::TextureDescriptor {
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: post_pass_color_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            label: Some("Post Pass Color Texture"),
-        })];
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Post Pass Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let bind_groups = vec![device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Post Pass Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Sampler(&device.create_sampler(
-                        &wgpu::SamplerDescriptor {
-                            label: Some("Post Pass Sampler"),
-                            address_mode_u: wgpu::AddressMode::ClampToEdge,
-                            address_mode_v: wgpu::AddressMode::ClampToEdge,
-                            address_mode_w: wgpu::AddressMode::ClampToEdge,
-                            mag_filter: wgpu::FilterMode::Nearest,
-                            min_filter: wgpu::FilterMode::Nearest,
-                            mipmap_filter: wgpu::FilterMode::Nearest,
-                            ..Default::default()
-                        },
-                    )),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(
-                        &ssao_bloom_x_pass_color_ao_texture
-                            .create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(
-                        &textures[0].create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-            ],
-        })];
-
-        let post_pass = Pass {
-            textures,
-            bind_groups,
-            shader_quad: ShaderQuad::new(
-                &device,
-                &queue,
-                internal_size,
-                internal_size,
-                &[Some(wgpu::ColorTargetState {
-                    format: output_pass_color_format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                Self::get_shader("post.wgsl"),
-                &[&bind_group_layout],
-            ),
-        };
-
-        // SSAO & Bloom Y Pass --------------------------------------------------------------------
-
-        let ssao_bloom_y_pass_color_ao_format = wgpu::TextureFormat::Rgba16Float;
-
-        let textures = vec![device.create_texture(&wgpu::TextureDescriptor {
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: ssao_bloom_y_pass_color_ao_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            label: Some("SSAO & Bloom Y Pass Color and AO Texture"),
-        })];
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("SSAO & Bloom Y Pass Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let bind_groups = vec![device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("SSAO & Bloom Y Pass Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&device.create_sampler(
-                        &wgpu::SamplerDescriptor {
-                            label: Some("SSAO & Bloom Y Pass Sampler"),
-                            address_mode_u: wgpu::AddressMode::ClampToEdge,
-                            address_mode_v: wgpu::AddressMode::ClampToEdge,
-                            address_mode_w: wgpu::AddressMode::ClampToEdge,
-                            mag_filter: wgpu::FilterMode::Nearest,
-                            min_filter: wgpu::FilterMode::Nearest,
-                            mipmap_filter: wgpu::FilterMode::Nearest,
-                            ..Default::default()
-                        },
-                    )),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(
-                        &textures[0].create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-            ],
-        })];
-
-        let ssao_bloom_y_pass = Pass {
-            textures,
-            bind_groups,
-            shader_quad: ShaderQuad::new(
-                &device,
-                &queue,
-                internal_size,
-                internal_size,
-                &[Some(wgpu::ColorTargetState {
-                    format: post_pass_color_format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                Self::get_shader("ssao_bloom_y.wgsl"),
-                &[&bind_group_layout],
-            ),
-        };
-
-        // SSAO & Bloom X Pass --------------------------------------------------------------------
-
-        let ssao_bloom_x_pass_normal_depth_format = wgpu::TextureFormat::Rgba16Float;
-
-        let textures = vec![
-            ssao_bloom_x_pass_color_ao_texture,
-            device.create_texture(&wgpu::TextureDescriptor {
+        let depth_texture = device
+            .create_texture(&wgpu::TextureDescriptor {
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: ssao_bloom_x_pass_normal_depth_format,
+                format: DEPTH_TEXTURE_FORMAT,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
-                label: Some("SSAO & Bloom X Pass Normal & Depth Texture"),
-            }),
-        ];
+                label: Some("Depth Texture"),
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let ssao_noise: Vec<Vec2> = (0..SSAO_NOISE_SIZE.pow(2))
-            .map(|_| vec2(rng.gen::<f32>() * 2. - 1., rng.gen::<f32>() * 2. - 1.))
-            .collect();
-        let ssao_noise_texture = device.create_texture_with_data(
-            &queue,
-            &wgpu::TextureDescriptor {
-                label: Some("SSAO Noise Texture"),
-                size: wgpu::Extent3d {
-                    width: SSAO_NOISE_SIZE as u32,
-                    height: SSAO_NOISE_SIZE as u32,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rg32Float,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        let rgba_textures: [wgpu::TextureView; PASS_TEXTURES] = (0..PASS_TEXTURES)
+            .map(|_| {
+                device
+                    .create_texture(&wgpu::TextureDescriptor {
+                        size,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: PASS_TEXTURE_FORMAT,
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                            | wgpu::TextureUsages::TEXTURE_BINDING,
+                        label: Some("Pass Texture"),
+                    })
+                    .create_view(&wgpu::TextureViewDescriptor::default())
+            })
+            .collect::<Vec<wgpu::TextureView>>()
+            .try_into()
+            .unwrap();
+
+        let post_noise_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Post Noise Texture"),
+            size: wgpu::Extent3d {
+                width: POST_NOISE_SIZE,
+                height: POST_NOISE_SIZE,
+                depth_or_array_layers: 1,
             },
-            bytemuck::cast_slice(&ssao_noise),
-        );
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("SSAO & Bloom X Pass Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-            ],
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         });
-
-        let bind_groups = vec![device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("SSAO & Bloom X Pass Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&device.create_sampler(
-                        &wgpu::SamplerDescriptor {
-                            label: Some("SSAO & Bloom X Pass Sampler"),
-                            address_mode_u: wgpu::AddressMode::Repeat,
-                            address_mode_v: wgpu::AddressMode::Repeat,
-                            address_mode_w: wgpu::AddressMode::Repeat,
-                            mag_filter: wgpu::FilterMode::Nearest,
-                            min_filter: wgpu::FilterMode::Nearest,
-                            mipmap_filter: wgpu::FilterMode::Nearest,
-                            ..Default::default()
-                        },
-                    )),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(
-                        &textures[0].create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(
-                        &textures[1].create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(
-                        &ssao_noise_texture.create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-            ],
-        })];
-
-        let ssao_bloom_x_pass = Pass {
-            textures,
-            bind_groups,
-            shader_quad: ShaderQuad::new(
-                &device,
-                &queue,
-                internal_size,
-                internal_size,
-                &[Some(wgpu::ColorTargetState {
-                    format: ssao_bloom_y_pass_color_ao_format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                Self::get_shader("ssao_bloom_x.wgsl"),
-                &[&bind_group_layout],
-            ),
-        };
-
-        // Light Pass -----------------------------------------------------------------------------
-
-        let light_pass_color_format = wgpu::TextureFormat::Rgba16Float;
-        let light_pass_normal_format = wgpu::TextureFormat::Rgba16Float;
-        let light_pass_depth_format = wgpu::TextureFormat::Depth32Float;
-
-        let textures = vec![
-            device.create_texture(&wgpu::TextureDescriptor {
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: light_pass_color_format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                label: Some("Light Pass Color and Roughness Texture"),
-            }),
-            device.create_texture(&wgpu::TextureDescriptor {
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: light_pass_normal_format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                label: Some("Light Pass Normal Texture"),
-            }),
-            device.create_texture(&wgpu::TextureDescriptor {
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: light_pass_depth_format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                label: Some("Light Pass Depth Texture"),
-            }),
-        ];
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Light Pass Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let bind_groups = vec![device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Light Pass Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&device.create_sampler(
-                        &wgpu::SamplerDescriptor {
-                            label: Some("Output Pass Sampler"),
-                            address_mode_u: wgpu::AddressMode::ClampToEdge,
-                            address_mode_v: wgpu::AddressMode::ClampToEdge,
-                            address_mode_w: wgpu::AddressMode::ClampToEdge,
-                            mag_filter: wgpu::FilterMode::Nearest,
-                            min_filter: wgpu::FilterMode::Nearest,
-                            mipmap_filter: wgpu::FilterMode::Nearest,
-                            ..Default::default()
-                        },
-                    )),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(
-                        &textures[0].create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(
-                        &textures[1].create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(
-                        &textures[2].create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
-                },
-            ],
-        })];
-
-        let light_pass = Pass {
-            textures,
-            bind_groups,
-            shader_quad: ShaderQuad::new(
-                &device,
-                &queue,
-                internal_size,
-                internal_size,
-                &[
-                    Some(wgpu::ColorTargetState {
-                        format: ssao_bloom_x_pass_color_ao_format,
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent::REPLACE,
-                            alpha: wgpu::BlendComponent::REPLACE,
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    }),
-                    Some(wgpu::ColorTargetState {
-                        format: ssao_bloom_x_pass_normal_depth_format,
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent::REPLACE,
-                            alpha: wgpu::BlendComponent::REPLACE,
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    }),
-                ],
-                Self::get_shader("light.wgsl"),
-                &[&bind_group_layout],
-            ),
-        };
 
         // Scene ----------------------------------------------------------------------------------
 
@@ -911,7 +349,7 @@ impl<const M: usize> Renderer<M> {
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: light_pass_depth_format,
+                format: DEPTH_TEXTURE_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
@@ -923,7 +361,7 @@ impl<const M: usize> Renderer<M> {
                 entry_point: "fs_main",
                 targets: &[
                     Some(wgpu::ColorTargetState {
-                        format: light_pass_color_format,
+                        format: PASS_TEXTURE_FORMAT,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent::REPLACE,
                             alpha: wgpu::BlendComponent::REPLACE,
@@ -931,7 +369,7 @@ impl<const M: usize> Renderer<M> {
                         write_mask: wgpu::ColorWrites::ALL,
                     }),
                     Some(wgpu::ColorTargetState {
-                        format: light_pass_normal_format,
+                        format: PASS_TEXTURE_FORMAT,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent::REPLACE,
                             alpha: wgpu::BlendComponent::REPLACE,
@@ -957,7 +395,77 @@ impl<const M: usize> Renderer<M> {
             mapped_at_creation: false,
         });
 
+        // Passes ---------------------------------------------------------------------------------
+
+        // textures depth + (0, 1) -> (2)
+        let light_pass = Pass::new(
+            &device,
+            &queue,
+            &uniform_buffer,
+            &sampler,
+            Some(&depth_texture),
+            &[&rgba_textures[0], &rgba_textures[1]],
+            vec![pass::Target::Texture(2)],
+            Self::get_shader("light.wgsl"),
+        );
+
+        // textures (2) -> (0)
+        let bloom_x_pass = Pass::new(
+            &device,
+            &queue,
+            &uniform_buffer,
+            &sampler,
+            None,
+            &[&rgba_textures[2]],
+            vec![pass::Target::Texture(0)],
+            Self::get_shader("bloom_x.wgsl"),
+        );
+
+        // textures (0) -> (1)
+        let bloom_y_pass = Pass::new(
+            &device,
+            &queue,
+            &uniform_buffer,
+            &sampler,
+            None,
+            &[&rgba_textures[0]],
+            vec![pass::Target::Texture(1)],
+            Self::get_shader("bloom_y.wgsl"),
+        );
+
+        // textures (2, 1) + post noise -> (0)
+        let post_pass = Pass::new(
+            &device,
+            &queue,
+            &uniform_buffer,
+            &sampler,
+            None,
+            &[
+                &rgba_textures[2],
+                &rgba_textures[1],
+                &post_noise_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+            ],
+            vec![pass::Target::Texture(0)],
+            Self::get_shader("post.wgsl"),
+        );
+
+        // textures (0) -> surface
+        let output_pass = Pass::new(
+            &device,
+            &queue,
+            &uniform_buffer,
+            &sampler,
+            None,
+            &[&rgba_textures[0]],
+            vec![pass::Target::Surface(surface_format)],
+            Self::get_shader("output.wgsl"),
+        );
+
+        let surface_quad = ScreenQuad::new(&device, &queue, internal_size, surface_size);
+        let pass_quad = ScreenQuad::new(&device, &queue, internal_size, internal_size);
+
         let mut renderer = Self {
+            rng,
             surface,
             device,
             queue,
@@ -968,13 +476,16 @@ impl<const M: usize> Renderer<M> {
             internal_size,
             models,
             instance_buffer,
-            ssao_noise_texture,
+            surface_quad,
+            pass_quad,
+            post_noise_texture,
+            depth_texture,
+            rgba_textures,
             light_pass,
-            ssao_bloom_x_pass,
-            ssao_bloom_y_pass,
+            bloom_x_pass,
+            bloom_y_pass,
             post_pass,
             output_pass,
-            rng,
         };
 
         renderer.resize(surface_size);
@@ -986,8 +497,7 @@ impl<const M: usize> Renderer<M> {
             self.surface_configuration.width = new_size.width;
             self.surface_configuration.height = new_size.height;
             self.configure_surface();
-            self.output_pass
-                .shader_quad
+            self.surface_quad
                 .resize(&self.queue, self.internal_size, new_size);
         }
     }
@@ -997,7 +507,53 @@ impl<const M: usize> Renderer<M> {
             .configure(&self.device, &self.surface_configuration);
     }
 
+    fn render_screen_pass<'a>(
+        &self,
+        encoder: &'a mut wgpu::CommandEncoder,
+        surface_texture: &wgpu::TextureView,
+        pass: &Pass,
+        quad: &ScreenQuad,
+    ) {
+        let attachments: Vec<Option<wgpu::RenderPassColorAttachment>> = pass
+            .targets()
+            .iter()
+            .map(|target| {
+                Some(wgpu::RenderPassColorAttachment {
+                    view: match target {
+                        pass::Target::Surface(_) => surface_texture,
+                        pass::Target::Texture(id) => &self.rgba_textures[*id],
+                    },
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.,
+                            g: 0.,
+                            b: 0.,
+                            a: 1.,
+                        }),
+                        store: true,
+                    },
+                })
+            })
+            .collect();
+
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &attachments,
+            depth_stencil_attachment: None,
+        });
+
+        pass.set_pass_state(&mut render_pass);
+        quad.draw(&mut render_pass);
+    }
+
     pub fn render(&mut self, scene: &scene::Scene<M>) -> Result<(), wgpu::SurfaceError> {
+        // Get surface texture
+        let surface_texture = self.surface.get_current_texture()?;
+        let surface_view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
         // Update uniforms
         let camera_position = Vec4::from((scene.camera.position, 1.));
         let view_mat = Mat4::look_at_rh(scene.camera.position, scene.camera.target, Vec3::Y);
@@ -1007,27 +563,49 @@ impl<const M: usize> Renderer<M> {
             0.1,
             100.,
         );
+        let view_projection_mat = projection_mat * view_mat;
         self.queue.write_buffer(
             &self.uniform_buffer,
             0,
             bytemuck::cast_slice(&[Uniforms {
-                view_mat,
-                inverse_view_mat: view_mat.inverse(),
-                projection_mat,
-                inverse_projection_mat: projection_mat.inverse(),
+                view_projection_mat,
+                inverse_view_projection_mat: view_projection_mat.inverse(),
                 light_position: camera_position,
                 camera_position,
                 screen_size: vec2(
                     self.internal_size.width as f32,
                     self.internal_size.height as f32,
                 ),
-                ssao_noise_size: SSAO_NOISE_SIZE as f32,
+                post_noise_size: POST_NOISE_SIZE as f32,
                 ambient: 0.2,
                 diffuse: 0.5,
                 specular: 0.3,
                 _pad: Vec2::ZERO,
-                ssao_kernel: Self::ssao_kernel(&mut self.rng),
             }]),
+        );
+
+        // Update textures
+        let noise: Vec<u8> = (0..POST_NOISE_SIZE.pow(2) * 4)
+            .map(|_| self.rng.gen())
+            .collect();
+        self.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &self.post_noise_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &noise,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: std::num::NonZeroU32::new(4 * POST_NOISE_SIZE),
+                rows_per_image: std::num::NonZeroU32::new(POST_NOISE_SIZE),
+            },
+            wgpu::Extent3d {
+                width: POST_NOISE_SIZE,
+                height: POST_NOISE_SIZE,
+                depth_or_array_layers: 1,
+            },
         );
 
         // Update instances
@@ -1048,14 +626,6 @@ impl<const M: usize> Renderer<M> {
         self.queue
             .write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&instances));
 
-        // Lighting pass texture views
-        let color_view =
-            self.light_pass.textures[0].create_view(&wgpu::TextureViewDescriptor::default());
-        let normal_view =
-            self.light_pass.textures[1].create_view(&wgpu::TextureViewDescriptor::default());
-        let depth_view =
-            self.light_pass.textures[2].create_view(&wgpu::TextureViewDescriptor::default());
-
         // Render commands
         let mut encoder = self
             .device
@@ -1067,7 +637,7 @@ impl<const M: usize> Renderer<M> {
                 label: Some("Render Pass"),
                 color_attachments: &[
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &color_view,
+                        view: &self.rgba_textures[0],
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -1080,7 +650,7 @@ impl<const M: usize> Renderer<M> {
                         },
                     }),
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &normal_view,
+                        view: &self.rgba_textures[1],
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -1094,7 +664,7 @@ impl<const M: usize> Renderer<M> {
                     }),
                 ],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_view,
+                    view: &self.depth_texture,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.),
                         store: true,
@@ -1124,139 +694,70 @@ impl<const M: usize> Renderer<M> {
 
         // Render deferred lighting ---------------------------------------------------------------
 
-        let color_ao_view = &self.ssao_bloom_x_pass.textures[0]
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let normal_depth_view = &self.ssao_bloom_x_pass.textures[1]
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        self.light_pass.shader_quad.render(
-            &self.device,
-            &self.queue,
-            &[
-                Some(wgpu::RenderPassColorAttachment {
-                    view: color_ao_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.,
-                            g: 0.,
-                            b: 0.,
-                            a: 1.,
-                        }),
-                        store: true,
-                    },
-                }),
-                Some(wgpu::RenderPassColorAttachment {
-                    view: normal_depth_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.,
-                            g: 0.,
-                            b: 0.,
-                            a: 1.,
-                        }),
-                        store: true,
-                    },
-                }),
-            ],
-            &self.light_pass.bind_groups,
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        self.render_screen_pass(
+            &mut encoder,
+            &surface_view,
+            &self.light_pass,
+            &self.pass_quad,
         );
+        self.queue.submit(Some(encoder.finish()));
 
-        // Render SSAO & Bloom X ------------------------------------------------------------------
+        // Render Bloom X -------------------------------------------------------------------------
 
-        let color_ao_view = &self.ssao_bloom_y_pass.textures[0]
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        self.ssao_bloom_x_pass.shader_quad.render(
-            &self.device,
-            &self.queue,
-            &[Some(wgpu::RenderPassColorAttachment {
-                view: color_ao_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.,
-                        g: 0.,
-                        b: 0.,
-                        a: 1.,
-                    }),
-                    store: true,
-                },
-            })],
-            &self.ssao_bloom_x_pass.bind_groups,
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        self.render_screen_pass(
+            &mut encoder,
+            &surface_view,
+            &self.bloom_x_pass,
+            &self.pass_quad,
         );
+        self.queue.submit(Some(encoder.finish()));
 
-        // Render SSAO & Bloom Y ------------------------------------------------------------------
+        // Render Bloom Y -------------------------------------------------------------------------
 
-        let color_ao_view =
-            &self.post_pass.textures[0].create_view(&wgpu::TextureViewDescriptor::default());
-        self.ssao_bloom_y_pass.shader_quad.render(
-            &self.device,
-            &self.queue,
-            &[Some(wgpu::RenderPassColorAttachment {
-                view: color_ao_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.,
-                        g: 0.,
-                        b: 0.,
-                        a: 1.,
-                    }),
-                    store: true,
-                },
-            })],
-            &self.ssao_bloom_y_pass.bind_groups,
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        self.render_screen_pass(
+            &mut encoder,
+            &surface_view,
+            &self.bloom_y_pass,
+            &self.pass_quad,
         );
+        self.queue.submit(Some(encoder.finish()));
 
         // Render Post Processing -----------------------------------------------------------------
 
-        let view =
-            &self.output_pass.textures[0].create_view(&wgpu::TextureViewDescriptor::default());
-        self.post_pass.shader_quad.render(
-            &self.device,
-            &self.queue,
-            &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.,
-                        g: 0.,
-                        b: 0.,
-                        a: 1.,
-                    }),
-                    store: true,
-                },
-            })],
-            &self.post_pass.bind_groups,
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        self.render_screen_pass(
+            &mut encoder,
+            &surface_view,
+            &self.post_pass,
+            &self.pass_quad,
         );
+        self.queue.submit(Some(encoder.finish()));
 
         // Output (scaling) to window pass --------------------------------------------------------
 
-        let output = self.surface.get_current_texture()?;
-        let view = &output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        self.output_pass.shader_quad.render(
-            &self.device,
-            &self.queue,
-            &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.,
-                        g: 0.,
-                        b: 0.,
-                        a: 1.,
-                    }),
-                    store: true,
-                },
-            })],
-            &self.output_pass.bind_groups,
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        self.render_screen_pass(
+            &mut encoder,
+            &surface_view,
+            &self.output_pass,
+            &self.surface_quad,
         );
+        self.queue.submit(Some(encoder.finish()));
 
-        output.present();
+        surface_texture.present();
 
         Ok(())
     }

@@ -1,3 +1,17 @@
+struct Uniforms {
+    view_projection_mat: mat4x4<f32>,
+    inverse_view_projection_mat: mat4x4<f32>,
+    light_position: vec4<f32>,
+    camera_position: vec4<f32>,
+    screen_size: vec2<f32>,
+    ambient: f32,
+    diffuse: f32,
+    specular: f32,
+    post_noise_size: f32,
+};
+@group(0) @binding(0)
+var<uniform> uniforms: Uniforms;
+
 struct VertInput {
     @location(0) pos: vec2<f32>,
     @location(1) uv: vec2<f32>,
@@ -16,12 +30,14 @@ fn vs_main(in: VertInput) -> VertOutput {
     return out;
 }
 
-@group(0) @binding(0)
-var s: sampler;
 @group(0) @binding(1)
-var t_lit: texture_2d<f32>;
+var s: sampler;
 @group(0) @binding(2)
-var t_bloom_ao: texture_2d<f32>;
+var t_lit: texture_2d<f32>;
+@group(0) @binding(3)
+var t_bloom: texture_2d<f32>;
+@group(0) @binding(4)
+var t_noise: texture_2d<f32>;
 
 fn rrt_and_odt_fit(v: vec3<f32>) -> vec3<f32> {
     let a = v * (v + 0.0245786) - 0.000090537;
@@ -68,8 +84,9 @@ fn reinhard_jodie(v: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
-    let bloom_ao = textureSample(t_bloom_ao, s, in.v_uv);
-    let color = textureSample(t_lit, s, in.v_uv).rgb * bloom_ao.a + bloom_ao.rgb;
-    //let color = bloom_ao.rgb;
-    return vec4<f32>(aces_fitted(color), 1.);
+    let noise_scale = uniforms.screen_size / uniforms.post_noise_size;
+    let noise = textureSample(t_noise, s, in.v_uv * noise_scale).rgb - 0.5;
+    let bloom = textureSample(t_bloom, s, in.v_uv);
+    let color = textureSample(t_lit, s, in.v_uv).rgb + bloom.rgb;
+    return vec4<f32>(aces_fitted(color) + noise * 0.04, 1.);
 }
