@@ -37,3 +37,8 @@ I refactored the pass system for readability and vram savings.
 
 Next I need to make my scene/models good, and implement a non-placeholder
 lighting system.
+
+## 2022-07-24
+
+I had a few hours to work on the light infrastructure and I also got to remove
+one of the shader source files by introducing control parameters to bloom
