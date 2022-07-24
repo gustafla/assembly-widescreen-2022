@@ -4,6 +4,7 @@ mod screen_quad;
 use crate::scene;
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
+use color_space::{Hsv, Rgb};
 use glam::*;
 use pass::Pass;
 use rand::prelude::*;
@@ -12,24 +13,51 @@ use screen_quad::ScreenQuad;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
 
+const MAX_LIGHTS: usize = 8;
 const POST_NOISE_SIZE: u32 = 128;
 const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const PASS_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 const PASS_TEXTURES: usize = 3;
 
+struct NormRgb(Vec3);
+impl From<Hsv> for NormRgb {
+    fn from(hsv: Hsv) -> Self {
+        let rgb = Rgb::from(hsv);
+        NormRgb(vec3(rgb.r as f32, rgb.g as f32, rgb.b as f32) / 255.)
+    }
+}
+
+impl From<NormRgb> for Vec3 {
+    fn from(nrg: NormRgb) -> Self {
+        nrg.0
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct Uniforms {
+pub struct Light {
+    coordinates: Vec4,
+    rgb_intensity: Vec3,
+    _pad: f32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct RenderUniforms {
     view_projection_mat: Mat4,
     inverse_view_projection_mat: Mat4,
-    light_position: Vec4,
     camera_position: Vec4,
+    lights: [Light; MAX_LIGHTS],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct PostUniforms {
     screen_size: Vec2,
-    ambient: f32,
-    diffuse: f32,
-    specular: f32,
-    post_noise_size: f32,
-    _pad: Vec2,
+    post_noise_size: Vec2,
+    bloom_offset: Vec2,
+    bloom_sample_exponent: f32,
+    _pad: f32,
 }
 
 #[repr(C)]
@@ -85,7 +113,8 @@ pub struct Renderer<const M: usize> {
     surface_configuration: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
     uniform_bind_group: wgpu::BindGroup,
-    uniform_buffer: wgpu::Buffer,
+    render_uniform_buffer: wgpu::Buffer,
+    post_uniform_buffer: wgpu::Buffer,
     internal_size: PhysicalSize<u32>,
     models: [Model; M],
     instance_buffer: wgpu::Buffer,
@@ -153,11 +182,12 @@ impl<const M: usize> Renderer<M> {
         let vertices: Vec<Vertex> = vert
             .positions
             .into_iter()
-            .zip(vert.color_roughness.into_iter())
+            .zip(vert.colors.into_iter())
+            .zip(vert.roughness.into_iter())
             .zip(vert.normals.into_iter())
-            .map(|((position, color_roughness), normal)| Vertex {
+            .map(|(((position, color), roughness), normal)| Vertex {
                 position: Vec4::from((position, 1.)),
-                color_roughness,
+                color_roughness: Vec4::from((Vec3::from(NormRgb::from(color)), roughness)),
                 normal: Vec4::from((normal, 0.)),
             })
             .collect();
@@ -232,9 +262,16 @@ impl<const M: usize> Renderer<M> {
 
         // Common Resources -----------------------------------------------------------------------
 
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Uniform Buffer"),
-            size: std::mem::size_of::<Uniforms>() as u64,
+        let render_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Render Uniform Buffer"),
+            size: std::mem::size_of::<RenderUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let post_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Post Uniform Buffer"),
+            size: std::mem::size_of::<PostUniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -356,7 +393,7 @@ impl<const M: usize> Renderer<M> {
             layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: render_uniform_buffer.as_entire_binding(),
             }],
         });
 
@@ -432,7 +469,7 @@ impl<const M: usize> Renderer<M> {
         let light_pass = Pass::new(
             &device,
             &queue,
-            &uniform_buffer,
+            &render_uniform_buffer,
             sampler,
             Some(&depth_texture),
             &[&rgba_textures[0], &rgba_textures[1]],
@@ -444,31 +481,31 @@ impl<const M: usize> Renderer<M> {
         let bloom_x_pass = Pass::new(
             &device,
             &queue,
-            &uniform_buffer,
+            &post_uniform_buffer,
             sampler,
             None,
             &[&rgba_textures[2]],
             vec![pass::Target::Texture(0)],
-            Self::get_shader("bloom_x.wgsl"),
+            Self::get_shader("bloom.wgsl"),
         );
 
         // textures (0) -> (1)
         let bloom_y_pass = Pass::new(
             &device,
             &queue,
-            &uniform_buffer,
+            &post_uniform_buffer,
             sampler,
             None,
             &[&rgba_textures[0]],
             vec![pass::Target::Texture(1)],
-            Self::get_shader("bloom_y.wgsl"),
+            Self::get_shader("bloom.wgsl"),
         );
 
         // textures (2, 1) + post noise -> (0)
         let post_pass = Pass::new(
             &device,
             &queue,
-            &uniform_buffer,
+            &post_uniform_buffer,
             repeating_sampler,
             None,
             &[
@@ -484,7 +521,7 @@ impl<const M: usize> Renderer<M> {
         let output_pass = Pass::new(
             &device,
             &queue,
-            &uniform_buffer,
+            &post_uniform_buffer,
             filtering_sampler,
             None,
             &[&rgba_textures[0]],
@@ -503,7 +540,8 @@ impl<const M: usize> Renderer<M> {
             surface_configuration,
             render_pipeline,
             uniform_bind_group,
-            uniform_buffer,
+            render_uniform_buffer,
+            post_uniform_buffer,
             internal_size,
             models,
             instance_buffer,
@@ -595,23 +633,22 @@ impl<const M: usize> Renderer<M> {
             100.,
         );
         let view_projection_mat = projection_mat * view_mat;
+        let mut lights: [Light; MAX_LIGHTS] = [Light::zeroed(); MAX_LIGHTS];
+        for (i, light) in scene.lights.iter().take(MAX_LIGHTS).enumerate() {
+            lights[i] = Light {
+                coordinates: light.coordinates,
+                rgb_intensity: light.intensity * Vec3::from(NormRgb::from(light.color)),
+                _pad: 0.,
+            }
+        }
         self.queue.write_buffer(
-            &self.uniform_buffer,
+            &self.render_uniform_buffer,
             0,
-            bytemuck::cast_slice(&[Uniforms {
+            bytemuck::cast_slice(&[RenderUniforms {
                 view_projection_mat,
                 inverse_view_projection_mat: view_projection_mat.inverse(),
-                light_position: camera_position,
                 camera_position,
-                screen_size: vec2(
-                    self.internal_size.width as f32,
-                    self.internal_size.height as f32,
-                ),
-                post_noise_size: POST_NOISE_SIZE as f32,
-                ambient: 0.2,
-                diffuse: 0.5,
-                specular: 0.3,
-                _pad: Vec2::ZERO,
+                lights,
             }]),
         );
 
@@ -738,6 +775,23 @@ impl<const M: usize> Renderer<M> {
 
         // Render Bloom X -------------------------------------------------------------------------
 
+        let mut post_uniforms = PostUniforms {
+            screen_size: vec2(
+                self.internal_size.width as f32,
+                self.internal_size.height as f32,
+            ),
+            post_noise_size: vec2(POST_NOISE_SIZE as f32, POST_NOISE_SIZE as f32),
+            bloom_offset: vec2(1., 0.),
+            bloom_sample_exponent: 32.,
+            _pad: 0.,
+        };
+
+        self.queue.write_buffer(
+            &self.post_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[post_uniforms]),
+        );
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -750,6 +804,14 @@ impl<const M: usize> Renderer<M> {
         self.queue.submit(Some(encoder.finish()));
 
         // Render Bloom Y -------------------------------------------------------------------------
+
+        post_uniforms.bloom_offset = vec2(0., 1.);
+        post_uniforms.bloom_sample_exponent = 1.;
+        self.queue.write_buffer(
+            &self.post_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[post_uniforms]),
+        );
 
         let mut encoder = self
             .device

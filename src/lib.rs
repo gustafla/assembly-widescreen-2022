@@ -3,11 +3,12 @@ mod renderer;
 pub mod scene;
 mod sync;
 
+use color_space::Hsv;
 use glam::*;
 use include_dir::{include_dir, Dir};
 pub use player::Player;
 pub use renderer::Renderer;
-use scene::{Camera, Instance, Model, Scene, VertexData};
+use scene::{Camera, Instance, Light, Model, Scene, VertexData};
 pub use sync::DemoSync;
 
 pub static RESOURCES_PATH: &str = "resources";
@@ -23,7 +24,8 @@ fn cylinder_position(r: f32, u: f32, v: f32) -> Vec3 {
 
 fn trunk_segment(r0: f32, r1: f32, start: f32, end: f32, n: usize) -> VertexData {
     let mut positions = Vec::new();
-    let mut color_roughness = Vec::new();
+    let mut colors = Vec::new();
+    let mut roughness = Vec::new();
     for i in 0..n - 1 {
         let u0 = i as f32 / (n - 1) as f32;
         let v0 = start;
@@ -42,7 +44,8 @@ fn trunk_segment(r0: f32, r1: f32, start: f32, end: f32, n: usize) -> VertexData
         positions.push(p3);
         positions.push(p0);
 
-        color_roughness.extend(std::iter::repeat(Vec4::ONE).take(6));
+        colors.extend(std::iter::repeat(Hsv::new(0., 0., 1.)).take(6));
+        roughness.extend(std::iter::repeat(1.).take(6));
 
         /*texcoords.push(vec2(u0, v0));
         texcoords.push(vec2(u1, v0));
@@ -52,7 +55,7 @@ fn trunk_segment(r0: f32, r1: f32, start: f32, end: f32, n: usize) -> VertexData
         texcoords.push(vec2(u0, v0));*/
     }
 
-    VertexData::from_triangles(positions, color_roughness)
+    VertexData::from_triangles(positions, colors, roughness)
 }
 
 fn generate_tree(nu: usize, nv: usize) -> VertexData {
@@ -77,7 +80,8 @@ fn generate_plane() -> VertexData {
             vec3(-0.5, 0., -0.5),
             vec3(-0.5, 0., 0.5),
         ],
-        std::iter::repeat(Vec4::ONE).take(6).collect(),
+        std::iter::repeat(Hsv::new(0., 0., 1.)).take(6).collect(),
+        std::iter::repeat(1.).take(6).collect(),
     )
 }
 
@@ -131,5 +135,17 @@ pub fn update(sync: &mut DemoSync) -> Scene<MODELS> {
                 sync.get("camera0:target.z"),
             ),
         },
+        lights: vec![
+            Light {
+                coordinates: Vec4::ZERO,
+                color: Hsv::new(0., 0., 1.),
+                intensity: 0.5,
+            },
+            Light {
+                coordinates: vec4(0.1, -1., -0.2, 0.),
+                color: Hsv::new(0., 0., 1.),
+                intensity: 1.,
+            },
+        ],
     }
 }

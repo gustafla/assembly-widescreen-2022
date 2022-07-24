@@ -1,15 +1,18 @@
+use color_space::Hsv;
 use glam::*;
 
 #[derive(Default)]
 pub struct VertexData {
     pub positions: Vec<Vec3>,
-    pub color_roughness: Vec<Vec4>,
+    pub colors: Vec<Hsv>,
+    pub roughness: Vec<f32>,
     pub normals: Vec<Vec3>,
 }
 
 impl VertexData {
-    pub fn from_triangles(positions: Vec<Vec3>, color_roughness: Vec<Vec4>) -> Self {
-        assert!(positions.len() == color_roughness.len());
+    pub fn from_triangles(positions: Vec<Vec3>, colors: Vec<Hsv>, roughness: Vec<f32>) -> Self {
+        assert!(positions.len() == colors.len());
+        assert!(positions.len() == roughness.len());
         assert!(positions.len() % 3 == 0);
 
         // Compute texcoord-aligned tangents and bitangents
@@ -50,15 +53,16 @@ impl VertexData {
 
         Self {
             positions,
-            color_roughness,
+            colors,
+            roughness,
             normals,
         }
     }
 
     pub fn push(&mut self, data: VertexData) {
         self.positions.extend_from_slice(&data.positions);
-        self.color_roughness
-            .extend_from_slice(&data.color_roughness);
+        self.colors.extend_from_slice(&data.colors);
+        self.roughness.extend_from_slice(&data.roughness);
         self.normals.extend_from_slice(&data.normals);
     }
 }
@@ -73,6 +77,12 @@ pub struct Instance {
     pub translation: Vec3,
 }
 
+pub struct Light {
+    pub coordinates: Vec4,
+    pub color: Hsv,
+    pub intensity: f32,
+}
+
 pub struct Camera {
     pub fov: f32,
     pub position: Vec3,
@@ -81,5 +91,6 @@ pub struct Camera {
 
 pub struct Scene<const M: usize> {
     pub instances_by_model: [Vec<Instance>; M],
+    pub lights: Vec<Light>,
     pub camera: Camera,
 }

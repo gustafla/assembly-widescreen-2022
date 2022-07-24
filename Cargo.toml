@@ -21,6 +21,7 @@ pollster = "0.2.5"
 include_dir = "0.7.2"
 rand_xoshiro = "0.6.0"
 rand = { version = "0.8.5", default_features = false }
+color_space = "0.5.3"
 
 [profile.dev]
 opt-level = 1

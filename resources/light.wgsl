@@ -1,15 +1,16 @@
-struct Uniforms {
+struct Light {
+    coordinates: vec4<f32>,
+    rgb_intensity: vec3<f32>,
+};
+
+struct RenderUniforms {
     view_projection_mat: mat4x4<f32>,
     inverse_view_projection_mat: mat4x4<f32>,
-    light_position: vec4<f32>,
     camera_position: vec4<f32>,
-    screen_size: vec2<f32>,
-    ambient: f32,
-    diffuse: f32,
-    specular: f32,
+    lights: array<Light, 8>,
 };
 @group(0) @binding(0)
-var<uniform> uniforms: Uniforms;
+var<uniform> uniforms: RenderUniforms;
 
 struct VertInput {
     @location(0) pos: vec2<f32>,
@@ -89,6 +90,6 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     }
     
     let normal = normalize(normal);
-    let diffuse = max(dot(normal, normalize(uniforms.light_position.xyz - pos)), 0.);
+    let diffuse = max(dot(normal, normalize(cam_pos - pos)), 0.);
     return vec4<f32>(color * diffuse, 1.);
 }

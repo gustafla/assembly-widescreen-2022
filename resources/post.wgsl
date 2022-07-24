@@ -1,16 +1,9 @@
-struct Uniforms {
-    view_projection_mat: mat4x4<f32>,
-    inverse_view_projection_mat: mat4x4<f32>,
-    light_position: vec4<f32>,
-    camera_position: vec4<f32>,
+struct PostUniforms {
     screen_size: vec2<f32>,
-    ambient: f32,
-    diffuse: f32,
-    specular: f32,
-    post_noise_size: f32,
+    post_noise_size: vec2<f32>,
 };
 @group(0) @binding(0)
-var<uniform> uniforms: Uniforms;
+var<uniform> uniforms: PostUniforms;
 
 struct VertInput {
     @location(0) pos: vec2<f32>,
