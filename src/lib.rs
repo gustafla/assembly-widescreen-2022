@@ -137,14 +137,21 @@ pub fn update(sync: &mut DemoSync) -> Scene<MODELS> {
         },
         lights: vec![
             Light {
-                coordinates: Vec4::ZERO,
-                color: Hsv::new(0., 0., 1.),
-                intensity: 0.5,
+                coordinates: vec4(
+                    sync.get("light:point.x"),
+                    sync.get("light:point.y"),
+                    sync.get("light:point.z"),
+                    1.,
+                ),
+                color: Hsv::new(
+                    sync.get("light:point.hue") as f64,
+                    sync.get("light:point.sat") as f64,
+                    sync.get("light:point.val") as f64,
+                ),
             },
             Light {
-                coordinates: vec4(0.1, -1., -0.2, 0.),
-                color: Hsv::new(0., 0., 1.),
-                intensity: 1.,
+                coordinates: vec4(0.1, -1., -0.1, 0.),
+                color: Hsv::new(0., 0., 0.8),
             },
         ],
     }

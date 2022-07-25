@@ -41,6 +41,16 @@ pub struct Light {
     _pad: f32,
 }
 
+impl Default for Light {
+    fn default() -> Self {
+        Light {
+            coordinates: Vec4::ONE,
+            rgb_intensity: Vec3::ZERO,
+            _pad: 0.,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct RenderUniforms {
@@ -56,7 +66,7 @@ pub struct PostUniforms {
     screen_size: Vec2,
     post_noise_size: Vec2,
     bloom_offset: Vec2,
-    bloom_sample_exponent: f32,
+    bloom_sample_bias: f32,
     _pad: f32,
 }
 
@@ -633,11 +643,11 @@ impl<const M: usize> Renderer<M> {
             100.,
         );
         let view_projection_mat = projection_mat * view_mat;
-        let mut lights: [Light; MAX_LIGHTS] = [Light::zeroed(); MAX_LIGHTS];
+        let mut lights: [Light; MAX_LIGHTS] = [Light::default(); MAX_LIGHTS];
         for (i, light) in scene.lights.iter().take(MAX_LIGHTS).enumerate() {
             lights[i] = Light {
                 coordinates: light.coordinates,
-                rgb_intensity: light.intensity * Vec3::from(NormRgb::from(light.color)),
+                rgb_intensity: Vec3::from(NormRgb::from(light.color)),
                 _pad: 0.,
             }
         }
@@ -782,7 +792,7 @@ impl<const M: usize> Renderer<M> {
             ),
             post_noise_size: vec2(POST_NOISE_SIZE as f32, POST_NOISE_SIZE as f32),
             bloom_offset: vec2(1., 0.),
-            bloom_sample_exponent: 32.,
+            bloom_sample_bias: 2.,
             _pad: 0.,
         };
 
@@ -806,7 +816,7 @@ impl<const M: usize> Renderer<M> {
         // Render Bloom Y -------------------------------------------------------------------------
 
         post_uniforms.bloom_offset = vec2(0., 1.);
-        post_uniforms.bloom_sample_exponent = 1.;
+        post_uniforms.bloom_sample_bias = 0.;
         self.queue.write_buffer(
             &self.post_uniform_buffer,
             0,

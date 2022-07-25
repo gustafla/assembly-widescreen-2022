@@ -80,7 +80,6 @@ pub struct Instance {
 pub struct Light {
     pub coordinates: Vec4,
     pub color: Hsv,
-    pub intensity: f32,
 }
 
 pub struct Camera {
