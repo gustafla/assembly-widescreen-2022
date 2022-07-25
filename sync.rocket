@@ -11,11 +11,11 @@
 			<key interpolation="0" value="8" row="0"/>
 		</track>
 		<track name="camera0:pos.y">
-			<key interpolation="1" value="50" row="0"/>
+			<key interpolation="1" value="2" row="0"/>
 			<key interpolation="0" value="40" row="48"/>
 		</track>
 		<track name="camera0:pos.z">
-			<key interpolation="1" value="70" row="0"/>
+			<key interpolation="1" value="2" row="0"/>
 			<key interpolation="0" value="-60" row="123"/>
 		</track>
 		<track name="camera0:target.x">
@@ -30,17 +30,17 @@
 		</track>
 		<track name="light:point.x"/>
 		<track name="light:point.y">
-			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="0" value="2" row="0"/>
 		</track>
 		<track name="light:point.z">
-			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="0" value="2" row="0"/>
 		</track>
 		<track name="light:point.hue"/>
 		<track name="light:point.sat">
-			<key interpolation="0" value="0.60000002" row="0"/>
+			<key interpolation="0" value="0.30000001" row="0"/>
 		</track>
 		<track name="light:point.val">
-			<key interpolation="0" value="20" row="0"/>
+			<key interpolation="0" value="3" row="0"/>
 		</track>
 	</tracks>
 	<bookmarks/>

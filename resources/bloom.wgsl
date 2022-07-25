@@ -35,7 +35,7 @@ fn luminance(v: vec3<f32>) -> f32 {
 }
 
 fn light(uv: vec2<f32>) -> vec3<f32> {
-    return clamp(textureSample(t_in, s, uv).rgb - uniforms.bloom_sample_bias, vec3<f32>(0.), vec3<f32> (100.));
+    return clamp(textureSample(t_in, s, uv).rgb - uniforms.bloom_sample_bias, vec3<f32>(0.), vec3<f32> (10.));
 }
 
 fn bloom(uv: vec2<f32>) -> vec3<f32> {

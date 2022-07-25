@@ -87,11 +87,12 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     if (march_t < rast_t) {
         pos = cam_pos + direction * march_t;
         normal = grad(pos);
-        color_roughness = vec4<f32>(1.0, 0.5, 0.1, 1.);
+        color_roughness = vec4<f32>(1.0, 0.5, 0.1, 0.5);
     }
     
     // Compute lighting
-    var sum: vec3<f32> = vec3<f32>(0.);
+    var diff_sum: vec3<f32> = vec3<f32>(0.);
+    var spec_sum: vec3<f32> = vec3<f32>(0.);
     var ambient: vec3<f32> = vec3<f32>(0.);
     let normal = normalize(normal);
     for (var i: i32 = 0; i < 8; i+=1) {
@@ -110,9 +111,10 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         
         // Compute diffuse lighting based on this variant of Oren-Nayar glsl code
         // https://github.com/glslify/glsl-diffuse-oren-nayar
-        let l_dot_v = dot(light_dir, -direction);
+        let v = -direction;
+        let l_dot_v = dot(light_dir, v);
         let l_dot_n = dot(light_dir, normal);
-        let n_dot_v = dot(normal, -direction);
+        let n_dot_v = dot(normal, v);
         let s = l_dot_v - l_dot_n * n_dot_v;
         let t = mix(1., max(l_dot_n, n_dot_v), step(0., s));
         let sigma2 = color_roughness.a * color_roughness.a;
@@ -120,9 +122,14 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         let b = 0.45 * sigma2 / (sigma2 + 0.09);
         let diffuse = max(0., l_dot_n) * (a + b * s / t) / 3.14159265;
         
-        sum += light.rgb_intensity * diffuse * attenuation;
+        // Lol add Blinn-Phong -style specular too, this is not correct either but I want it
+        let halfway = normalize(light_dir + v);
+        let spec = pow(max(dot(normal, halfway), 0.), 32.);
+        
+        diff_sum += light.rgb_intensity * diffuse * attenuation;
+        spec_sum += light.rgb_intensity * spec * (1. - color_roughness.a) * attenuation;
         ambient += light.rgb_intensity;
     }
 
-    return vec4<f32>(color_roughness.rgb * (sum + ambient * 0.01), 1.);
+    return vec4<f32>(color_roughness.rgb * (diff_sum + ambient * 0.01) + spec_sum, 1.);
 }
