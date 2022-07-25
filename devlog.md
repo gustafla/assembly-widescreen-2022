@@ -42,3 +42,16 @@ lighting system.
 
 I had a few hours to work on the light infrastructure and I also got to remove
 one of the shader source files by introducing control parameters to bloom
+
+## 2022-07-25
+
+I hastily... borrowed, some Oren-Nayar lighting code as I'm aiming to just get
+results and not to learn and struggle a week before deadline. It's apparently
+not even correct, but it looks fine for my purposes. I also got to implementing
+a better gaussian blur kernel for bloom (kernel.py).
+
+Next time I need to work on the models/meshes a bit more. They don't have to
+be great, but at least a little bit more like real trees.
+
+Other tasks are lights, color, camera, timeline, fog, sky, raymarched
+surfaces and animations, and maybe particle effects if I have extra time.
