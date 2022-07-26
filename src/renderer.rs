@@ -115,7 +115,7 @@ struct Model {
     num_vertices: u32,
 }
 
-pub struct Renderer<const M: usize> {
+pub struct Renderer {
     rng: Xoshiro128Plus,
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -126,7 +126,7 @@ pub struct Renderer<const M: usize> {
     render_uniform_buffer: wgpu::Buffer,
     post_uniform_buffer: wgpu::Buffer,
     internal_size: PhysicalSize<u32>,
-    models: [Model; M],
+    models: Vec<Model>,
     instance_buffer: wgpu::Buffer,
     pass_quad: ScreenQuad,
     surface_quad: ScreenQuad,
@@ -140,7 +140,7 @@ pub struct Renderer<const M: usize> {
     output_pass: Pass,
 }
 
-impl<const M: usize> Renderer<M> {
+impl Renderer {
     fn get_shader(path: &str) -> wgpu::ShaderModuleDescriptor<'_> {
         #[cfg(debug_assertions)]
         {
@@ -201,7 +201,7 @@ impl<const M: usize> Renderer<M> {
     pub async fn new(
         internal_size: PhysicalSize<u32>,
         window: &Window,
-        models: [scene::Model; M],
+        models: Vec<scene::Model>,
         rng: Xoshiro128Plus,
     ) -> Result<Self> {
         // Init & surface -------------------------------------------------------------------------
@@ -445,9 +445,7 @@ impl<const M: usize> Renderer<M> {
         let models = models
             .into_iter()
             .map(|m| Self::load_model(&device, m))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+            .collect();
 
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Instance Buffer"),
@@ -604,7 +602,7 @@ impl<const M: usize> Renderer<M> {
         quad.draw(&mut render_pass);
     }
 
-    pub fn render(&mut self, scene: &scene::Scene<M>) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, scene: &scene::Scene) -> Result<(), wgpu::SurfaceError> {
         // Get surface texture
         let surface_texture = self.surface.get_current_texture()?;
         let surface_view = surface_texture

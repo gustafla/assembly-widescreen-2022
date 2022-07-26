@@ -8,22 +8,21 @@
 			<key interpolation="1" value="0.40000001" row="0"/>
 		</track>
 		<track name="camera0:pos.x">
-			<key interpolation="0" value="8" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:pos.y">
-			<key interpolation="1" value="2" row="0"/>
-			<key interpolation="0" value="40" row="48"/>
+			<key interpolation="1" value="30" row="0"/>
+			<key interpolation="0" value="80" row="48"/>
 		</track>
 		<track name="camera0:pos.z">
-			<key interpolation="1" value="2" row="0"/>
-			<key interpolation="0" value="-60" row="123"/>
+			<key interpolation="0" value="40" row="0"/>
 		</track>
 		<track name="camera0:target.x">
 			<key interpolation="1" value="0" row="0"/>
-			<key interpolation="0" value="0" row="24"/>
+			<key interpolation="0" value="-40" row="48"/>
 		</track>
 		<track name="camera0:target.y">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="10" row="0"/>
 		</track>
 		<track name="camera0:target.z">
 			<key interpolation="0" value="0" row="0"/>

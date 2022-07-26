@@ -65,6 +65,17 @@ impl VertexData {
         self.roughness.extend_from_slice(&data.roughness);
         self.normals.extend_from_slice(&data.normals);
     }
+
+    pub fn transform(mut self, transformation: Mat4) -> Self {
+        for x in self.positions.iter_mut() {
+            *x = transformation.transform_point3(*x);
+        }
+        let normal_transformation = transformation.inverse().transpose();
+        for x in self.normals.iter_mut() {
+            *x = normal_transformation.transform_vector3(*x);
+        }
+        self
+    }
 }
 
 pub struct Model {
@@ -88,8 +99,8 @@ pub struct Camera {
     pub target: Vec3,
 }
 
-pub struct Scene<const M: usize> {
-    pub instances_by_model: [Vec<Instance>; M],
+pub struct Scene {
+    pub instances_by_model: Vec<Vec<Instance>>,
     pub lights: Vec<Light>,
     pub camera: Camera,
 }

@@ -63,8 +63,8 @@ fn march(origin: vec3<f32>, direction: vec3<f32>) -> f32 {
     for (var i: i32 = 0; i < 30; i += 1) {
         dist = scene(origin + direction * t);
         t += dist;
-        if (t > 99.) {
-            t = 99.;
+        if (t > 199.) {
+            t = 199.;
             break;
         }
     }
