@@ -15,7 +15,6 @@ pub struct Pass {
 impl Pass {
     pub fn new(
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
         uniform_buffer: &wgpu::Buffer,
         sampler: (wgpu::SamplerBindingType, &wgpu::Sampler),
         depth_texture: Option<&wgpu::TextureView>,

@@ -7,6 +7,7 @@ use color_space::Hsv;
 use glam::*;
 use include_dir::{include_dir, Dir};
 pub use player::Player;
+use rand::prelude::*;
 pub use renderer::Renderer;
 use scene::{Camera, Instance, Light, Model, Scene, VertexData};
 pub use sync::DemoSync;
@@ -58,7 +59,7 @@ fn trunk_segment(r0: f32, r1: f32, start: f32, end: f32, n: usize) -> VertexData
     VertexData::from_triangles(positions, colors, roughness)
 }
 
-fn generate_tree(nu: usize, nv: usize) -> VertexData {
+fn generate_tree(rng: &mut impl Rng, nu: usize, nv: usize) -> VertexData {
     let mut vertices = VertexData::default();
 
     for v in 0..nv {
@@ -87,10 +88,10 @@ fn generate_plane() -> VertexData {
 
 const MODELS: usize = 2;
 
-pub fn init() -> [Model; MODELS] {
+pub fn init(rng: &mut impl Rng) -> [Model; MODELS] {
     let models = [
         Model {
-            vertices: generate_tree(8, 5),
+            vertices: generate_tree(rng, 8, 15),
         },
         Model {
             vertices: generate_plane(),

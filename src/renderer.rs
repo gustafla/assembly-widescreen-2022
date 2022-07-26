@@ -141,7 +141,7 @@ pub struct Renderer<const M: usize> {
 }
 
 impl<const M: usize> Renderer<M> {
-    fn get_shader<'a>(path: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
+    fn get_shader(path: &str) -> wgpu::ShaderModuleDescriptor<'_> {
         #[cfg(debug_assertions)]
         {
             wgpu::ShaderModuleDescriptor {
@@ -169,22 +169,6 @@ impl<const M: usize> Renderer<M> {
                 ),
             }
         }
-    }
-
-    fn ssao_kernel<const N: usize>(rng: &mut impl Rng) -> [Vec4; N] {
-        let mut kernel = [Vec4::ZERO; N];
-        for i in 0..N {
-            let sample = vec3(
-                rng.gen::<f32>() * 2. - 1.,
-                rng.gen::<f32>() * 2. - 1.,
-                rng.gen::<f32>(),
-            );
-            let sample = sample.normalize() * rng.gen::<f32>();
-            let scale = i as f32 / N as f32;
-            let scale = 0.1 + scale.powi(2) * 0.9;
-            kernel[i] = Vec4::from((sample * scale, 0.));
-        }
-        kernel
     }
 
     fn load_model(device: &wgpu::Device, model: scene::Model) -> Model {
@@ -218,9 +202,8 @@ impl<const M: usize> Renderer<M> {
         internal_size: PhysicalSize<u32>,
         window: &Window,
         models: [scene::Model; M],
+        rng: Xoshiro128Plus,
     ) -> Result<Self> {
-        let rng = Xoshiro128Plus::seed_from_u64(0);
-
         // Init & surface -------------------------------------------------------------------------
 
         let surface_size = window.inner_size();
@@ -478,7 +461,6 @@ impl<const M: usize> Renderer<M> {
         // textures depth + (0, 1) -> (2)
         let light_pass = Pass::new(
             &device,
-            &queue,
             &render_uniform_buffer,
             sampler,
             Some(&depth_texture),
@@ -490,7 +472,6 @@ impl<const M: usize> Renderer<M> {
         // textures (2) -> (0)
         let bloom_x_pass = Pass::new(
             &device,
-            &queue,
             &post_uniform_buffer,
             sampler,
             None,
@@ -502,7 +483,6 @@ impl<const M: usize> Renderer<M> {
         // textures (0) -> (1)
         let bloom_y_pass = Pass::new(
             &device,
-            &queue,
             &post_uniform_buffer,
             sampler,
             None,
@@ -514,7 +494,6 @@ impl<const M: usize> Renderer<M> {
         // textures (2, 1) + post noise -> (0)
         let post_pass = Pass::new(
             &device,
-            &queue,
             &post_uniform_buffer,
             repeating_sampler,
             None,
@@ -530,7 +509,6 @@ impl<const M: usize> Renderer<M> {
         // textures (0) -> surface
         let output_pass = Pass::new(
             &device,
-            &queue,
             &post_uniform_buffer,
             filtering_sampler,
             None,
@@ -690,8 +668,7 @@ impl<const M: usize> Renderer<M> {
         let instances: Vec<Instance> = scene
             .instances_by_model
             .iter()
-            .map(|inst| inst.iter())
-            .flatten()
+            .flat_map(|inst| inst.iter())
             .map(|i| {
                 let model =
                     Mat4::from_scale_rotation_translation(i.scale, i.rotation, i.translation);

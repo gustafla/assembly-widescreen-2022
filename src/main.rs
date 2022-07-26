@@ -3,6 +3,8 @@ mod logger;
 use anyhow::{anyhow, Context, Result};
 use demo::{DemoSync, Player, Renderer};
 use pico_args::Arguments;
+use rand::prelude::*;
+use rand_xoshiro::Xoshiro128Plus;
 #[cfg(target_family = "unix")]
 use winit::platform::unix::WindowBuilderExtUnix;
 use winit::{
@@ -113,14 +115,15 @@ fn run(
         .context("Failed to build a window")?;
 
     // Initialize demo render data
-    let models = demo::init();
+    let mut rng = Xoshiro128Plus::seed_from_u64(0);
+    let models = demo::init(&mut rng);
 
     // Initialize Renderer for window
     let internal_size = PhysicalSize::new(
         (size.width as f32 * scale) as u32,
         (size.height as f32 * scale) as u32,
     );
-    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window, models))?;
+    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window, models, rng))?;
 
     // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]
@@ -147,8 +150,10 @@ fn run(
                     }
                     #[cfg(debug_assertions)]
                     Some(VirtualKeyCode::R) => {
+                        let mut rng = Xoshiro128Plus::seed_from_u64(0);
+                        let models = demo::init(&mut rng);
                         renderer =
-                            pollster::block_on(Renderer::new(internal_size, &window, demo::init()))
+                            pollster::block_on(Renderer::new(internal_size, &window, models, rng))
                                 .unwrap();
                     }
                     _ => {}
@@ -197,7 +202,7 @@ fn main() -> Result<()> {
     }
     let benchmark = pargs.contains("--benchmark");
     let scale = pargs.opt_value_from_str(["-s", "--scale"])?.unwrap_or(1.);
-    if scale < 0.1 || scale > 2. {
+    if !(0.1..=2.).contains(&scale) {
         return Err(anyhow!("Scale must be from 0.1 to 2.0"));
     }
     eprintln!("See --help if the default options don't work for you");

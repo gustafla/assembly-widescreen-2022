@@ -40,7 +40,7 @@ impl VertexData {
         }*/
         let mut normals = Vec::with_capacity(positions.len());
         for i in (0..positions.len()).step_by(3) {
-            let pos0 = positions[i + 0];
+            let pos0 = positions[i];
             let pos1 = positions[i + 1];
             let pos2 = positions[i + 2];
 
