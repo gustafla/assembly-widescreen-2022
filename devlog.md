@@ -55,3 +55,8 @@ be great, but at least a little bit more like real trees.
 
 Other tasks are lights, color, camera, timeline, fog, sky, raymarched
 surfaces and animations, and maybe particle effects if I have extra time.
+
+## 2022-07-26
+
+I implemented a quite allright looking low-poly tree generator. Terrain grid
+still missing but I'm very satisfied with today's progress.
