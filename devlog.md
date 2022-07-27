@@ -60,3 +60,7 @@ surfaces and animations, and maybe particle effects if I have extra time.
 
 I implemented a quite allright looking low-poly tree generator. Terrain grid
 still missing but I'm very satisfied with today's progress.
+
+## 2022-07-27
+
+I added a simple terrain grid generator using a noise function.
