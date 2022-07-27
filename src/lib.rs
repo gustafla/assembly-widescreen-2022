@@ -10,6 +10,7 @@ pub use player::Player;
 use rand::prelude::*;
 pub use renderer::Renderer;
 use scene::{Camera, Instance, Light, Model, Scene, VertexData};
+use simdnoise::*;
 pub use sync::DemoSync;
 
 pub static RESOURCES_PATH: &str = "resources";
@@ -138,25 +139,43 @@ fn generate_tree(
     vertices
 }
 
-fn generate_plane() -> VertexData {
-    VertexData::from_triangles(
-        vec![
-            vec3(-0.5, 0., 0.5),
-            vec3(0.5, 0., 0.5),
-            vec3(0.5, 0., -0.5),
-            vec3(0.5, 0., -0.5),
-            vec3(-0.5, 0., -0.5),
-            vec3(-0.5, 0., 0.5),
-        ],
-        std::iter::repeat(Hsv::new(0., 0., 1.)).take(6).collect(),
-        std::iter::repeat(1.).take(6).collect(),
+fn generate_terrain(nu: usize, nv: usize) -> (VertexData, Vec<f32>) {
+    let mut positions = Vec::new();
+    let mut colors = Vec::new();
+    let mut roughness = Vec::new();
+
+    let (hu, hv) = (nu as f32 / 2., nv as f32 / 2.);
+
+    let noise = NoiseBuilder::gradient_2d(nu, nv).generate_scaled(0., 10.);
+
+    for u in 0..(nu - 1) {
+        for v in 0..(nv - 1) {
+            let u0 = u;
+            let u1 = u + 1;
+            let v0 = v + 1;
+            let v1 = v;
+
+            positions.push(vec3(u0 as f32 - hu, noise[u0 * nu + v0], v0 as f32 - hv));
+            positions.push(vec3(u1 as f32 - hu, noise[u1 * nu + v0], v0 as f32 - hv));
+            positions.push(vec3(u1 as f32 - hu, noise[u1 * nu + v1], v1 as f32 - hv));
+            positions.push(vec3(u1 as f32 - hu, noise[u1 * nu + v1], v1 as f32 - hv));
+            positions.push(vec3(u0 as f32 - hu, noise[u0 * nu + v1], v1 as f32 - hv));
+            positions.push(vec3(u0 as f32 - hu, noise[u0 * nu + v0], v0 as f32 - hv));
+
+            colors.extend(std::iter::repeat(Hsv::new(0., 0., 1.)).take(6));
+            roughness.extend(std::iter::repeat(1.).take(6));
+        }
+    }
+
+    (
+        VertexData::from_triangles(positions, colors, roughness),
+        noise,
     )
 }
 
 pub fn init(rng: &mut impl Rng) -> Vec<Model> {
-    let mut models = vec![Model {
-        vertices: generate_plane(),
-    }];
+    let (vertices, heightmap) = generate_terrain(1000, 1000);
+    let mut models = vec![Model { vertices }];
 
     for _ in 0..10 {
         models.push(Model {
@@ -171,7 +190,7 @@ pub fn init(rng: &mut impl Rng) -> Vec<Model> {
 
 pub fn update(sync: &mut DemoSync) -> Scene {
     let mut instances_by_model = vec![vec![Instance {
-        scale: Vec3::ONE * 60.,
+        scale: Vec3::ONE,
         rotation: Quat::IDENTITY,
         translation: vec3(0., 0., 0.),
     }]];
