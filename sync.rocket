@@ -11,8 +11,8 @@
 			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:pos.y">
-			<key interpolation="1" value="30" row="0"/>
-			<key interpolation="0" value="80" row="48"/>
+			<key interpolation="1" value="1.8" row="0"/>
+			<key interpolation="0" value="700" row="48"/>
 		</track>
 		<track name="camera0:pos.z">
 			<key interpolation="0" value="40" row="0"/>

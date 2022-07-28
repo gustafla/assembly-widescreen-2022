@@ -64,3 +64,9 @@ still missing but I'm very satisfied with today's progress.
 ## 2022-07-27
 
 I added a simple terrain grid generator using a noise function.
+
+## 2022-07-28
+
+I added a one shot static random tree placement. Perhaps could be made dynamic
+and cull behind view and far-away trees, but I must priorize effort on visual
+effects and design.

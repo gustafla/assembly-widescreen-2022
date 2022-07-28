@@ -221,21 +221,25 @@ impl State {
             translation: vec3(0., 0., 0.),
         }]];
 
-        // Add tree instances
-        for i in 1..=10 {
-            let i = i as f32 / 10.;
-            instances_by_model.push(vec![
-                Instance {
-                    scale: Vec3::ONE,
-                    rotation: Quat::IDENTITY,
-                    translation: vec3(i * 60., 0., 0.),
-                },
-                Instance {
-                    scale: Vec3::ONE,
-                    rotation: Quat::IDENTITY,
-                    translation: vec3(-i * 60., 0., 0.),
-                },
-            ]);
+        // Sprinkle random tree instances
+        for _ in 1..=10 {
+            let mut instances = Vec::with_capacity(20);
+            let dims = heightmap.dimensions();
+            let half = vec2(dims.0 as f32, dims.1 as f32) / 2.;
+            for _ in 0..20 {
+                let posrand = (rng.gen_range(0..dims.0), rng.gen_range(0..dims.1));
+                let height = heightmap.get(posrand.0, posrand.1);
+                let xz = vec2(posrand.0 as f32, posrand.1 as f32) - half;
+                instances.push(Instance {
+                    scale: Vec3::ONE + random_vec3(rng) * 0.1,
+                    rotation: Quat::from_axis_angle(
+                        Vec3::Y,
+                        rng.gen::<f32>() * std::f32::consts::TAU,
+                    ),
+                    translation: vec3(xz.x, height, xz.y),
+                });
+            }
+            instances_by_model.push(instances);
         }
 
         let scene = Scene {
