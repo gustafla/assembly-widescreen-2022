@@ -70,3 +70,6 @@ I added a simple terrain grid generator using a noise function.
 I added a one shot static random tree placement. Perhaps could be made dynamic
 and cull behind view and far-away trees, but I must priorize effort on visual
 effects and design.
+
+Later on during the same day, I implemented a shadow map for one light.
+This will be useful to achieve my desired look with volumetric lighting.
