@@ -73,3 +73,6 @@ effects and design.
 
 Later on during the same day, I implemented a shadow map for one light.
 This will be useful to achieve my desired look with volumetric lighting.
+
+... And I added the volumetric lighting I so desire. It looks as good as I
+hoped for.

@@ -74,14 +74,30 @@ fn march(origin: vec3<f32>, direction: vec3<f32>) -> f32 {
     return t;
 }
 
-fn shadow(pos: vec3<f32>) -> f32 {
+fn shadow(pos: vec3<f32>, bias: f32) -> f32 {
     let pos_shadow = uniforms.shadow_view_projection_mat * vec4<f32>(pos, 1.);
     let pos_shadow = pos_shadow.xyz / pos_shadow.w;
     let closest_depth = textureSample(t_shadow, s, pos_shadow.xy * vec2<f32>(0.5, -0.5) + 0.5);
-    if (pos_shadow.z - 0.0001 > closest_depth) {
-        return 1.;
+    if (pos_shadow.z - bias > closest_depth) {
+        return 0.;
     }
-    return 0.;
+    return 1.;
+}
+
+fn volumetric_light(origin: vec3<f32>, direction: vec3<f32>, max_t: f32) -> f32 {
+    let opacity = 0.001;
+    let step = 0.1;
+    var sum: f32 = 0.;
+    for (var i: i32 = 0; i < 1000; i += 1) {
+        let t = f32(i) * step;
+        if (t > max_t) {
+            break;
+        }
+        let pos = origin + direction * t;
+        sum += shadow(pos, 0.) * opacity;
+    }
+    
+    return sum;
 }
 
 @fragment
@@ -96,11 +112,13 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     var pos: vec3<f32> = frag_pos;
     var normal: vec3<f32> = textureSample(t_normal, s, in.v_uv).rgb;
     var color_roughness: vec4<f32> = textureSample(t_color_roughness, s, in.v_uv);
+    var distance_cam: f32 = rast_t;
     let march_t = march(cam_pos, direction);
     if (march_t < rast_t) {
         pos = cam_pos + direction * march_t;
         normal = grad(pos);
         color_roughness = vec4<f32>(1.0, 0.5, 0.1, 0.5);
+        distance_cam = march_t;
     }
     
     // Compute lighting
@@ -139,15 +157,18 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         let halfway = normalize(light_dir + v);
         let spec = pow(max(dot(normal, halfway), 0.), 32.);
         
+        // Account for shadow map if first light
         var s: f32 = 1.;
         if (i == 0) {
-            s = 1. - shadow(pos);
+            s = shadow(pos, 0.0001);
         }
 
         diff_sum += light.rgb_intensity * diffuse * attenuation * s;
         spec_sum += light.rgb_intensity * spec * (1. - color_roughness.a) * attenuation * s;
         ambient += light.rgb_intensity;
     }
+    
+    spec_sum += volumetric_light(cam_pos, direction, distance_cam) * uniforms.lights[0].rgb_intensity;
 
     return vec4<f32>(color_roughness.rgb * (diff_sum + ambient * 0.01) + spec_sum, 1.);
 }

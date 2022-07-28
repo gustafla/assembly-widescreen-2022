@@ -231,7 +231,7 @@ impl State {
                 let height = heightmap.get(posrand.0, posrand.1);
                 let xz = vec2(posrand.0 as f32, posrand.1 as f32) - half;
                 instances.push(Instance {
-                    scale: Vec3::ONE + random_vec3(rng) * 0.1,
+                    scale: Vec3::ONE + random_vec3(rng) * 0.1 + rng.gen_range(0f32..2.),
                     rotation: Quat::from_axis_angle(
                         Vec3::Y,
                         rng.gen::<f32>() * std::f32::consts::TAU,
