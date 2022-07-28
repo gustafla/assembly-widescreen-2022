@@ -99,6 +99,16 @@ pub struct Camera {
     pub target: Vec3,
 }
 
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            fov: 1.,
+            position: vec3(0., 10., 10.),
+            target: Vec3::ZERO,
+        }
+    }
+}
+
 pub struct Scene {
     pub instances_by_model: Vec<Vec<Instance>>,
     pub lights: Vec<Light>,

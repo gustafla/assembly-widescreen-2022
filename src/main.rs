@@ -116,7 +116,7 @@ fn run(
 
     // Initialize demo render data
     let mut rng = Xoshiro128Plus::seed_from_u64(0);
-    let models = demo::init(&mut rng);
+    let (mut state, models) = demo::State::new(&mut rng);
 
     // Initialize Renderer for window
     let internal_size = PhysicalSize::new(
@@ -148,14 +148,6 @@ fn run(
                     Some(VirtualKeyCode::Q | VirtualKeyCode::Escape) => {
                         *control_flow = ControlFlow::Exit
                     }
-                    #[cfg(debug_assertions)]
-                    Some(VirtualKeyCode::R) => {
-                        let mut rng = Xoshiro128Plus::seed_from_u64(0);
-                        let models = demo::init(&mut rng);
-                        renderer =
-                            pollster::block_on(Renderer::new(internal_size, &window, models, rng))
-                                .unwrap();
-                    }
                     _ => {}
                 },
                 WindowEvent::Resized(physical_size) => {
@@ -174,10 +166,10 @@ fn run(
                 }
 
                 // Create the frame scene
-                let scene = demo::update(&mut sync);
+                let scene = state.update(&mut sync);
 
                 // Render the scene
-                match renderer.render(&scene) {
+                match renderer.render(scene) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost) => renderer.configure_surface(),
                     Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,

@@ -139,14 +139,35 @@ fn generate_tree(
     vertices
 }
 
-fn generate_terrain(nu: usize, nv: usize) -> (VertexData, Vec<f32>) {
+struct Heightmap {
+    nu: usize,
+    nv: usize,
+    values: Vec<f32>,
+}
+
+impl Heightmap {
+    fn new(nu: usize, nv: usize, height: f32) -> Self {
+        let values = NoiseBuilder::gradient_2d(nu, nv).generate_scaled(0., height);
+        Self { nu, nv, values }
+    }
+
+    fn get(&self, u: usize, v: usize) -> f32 {
+        self.values[u * self.nu + v]
+    }
+
+    fn dimensions(&self) -> (usize, usize) {
+        (self.nu, self.nv)
+    }
+}
+
+fn generate_terrain(nu: usize, nv: usize) -> (VertexData, Heightmap) {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut roughness = Vec::new();
 
     let (hu, hv) = (nu as f32 / 2., nv as f32 / 2.);
 
-    let noise = NoiseBuilder::gradient_2d(nu, nv).generate_scaled(0., 10.);
+    let heightmap = Heightmap::new(nu, nv, 10.);
 
     for u in 0..(nu - 1) {
         for v in 0..(nv - 1) {
@@ -155,12 +176,12 @@ fn generate_terrain(nu: usize, nv: usize) -> (VertexData, Vec<f32>) {
             let v0 = v + 1;
             let v1 = v;
 
-            positions.push(vec3(u0 as f32 - hu, noise[u0 * nu + v0], v0 as f32 - hv));
-            positions.push(vec3(u1 as f32 - hu, noise[u1 * nu + v0], v0 as f32 - hv));
-            positions.push(vec3(u1 as f32 - hu, noise[u1 * nu + v1], v1 as f32 - hv));
-            positions.push(vec3(u1 as f32 - hu, noise[u1 * nu + v1], v1 as f32 - hv));
-            positions.push(vec3(u0 as f32 - hu, noise[u0 * nu + v1], v1 as f32 - hv));
-            positions.push(vec3(u0 as f32 - hu, noise[u0 * nu + v0], v0 as f32 - hv));
+            positions.push(vec3(u0 as f32 - hu, heightmap.get(u0, v0), v0 as f32 - hv));
+            positions.push(vec3(u1 as f32 - hu, heightmap.get(u1, v0), v0 as f32 - hv));
+            positions.push(vec3(u1 as f32 - hu, heightmap.get(u1, v1), v1 as f32 - hv));
+            positions.push(vec3(u1 as f32 - hu, heightmap.get(u1, v1), v1 as f32 - hv));
+            positions.push(vec3(u0 as f32 - hu, heightmap.get(u0, v1), v1 as f32 - hv));
+            positions.push(vec3(u0 as f32 - hu, heightmap.get(u0, v0), v0 as f32 - hv));
 
             colors.extend(std::iter::repeat(Hsv::new(0., 0., 1.)).take(6));
             roughness.extend(std::iter::repeat(1.).take(6));
@@ -169,51 +190,67 @@ fn generate_terrain(nu: usize, nv: usize) -> (VertexData, Vec<f32>) {
 
     (
         VertexData::from_triangles(positions, colors, roughness),
-        noise,
+        heightmap,
     )
 }
 
-pub fn init(rng: &mut impl Rng) -> Vec<Model> {
-    let (vertices, heightmap) = generate_terrain(1000, 1000);
-    let mut models = vec![Model { vertices }];
-
-    for _ in 0..10 {
-        models.push(Model {
-            vertices: generate_tree(rng, 6, 20, 1., Vec3::ZERO, Vec3::Y, 5, 100, 20.),
-        });
-    }
-
-    log::trace!("Models initialized");
-
-    models
+pub struct State {
+    heightmap: Heightmap,
+    scene: Scene,
 }
 
-pub fn update(sync: &mut DemoSync) -> Scene {
-    let mut instances_by_model = vec![vec![Instance {
-        scale: Vec3::ONE,
-        rotation: Quat::IDENTITY,
-        translation: vec3(0., 0., 0.),
-    }]];
+impl State {
+    pub fn new(rng: &mut impl Rng) -> (State, Vec<Model>) {
+        let (vertices, heightmap) = generate_terrain(1000, 1000);
+        // Add terrain model
+        let mut models = vec![Model { vertices }];
 
-    for i in 1..=10 {
-        let i = i as f32 / 10.;
-        instances_by_model.push(vec![
-            Instance {
-                scale: Vec3::ONE,
-                rotation: Quat::from_axis_angle(Vec3::Y, sync.get("rotation.y")),
-                translation: vec3(i * 60., 0., 0.),
-            },
-            Instance {
-                scale: Vec3::ONE,
-                rotation: Quat::from_axis_angle(Vec3::Y, sync.get("rotation.y")),
-                translation: vec3(-i * 60., 0., 0.),
-            },
-        ]);
+        // Add tree models
+        for _ in 0..10 {
+            models.push(Model {
+                vertices: generate_tree(rng, 6, 20, 1., Vec3::ZERO, Vec3::Y, 5, 100, 20.),
+            });
+        }
+
+        log::trace!("Models initialized");
+
+        // Add terrain instance
+        let mut instances_by_model = vec![vec![Instance {
+            scale: Vec3::ONE,
+            rotation: Quat::IDENTITY,
+            translation: vec3(0., 0., 0.),
+        }]];
+
+        // Add tree instances
+        for i in 1..=10 {
+            let i = i as f32 / 10.;
+            instances_by_model.push(vec![
+                Instance {
+                    scale: Vec3::ONE,
+                    rotation: Quat::IDENTITY,
+                    translation: vec3(i * 60., 0., 0.),
+                },
+                Instance {
+                    scale: Vec3::ONE,
+                    rotation: Quat::IDENTITY,
+                    translation: vec3(-i * 60., 0., 0.),
+                },
+            ]);
+        }
+
+        let scene = Scene {
+            instances_by_model,
+            camera: Camera::default(),
+            lights: vec![Light {
+                coordinates: vec4(0.1, -1., -0.1, 0.),
+                color: Hsv::new(0., 0., 0.8),
+            }],
+        };
+        (Self { heightmap, scene }, models)
     }
 
-    Scene {
-        instances_by_model,
-        camera: Camera {
+    pub fn update(&mut self, sync: &mut DemoSync) -> &Scene {
+        self.scene.camera = Camera {
             fov: sync.get("camera0:fov"),
             position: vec3(
                 sync.get("camera0:pos.x"),
@@ -225,25 +262,8 @@ pub fn update(sync: &mut DemoSync) -> Scene {
                 sync.get("camera0:target.y"),
                 sync.get("camera0:target.z"),
             ),
-        },
-        lights: vec![
-            Light {
-                coordinates: vec4(
-                    sync.get("light:point.x"),
-                    sync.get("light:point.y"),
-                    sync.get("light:point.z"),
-                    1.,
-                ),
-                color: Hsv::new(
-                    sync.get("light:point.hue") as f64,
-                    sync.get("light:point.sat") as f64,
-                    sync.get("light:point.val") as f64,
-                ),
-            },
-            Light {
-                coordinates: vec4(0.1, -1., -0.1, 0.),
-                color: Hsv::new(0., 0., 0.8),
-            },
-        ],
+        };
+
+        &self.scene
     }
 }

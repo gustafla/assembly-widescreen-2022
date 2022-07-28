@@ -615,8 +615,8 @@ impl Renderer {
         let projection_mat = Mat4::perspective_rh(
             scene.camera.fov,
             self.internal_size.width as f32 / self.internal_size.height as f32,
-            0.1,
-            100.,
+            1.,
+            1000.,
         );
         let view_projection_mat = projection_mat * view_mat;
         let mut lights: [Light; MAX_LIGHTS] = [Light::default(); MAX_LIGHTS];
