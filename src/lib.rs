@@ -139,6 +139,36 @@ fn generate_tree(
     vertices
 }
 
+fn load_bitmap(path: &str, width: usize) -> VertexData {
+    let image_data = std::fs::read(path).unwrap();
+
+    let mut positions = Vec::new();
+    let mut colors = Vec::new();
+    let mut roughness = Vec::new();
+
+    for (i, element) in image_data.iter().step_by(2).enumerate() {
+        let u = i % width;
+        let v = i / width;
+        if *element > 0 {
+            let u0 = u as f32;
+            let v0 = v as f32;
+            let u1 = u as f32 + 1.;
+            let v1 = v as f32 + 1.;
+
+            let p0 = vec3(u0, -v0, 0.);
+            let p1 = vec3(u1, -v0, 0.);
+            let p2 = vec3(u1, -v1, 0.);
+            let p3 = vec3(u0, -v1, 0.);
+
+            positions.extend_from_slice(&[p0, p1, p2, p2, p1, p0, p2, p3, p0, p0, p3, p2]);
+            colors.extend(std::iter::repeat(Hsv::new(0., 0., 1.)).take(12));
+            roughness.extend(std::iter::repeat(1.).take(12));
+        }
+    }
+
+    VertexData::from_triangles(positions, colors, roughness)
+}
+
 struct Heightmap {
     nu: usize,
     nv: usize,
@@ -212,6 +242,11 @@ impl State {
             });
         }
 
+        // Add "Mehu" bitmap model
+        models.push(Model {
+            vertices: load_bitmap("resources/mehu.raw", 32),
+        });
+
         log::trace!("Models initialized");
 
         // Add terrain instance
@@ -241,6 +276,13 @@ impl State {
             }
             instances_by_model.push(instances);
         }
+
+        // Add "Mehu" to origin
+        instances_by_model.push(vec![Instance {
+            scale: Vec3::ONE * 0.1,
+            rotation: Quat::IDENTITY,
+            translation: Vec3::Y * 100.,
+        }]);
 
         let scene = Scene {
             instances_by_model,
