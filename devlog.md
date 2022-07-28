@@ -76,3 +76,6 @@ This will be useful to achieve my desired look with volumetric lighting.
 
 ... And I added the volumetric lighting I so desire. It looks as good as I
 hoped for.
+
+This evening is quite productive! I also added a raw image to mesh converter
+to be able to display greets.
