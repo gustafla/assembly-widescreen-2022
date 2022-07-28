@@ -6,6 +6,7 @@ struct Light {
 struct RenderUniforms {
     view_projection_mat: mat4x4<f32>,
     inverse_view_projection_mat: mat4x4<f32>,
+    shadow_view_projection_mat: mat4x4<f32>,
     camera_position: vec4<f32>,
     lights: array<Light, 8>,
 };
@@ -38,8 +39,10 @@ var s: sampler;
 @group(0) @binding(2)
 var t_depth: texture_depth_2d;
 @group(0) @binding(3)
-var t_color_roughness: texture_2d<f32>;
+var t_shadow: texture_depth_2d;
 @group(0) @binding(4)
+var t_color_roughness: texture_2d<f32>;
+@group(0) @binding(5)
 var t_normal: texture_2d<f32>;
 
 fn ndc_to_world_pos(in: VertOutput) -> vec3<f32> {
@@ -69,6 +72,16 @@ fn march(origin: vec3<f32>, direction: vec3<f32>) -> f32 {
         }
     }
     return t;
+}
+
+fn shadow(pos: vec3<f32>) -> f32 {
+    let pos_shadow = uniforms.shadow_view_projection_mat * vec4<f32>(pos, 1.);
+    let pos_shadow = pos_shadow.xyz / pos_shadow.w;
+    let closest_depth = textureSample(t_shadow, s, pos_shadow.xy * vec2<f32>(0.5, -0.5) + 0.5);
+    if (pos_shadow.z - 0.0001 > closest_depth) {
+        return 1.;
+    }
+    return 0.;
 }
 
 @fragment
@@ -126,8 +139,13 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         let halfway = normalize(light_dir + v);
         let spec = pow(max(dot(normal, halfway), 0.), 32.);
         
-        diff_sum += light.rgb_intensity * diffuse * attenuation;
-        spec_sum += light.rgb_intensity * spec * (1. - color_roughness.a) * attenuation;
+        var s: f32 = 1.;
+        if (i == 0) {
+            s = 1. - shadow(pos);
+        }
+
+        diff_sum += light.rgb_intensity * diffuse * attenuation * s;
+        spec_sum += light.rgb_intensity * spec * (1. - color_roughness.a) * attenuation * s;
         ambient += light.rgb_intensity;
     }
 

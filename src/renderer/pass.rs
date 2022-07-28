@@ -17,8 +17,8 @@ impl Pass {
         device: &wgpu::Device,
         uniform_buffer: &wgpu::Buffer,
         sampler: (wgpu::SamplerBindingType, &wgpu::Sampler),
-        depth_texture: Option<&wgpu::TextureView>,
-        textures_in: &[&wgpu::TextureView],
+        depth_textures: &[&wgpu::TextureView],
+        rgba_textures: &[&wgpu::TextureView],
         targets: Vec<Target>,
         shader: wgpu::ShaderModuleDescriptor,
     ) -> Self {
@@ -40,9 +40,10 @@ impl Pass {
                 count: None,
             },
         ];
-        if let Some(_depth) = depth_texture {
+        let offset = bgle.len();
+        for (i, _) in depth_textures.iter().enumerate() {
             bgle.push(wgpu::BindGroupLayoutEntry {
-                binding: 2,
+                binding: (i + offset) as u32,
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Depth,
@@ -53,7 +54,7 @@ impl Pass {
             });
         }
         let offset = bgle.len();
-        for (i, _) in textures_in.iter().enumerate() {
+        for (i, _) in rgba_textures.iter().enumerate() {
             bgle.push(wgpu::BindGroupLayoutEntry {
                 binding: (i + offset) as u32,
                 visibility: wgpu::ShaderStages::FRAGMENT,
@@ -81,14 +82,15 @@ impl Pass {
                 resource: wgpu::BindingResource::Sampler(sampler.1),
             },
         ];
-        if let Some(depth_texture) = depth_texture {
-            bge.push(wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(depth_texture),
-            });
-        };
         let offset = bge.len();
-        for (i, tex) in textures_in.iter().enumerate() {
+        for (i, tex) in depth_textures.iter().enumerate() {
+            bge.push(wgpu::BindGroupEntry {
+                binding: (i + offset) as u32,
+                resource: wgpu::BindingResource::TextureView(tex),
+            });
+        }
+        let offset = bge.len();
+        for (i, tex) in rgba_textures.iter().enumerate() {
             bge.push(wgpu::BindGroupEntry {
                 binding: (i + offset) as u32,
                 resource: wgpu::BindingResource::TextureView(tex),

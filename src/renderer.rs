@@ -15,6 +15,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 const MAX_LIGHTS: usize = 8;
 const POST_NOISE_SIZE: u32 = 128;
+const SHADOW_MAP_SIZE: u32 = 4096;
 const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const PASS_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 const PASS_TEXTURES: usize = 3;
@@ -56,6 +57,7 @@ impl Default for Light {
 pub struct RenderUniforms {
     view_projection_mat: Mat4,
     inverse_view_projection_mat: Mat4,
+    shadow_view_projection_mat: Mat4,
     camera_position: Vec4,
     lights: [Light; MAX_LIGHTS],
 }
@@ -122,6 +124,7 @@ pub struct Renderer {
     queue: wgpu::Queue,
     surface_configuration: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
+    shadow_render_pipeline: wgpu::RenderPipeline,
     uniform_bind_group: wgpu::BindGroup,
     render_uniform_buffer: wgpu::Buffer,
     post_uniform_buffer: wgpu::Buffer,
@@ -131,6 +134,7 @@ pub struct Renderer {
     pass_quad: ScreenQuad,
     surface_quad: ScreenQuad,
     post_noise_texture: wgpu::Texture,
+    shadow_texture: wgpu::TextureView,
     depth_texture: wgpu::TextureView,
     rgba_textures: [wgpu::TextureView; PASS_TEXTURES],
     light_pass: Pass,
@@ -223,7 +227,7 @@ impl Renderer {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Device Descriptor"),
-                    features: wgpu::Features::empty(),
+                    features: wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
                     limits: wgpu::Limits::default(),
                 },
                 None,
@@ -283,10 +287,25 @@ impl Renderer {
             }),
         );
 
+        let shadow_sampler = (
+            wgpu::SamplerBindingType::NonFiltering,
+            &device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("Shadow Sampler"),
+                address_mode_u: wgpu::AddressMode::ClampToBorder,
+                address_mode_v: wgpu::AddressMode::ClampToBorder,
+                address_mode_w: wgpu::AddressMode::ClampToBorder,
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
+                ..Default::default()
+            }),
+        );
+
         let filtering_sampler = (
             wgpu::SamplerBindingType::Filtering,
             &device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("Pass Sampler"),
+                label: Some("Output Pass Sampler"),
                 address_mode_u: wgpu::AddressMode::ClampToEdge,
                 address_mode_v: wgpu::AddressMode::ClampToEdge,
                 address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -300,7 +319,7 @@ impl Renderer {
         let repeating_sampler = (
             wgpu::SamplerBindingType::NonFiltering,
             &device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("Pass Sampler"),
+                label: Some("Post Pass Sampler"),
                 address_mode_u: wgpu::AddressMode::Repeat,
                 address_mode_v: wgpu::AddressMode::Repeat,
                 address_mode_w: wgpu::AddressMode::Repeat,
@@ -316,6 +335,23 @@ impl Renderer {
             height: internal_size.height,
             depth_or_array_layers: 1,
         };
+
+        let shadow_texture = device
+            .create_texture(&wgpu::TextureDescriptor {
+                size: wgpu::Extent3d {
+                    width: SHADOW_MAP_SIZE,
+                    height: SHADOW_MAP_SIZE,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: DEPTH_TEXTURE_FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                label: Some("Shadow Depth Texture"),
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let depth_texture = device
             .create_texture(&wgpu::TextureDescriptor {
@@ -442,6 +478,36 @@ impl Renderer {
             multiview: None,
         });
 
+        let shadow_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Shadow Render Pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    buffers: &[Vertex::desc(), Instance::desc()],
+                },
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    cull_mode: Some(wgpu::Face::Front),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: DEPTH_TEXTURE_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    targets: &[None, None],
+                }),
+                multiview: None,
+            });
+
         let models = models
             .into_iter()
             .map(|m| Self::load_model(&device, m))
@@ -449,7 +515,7 @@ impl Renderer {
 
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Instance Buffer"),
-            size: std::mem::size_of::<Instance>() as u64 * 1024,
+            size: std::mem::size_of::<Instance>() as u64 * 2048,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -460,8 +526,8 @@ impl Renderer {
         let light_pass = Pass::new(
             &device,
             &render_uniform_buffer,
-            sampler,
-            Some(&depth_texture),
+            shadow_sampler,
+            &[&depth_texture, &shadow_texture],
             &[&rgba_textures[0], &rgba_textures[1]],
             vec![pass::Target::Texture(2)],
             Self::get_shader("light.wgsl"),
@@ -472,7 +538,7 @@ impl Renderer {
             &device,
             &post_uniform_buffer,
             sampler,
-            None,
+            &[],
             &[&rgba_textures[2]],
             vec![pass::Target::Texture(0)],
             Self::get_shader("bloom.wgsl"),
@@ -483,7 +549,7 @@ impl Renderer {
             &device,
             &post_uniform_buffer,
             sampler,
-            None,
+            &[],
             &[&rgba_textures[0]],
             vec![pass::Target::Texture(1)],
             Self::get_shader("bloom.wgsl"),
@@ -494,7 +560,7 @@ impl Renderer {
             &device,
             &post_uniform_buffer,
             repeating_sampler,
-            None,
+            &[],
             &[
                 &rgba_textures[2],
                 &rgba_textures[1],
@@ -509,7 +575,7 @@ impl Renderer {
             &device,
             &post_uniform_buffer,
             filtering_sampler,
-            None,
+            &[],
             &[&rgba_textures[0]],
             vec![pass::Target::Surface(surface_format)],
             Self::get_shader("output.wgsl"),
@@ -525,6 +591,7 @@ impl Renderer {
             queue,
             surface_configuration,
             render_pipeline,
+            shadow_render_pipeline,
             uniform_bind_group,
             render_uniform_buffer,
             post_uniform_buffer,
@@ -534,6 +601,7 @@ impl Renderer {
             surface_quad,
             pass_quad,
             post_noise_texture,
+            shadow_texture,
             depth_texture,
             rgba_textures,
             light_pass,
@@ -627,12 +695,16 @@ impl Renderer {
                 _pad: 0.,
             }
         }
+        let dir = scene.lights[0].coordinates;
+        let shadow_view_projection_mat = Mat4::orthographic_rh(-200., 200., -200., 200., 1., 1000.)
+            * Mat4::look_at_rh(-dir.truncate().normalize() * 200., Vec3::ZERO, Vec3::Y);
         self.queue.write_buffer(
             &self.render_uniform_buffer,
             0,
             bytemuck::cast_slice(&[RenderUniforms {
-                view_projection_mat,
+                view_projection_mat: shadow_view_projection_mat, // Hack for getting a shadow map working
                 inverse_view_projection_mat: view_projection_mat.inverse(),
+                shadow_view_projection_mat,
                 camera_position,
                 lights,
             }]),
@@ -679,7 +751,55 @@ impl Renderer {
         self.queue
             .write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&instances));
 
-        // Render commands
+        // Render shadow depth buffer -------------------------------------------------------------
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Shadow Render Command Encoder"),
+            });
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Shadow Render Pass"),
+                color_attachments: &[None, None],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.shadow_texture,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
+            });
+
+            render_pass.set_pipeline(&self.shadow_render_pipeline);
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+
+            let mut instance_offset = 0;
+            for (model_id, instances) in scene.instances_by_model.iter().enumerate() {
+                // Draw instances of current model
+                render_pass.set_vertex_buffer(0, self.models[model_id].vertex_buffer.slice(..));
+                render_pass.draw(
+                    0..self.models[model_id].num_vertices,
+                    instance_offset..(instance_offset + instances.len() as u32),
+                );
+                // Bump instance buffer slice offset for next model
+                instance_offset += instances.len() as u32;
+            }
+        }
+
+        self.queue.submit(Some(encoder.finish()));
+
+        // Render screen G-Buffer -----------------------------------------------------------------
+
+        // Fix the view-projection matrix from previous shadow render pass
+        self.queue.write_buffer(
+            &self.render_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[view_projection_mat]),
+        );
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {

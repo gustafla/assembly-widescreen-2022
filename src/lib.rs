@@ -226,7 +226,7 @@ impl State {
             let mut instances = Vec::with_capacity(20);
             let dims = heightmap.dimensions();
             let half = vec2(dims.0 as f32, dims.1 as f32) / 2.;
-            for _ in 0..20 {
+            for _ in 0..200 {
                 let posrand = (rng.gen_range(0..dims.0), rng.gen_range(0..dims.1));
                 let height = heightmap.get(posrand.0, posrand.1);
                 let xz = vec2(posrand.0 as f32, posrand.1 as f32) - half;
@@ -246,7 +246,7 @@ impl State {
             instances_by_model,
             camera: Camera::default(),
             lights: vec![Light {
-                coordinates: vec4(0.1, -1., -0.1, 0.),
+                coordinates: vec4(0.45, -1., -0.5, 0.),
                 color: Hsv::new(0., 0., 0.8),
             }],
         };
