@@ -11,10 +11,13 @@ use rand::prelude::*;
 pub use renderer::Renderer;
 use scene::{Camera, Instance, Light, Model, Scene, VertexData};
 use simdnoise::*;
+use std::time::Instant;
 pub use sync::DemoSync;
 
 pub static RESOURCES_PATH: &str = "resources";
 pub static RESOURCES_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources");
+
+const PARTICLES_COUNT: usize = 2048;
 
 fn cylinder_position(r: f32, u: f32, v: f32) -> Vec3 {
     let u = u * std::f32::consts::TAU;
@@ -224,16 +227,56 @@ fn generate_terrain(nu: usize, nv: usize) -> (VertexData, Heightmap) {
     )
 }
 
+struct ParticleSystem {
+    velocities: [Vec3; PARTICLES_COUNT],
+    lives: [f32; PARTICLES_COUNT],
+}
+
+impl ParticleSystem {
+    fn update(&mut self, rng: &mut impl Rng, dt: f32, instances: &mut [Instance]) {
+        for (i, instance) in instances.iter_mut().enumerate() {
+            // Respawn dead particles
+            if self.lives[i] <= 0. {
+                instance.translation = random_vec3(rng) * vec3(20., 10., 20.) + vec3(10., 10., 10.);
+                //size = sin(f32(global_id.x) / 1024.) + 2.;
+                self.velocities[i] = vec3(0., 0., 0.);
+                self.lives[i] = 1.;
+            }
+
+            // Life
+            self.lives[i] -= dt;
+
+            // Gravity
+            let gravity = 1.;
+            self.velocities[i].y -= gravity * dt;
+
+            // Terminal velocity
+            let speed = self.velocities[i].length();
+            self.velocities[i] /= speed.max(1.);
+
+            // Position Integration
+            instance.translation += self.velocities[i] * dt;
+        }
+    }
+}
+
 pub struct State {
+    last_time: Instant,
     heightmap: Heightmap,
+    particles: ParticleSystem,
     scene: Scene,
 }
 
 impl State {
     pub fn new(rng: &mut impl Rng) -> (State, Vec<Model>) {
+        // Add leaf model for particle system
+        let mut models = vec![Model {
+            vertices: generate_leaf(Hsv::new(100., 0.5, 0.5), 0.3),
+        }];
+
         let (vertices, heightmap) = generate_terrain(1000, 1000);
         // Add terrain model
-        let mut models = vec![Model { vertices }];
+        models.push(Model { vertices });
 
         // Add tree models
         for _ in 0..10 {
@@ -249,12 +292,22 @@ impl State {
 
         log::trace!("Models initialized");
 
+        // Add particle instances
+        let mut instances_by_model = vec![vec![
+            Instance {
+                scale: Vec3::ONE,
+                rotation: Quat::IDENTITY,
+                translation: vec3(0., 0., 0.),
+            };
+            PARTICLES_COUNT
+        ]];
+
         // Add terrain instance
-        let mut instances_by_model = vec![vec![Instance {
+        instances_by_model.push(vec![Instance {
             scale: Vec3::ONE,
             rotation: Quat::IDENTITY,
             translation: vec3(0., 0., 0.),
-        }]];
+        }]);
 
         // Sprinkle random tree instances
         for _ in 1..=10 {
@@ -292,10 +345,31 @@ impl State {
                 color: Hsv::new(0., 0., 0.8),
             }],
         };
-        (Self { heightmap, scene }, models)
+        (
+            Self {
+                last_time: Instant::now(),
+                heightmap,
+                particles: ParticleSystem {
+                    velocities: [Vec3::ZERO; PARTICLES_COUNT],
+                    lives: [0.; PARTICLES_COUNT],
+                },
+                scene,
+            },
+            models,
+        )
     }
 
-    pub fn update(&mut self, sync: &mut DemoSync) -> &Scene {
+    pub fn update(&mut self, rng: &mut impl Rng, sync: &mut DemoSync) -> &Scene {
+        // Compute dt
+        let now = Instant::now();
+        let dt = now - self.last_time;
+        self.last_time = now;
+
+        // Update particles
+        self.particles
+            .update(rng, dt.as_secs_f32(), &mut self.scene.instances_by_model[0]);
+
+        // Update camera
         self.scene.camera = Camera {
             fov: sync.get("camera0:fov"),
             position: vec3(

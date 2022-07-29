@@ -123,7 +123,7 @@ fn run(
         (size.width as f32 * scale) as u32,
         (size.height as f32 * scale) as u32,
     );
-    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window, models, rng))?;
+    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window, models, &mut rng))?;
 
     // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]
@@ -166,10 +166,10 @@ fn run(
                 }
 
                 // Create the frame scene
-                let scene = state.update(&mut sync);
+                let scene = state.update(&mut rng, &mut sync);
 
                 // Render the scene
-                match renderer.render(scene) {
+                match renderer.render(&mut rng, scene) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost) => renderer.configure_surface(),
                     Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,

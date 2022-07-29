@@ -118,7 +118,6 @@ struct Model {
 }
 
 pub struct Renderer {
-    rng: Xoshiro128Plus,
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -206,7 +205,7 @@ impl Renderer {
         internal_size: PhysicalSize<u32>,
         window: &Window,
         models: Vec<scene::Model>,
-        rng: Xoshiro128Plus,
+        rng: &mut Xoshiro128Plus,
     ) -> Result<Self> {
         // Init & surface -------------------------------------------------------------------------
 
@@ -515,7 +514,7 @@ impl Renderer {
 
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Instance Buffer"),
-            size: std::mem::size_of::<Instance>() as u64 * 2048,
+            size: std::mem::size_of::<Instance>() as u64 * 4096,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -585,7 +584,6 @@ impl Renderer {
         let pass_quad = ScreenQuad::new(&device, &queue, internal_size, internal_size);
 
         let mut renderer = Self {
-            rng,
             surface,
             device,
             queue,
@@ -688,7 +686,11 @@ impl Renderer {
         }
     }
 
-    pub fn render(&mut self, scene: &scene::Scene) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(
+        &mut self,
+        rng: &mut Xoshiro128Plus,
+        scene: &scene::Scene,
+    ) -> Result<(), wgpu::SurfaceError> {
         // Get surface texture
         let surface_texture = self.surface.get_current_texture()?;
         let surface_view = surface_texture
@@ -729,9 +731,7 @@ impl Renderer {
         );
 
         // Update textures
-        let noise: Vec<u8> = (0..POST_NOISE_SIZE.pow(2) * 4)
-            .map(|_| self.rng.gen())
-            .collect();
+        let noise: Vec<u8> = (0..POST_NOISE_SIZE.pow(2) * 4).map(|_| rng.gen()).collect();
         self.queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &self.post_noise_texture,

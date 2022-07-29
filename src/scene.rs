@@ -82,6 +82,7 @@ pub struct Model {
     pub vertices: VertexData,
 }
 
+#[derive(Clone)]
 pub struct Instance {
     pub scale: Vec3,
     pub rotation: Quat,
