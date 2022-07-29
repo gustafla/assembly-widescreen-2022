@@ -8,10 +8,10 @@
 			<key interpolation="1" value="0.40000001" row="0"/>
 		</track>
 		<track name="camera0:pos.x">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="14" row="0"/>
 		</track>
 		<track name="camera0:pos.y">
-			<key interpolation="1" value="1.8" row="0"/>
+			<key interpolation="1" value="15" row="0"/>
 			<key interpolation="0" value="700" row="48"/>
 		</track>
 		<track name="camera0:pos.z">
@@ -22,21 +22,21 @@
 			<key interpolation="0" value="-40" row="48"/>
 		</track>
 		<track name="camera0:target.y">
-			<key interpolation="0" value="10" row="0"/>
+			<key interpolation="0" value="12" row="0"/>
 		</track>
 		<track name="camera0:target.z">
 			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light:point.x"/>
 		<track name="light:point.y">
-			<key interpolation="0" value="2" row="0"/>
+			<key interpolation="0" value="12" row="0"/>
 		</track>
 		<track name="light:point.z">
 			<key interpolation="0" value="2" row="0"/>
 		</track>
 		<track name="light:point.hue"/>
 		<track name="light:point.sat">
-			<key interpolation="0" value="0.30000001" row="0"/>
+			<key interpolation="0" value="12" row="0"/>
 		</track>
 		<track name="light:point.val">
 			<key interpolation="0" value="3" row="0"/>

@@ -268,7 +268,7 @@ impl ParticleSystem {
                 instance.translation = random_vec3(rng) * vec3(40., 1., 40.) + vec3(20., 20., 20.);
                 self.velocities[i] = random_vec3(rng) * 0.1;
                 self.lives[i] = 0.;
-                self.sizes[i] = rng.gen_range(0.3..0.6);
+                self.sizes[i] = rng.gen_range(0.1..0.3);
                 instance.scale = Vec3::splat(self.sizes[i]);
                 self.rotation_axes[i] = random_vec3(rng).normalize();
             }

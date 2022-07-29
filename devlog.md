@@ -79,3 +79,11 @@ hoped for.
 
 This evening is quite productive! I also added a raw image to mesh converter
 to be able to display greets.
+
+## 2022-07-29
+
+This day was kind of exhausting. I toiled with compute shader particle systems
+and shadow map filtering, but neither of those turned out like I hoped.
+
+All in all, it's not all losses. I did get a leaf particle system thing to
+run on the CPU. It'll have to do for this release.
