@@ -205,7 +205,6 @@ impl Renderer {
         internal_size: PhysicalSize<u32>,
         window: &Window,
         models: Vec<scene::Model>,
-        rng: &mut Xoshiro128Plus,
     ) -> Result<Self> {
         // Init & surface -------------------------------------------------------------------------
 
@@ -671,7 +670,7 @@ impl Renderer {
     fn draw_instances<'a>(
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
-        instances_by_model: &Vec<Vec<scene::Instance>>,
+        instances_by_model: &[Vec<scene::Instance>],
     ) {
         let mut instance_offset = 0;
         for (model_id, instances) in instances_by_model.iter().enumerate() {

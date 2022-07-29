@@ -201,7 +201,7 @@ fn generate_terrain(nu: usize, nv: usize) -> (VertexData, Heightmap) {
 
     let (hu, hv) = (nu as f32 / 2., nv as f32 / 2.);
 
-    let heightmap = Heightmap::new(nu, nv, 10.);
+    let heightmap = Heightmap::new(nu, nv, 6.);
 
     for u in 0..(nu - 1) {
         for v in 0..(nv - 1) {
@@ -282,10 +282,13 @@ impl ParticleSystem {
 
             // "Wind"
             let wind = vec3(
-                (instance.translation.x * 10.).sin() * 0.3,
+                (instance.translation.x * 0.1).sin() * 0.776
+                    + instance.translation.y.sin() * 0.3
+                    + (instance.translation.y * 2.43).sin() * 0.1,
                 instance.translation.z.sin() * 0.2,
-                instance.translation.y.sin() * 0.76,
-            );
+                instance.translation.y.sin() * 0.76 + (instance.translation.y * 1.43).sin() * 0.2,
+            ) * 0.3
+                + Vec3::X * 0.2;
             self.velocities[i] += dt * wind;
 
             // Terminal velocity

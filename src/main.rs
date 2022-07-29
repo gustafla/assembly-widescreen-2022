@@ -123,7 +123,7 @@ fn run(
         (size.width as f32 * scale) as u32,
         (size.height as f32 * scale) as u32,
     );
-    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window, models, &mut rng))?;
+    let mut renderer = pollster::block_on(Renderer::new(internal_size, &window, models))?;
 
     // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]
