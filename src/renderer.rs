@@ -670,6 +670,24 @@ impl Renderer {
         quad.draw(&mut render_pass);
     }
 
+    fn draw_instances<'a>(
+        &'a self,
+        render_pass: &mut wgpu::RenderPass<'a>,
+        instances_by_model: &Vec<Vec<scene::Instance>>,
+    ) {
+        let mut instance_offset = 0;
+        for (model_id, instances) in instances_by_model.iter().enumerate() {
+            // Draw instances of current model
+            render_pass.set_vertex_buffer(0, self.models[model_id].vertex_buffer.slice(..));
+            render_pass.draw(
+                0..self.models[model_id].num_vertices,
+                instance_offset..(instance_offset + instances.len() as u32),
+            );
+            // Bump instance buffer slice offset for next model
+            instance_offset += instances.len() as u32;
+        }
+    }
+
     pub fn render(&mut self, scene: &scene::Scene) -> Result<(), wgpu::SurfaceError> {
         // Get surface texture
         let surface_texture = self.surface.get_current_texture()?;
@@ -776,17 +794,7 @@ impl Renderer {
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
 
-            let mut instance_offset = 0;
-            for (model_id, instances) in scene.instances_by_model.iter().enumerate() {
-                // Draw instances of current model
-                render_pass.set_vertex_buffer(0, self.models[model_id].vertex_buffer.slice(..));
-                render_pass.draw(
-                    0..self.models[model_id].num_vertices,
-                    instance_offset..(instance_offset + instances.len() as u32),
-                );
-                // Bump instance buffer slice offset for next model
-                instance_offset += instances.len() as u32;
-            }
+            self.draw_instances(&mut render_pass, &scene.instances_by_model);
         }
 
         self.queue.submit(Some(encoder.finish()));
@@ -850,17 +858,7 @@ impl Renderer {
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
 
-            let mut instance_offset = 0;
-            for (model_id, instances) in scene.instances_by_model.iter().enumerate() {
-                // Draw instances of current model
-                render_pass.set_vertex_buffer(0, self.models[model_id].vertex_buffer.slice(..));
-                render_pass.draw(
-                    0..self.models[model_id].num_vertices,
-                    instance_offset..(instance_offset + instances.len() as u32),
-                );
-                // Bump instance buffer slice offset for next model
-                instance_offset += instances.len() as u32;
-            }
+            self.draw_instances(&mut render_pass, &scene.instances_by_model);
         }
 
         self.queue.submit(Some(encoder.finish()));
