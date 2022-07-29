@@ -18,6 +18,7 @@ pub static RESOURCES_PATH: &str = "resources";
 pub static RESOURCES_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources");
 
 const PARTICLES_COUNT: usize = 2048;
+const HEIGHTMAP_SIZE: usize = 1000;
 
 fn cylinder_position(r: f32, u: f32, v: f32) -> Vec3 {
     let u = u * std::f32::consts::TAU;
@@ -229,33 +230,72 @@ fn generate_terrain(nu: usize, nv: usize) -> (VertexData, Heightmap) {
 
 struct ParticleSystem {
     velocities: [Vec3; PARTICLES_COUNT],
+    rotation_axes: [Vec3; PARTICLES_COUNT],
+    sizes: [f32; PARTICLES_COUNT],
     lives: [f32; PARTICLES_COUNT],
 }
 
 impl ParticleSystem {
-    fn update(&mut self, rng: &mut impl Rng, dt: f32, instances: &mut [Instance]) {
+    fn new() -> Self {
+        Self {
+            velocities: [Vec3::ZERO; PARTICLES_COUNT],
+            rotation_axes: [Vec3::ZERO; PARTICLES_COUNT],
+            sizes: [0.; PARTICLES_COUNT],
+            lives: [0.; PARTICLES_COUNT],
+        }
+    }
+
+    fn update(
+        &mut self,
+        rng: &mut impl Rng,
+        dt: f32,
+        instances: &mut [Instance],
+        heightmap: &Heightmap,
+    ) {
         for (i, instance) in instances.iter_mut().enumerate() {
-            // Respawn dead particles
-            if self.lives[i] <= 0. {
-                instance.translation = random_vec3(rng) * vec3(20., 10., 20.) + vec3(10., 10., 10.);
-                //size = sin(f32(global_id.x) / 1024.) + 2.;
-                self.velocities[i] = vec3(0., 0., 0.);
-                self.lives[i] = 1.;
+            // Sample heightmap at particle xz coordinates
+            let u = instance.translation.x as i32 + (heightmap.dimensions().0 as i32 / 2);
+            let v = instance.translation.z as i32 + (heightmap.dimensions().1 as i32 / 2);
+            let height = (u >= 0
+                && v >= 0
+                && u < heightmap.dimensions().0 as i32
+                && v < heightmap.dimensions().1 as i32)
+                .then(|| heightmap.get(u as usize, v as usize))
+                .unwrap_or(0.);
+
+            // Respawn underground particles
+            if instance.translation.y < height - 1. {
+                instance.translation = random_vec3(rng) * vec3(40., 1., 40.) + vec3(20., 20., 20.);
+                self.velocities[i] = random_vec3(rng) * 0.1;
+                self.lives[i] = 0.;
+                self.sizes[i] = rng.gen_range(0.3..0.6);
+                instance.scale = Vec3::splat(self.sizes[i]);
+                self.rotation_axes[i] = random_vec3(rng).normalize();
             }
 
             // Life
-            self.lives[i] -= dt;
+            self.lives[i] += dt;
 
             // Gravity
             let gravity = 1.;
-            self.velocities[i].y -= gravity * dt;
+            self.velocities[i].y -= gravity * dt * self.sizes[i];
+
+            // "Wind"
+            let wind = vec3(
+                (instance.translation.x * 10.).sin() * 0.3,
+                instance.translation.z.sin() * 0.2,
+                instance.translation.y.sin() * 0.76,
+            );
+            self.velocities[i] += dt * wind;
 
             // Terminal velocity
             let speed = self.velocities[i].length();
             self.velocities[i] /= speed.max(1.);
 
-            // Position Integration
+            // Output
             instance.translation += self.velocities[i] * dt;
+            instance.rotation =
+                Quat::from_axis_angle(self.rotation_axes[i], self.lives[i] * self.sizes[i]);
         }
     }
 }
@@ -274,7 +314,7 @@ impl State {
             vertices: generate_leaf(Hsv::new(100., 0.5, 0.5), 0.3),
         }];
 
-        let (vertices, heightmap) = generate_terrain(1000, 1000);
+        let (vertices, heightmap) = generate_terrain(HEIGHTMAP_SIZE, HEIGHTMAP_SIZE);
         // Add terrain model
         models.push(Model { vertices });
 
@@ -293,14 +333,19 @@ impl State {
         log::trace!("Models initialized");
 
         // Add particle instances
+        let mut particles = ParticleSystem::new();
         let mut instances_by_model = vec![vec![
             Instance {
-                scale: Vec3::ONE,
+                scale: Vec3::ZERO,
                 rotation: Quat::IDENTITY,
-                translation: vec3(0., 0., 0.),
+                translation: Vec3::ZERO,
             };
             PARTICLES_COUNT
         ]];
+        // Pre-run to have nicer looking initial state
+        for _ in 0..10000 {
+            particles.update(rng, 0.01, &mut instances_by_model[0], &heightmap);
+        }
 
         // Add terrain instance
         instances_by_model.push(vec![Instance {
@@ -349,10 +394,7 @@ impl State {
             Self {
                 last_time: Instant::now(),
                 heightmap,
-                particles: ParticleSystem {
-                    velocities: [Vec3::ZERO; PARTICLES_COUNT],
-                    lives: [0.; PARTICLES_COUNT],
-                },
+                particles,
                 scene,
             },
             models,
@@ -366,8 +408,12 @@ impl State {
         self.last_time = now;
 
         // Update particles
-        self.particles
-            .update(rng, dt.as_secs_f32(), &mut self.scene.instances_by_model[0]);
+        self.particles.update(
+            rng,
+            dt.as_secs_f32(),
+            &mut self.scene.instances_by_model[0],
+            &self.heightmap,
+        );
 
         // Update camera
         self.scene.camera = Camera {
