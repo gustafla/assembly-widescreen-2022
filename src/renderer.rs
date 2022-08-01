@@ -698,7 +698,17 @@ impl Renderer {
 
         // Update uniforms
         let camera_position = Vec4::from((scene.camera.position, 1.));
-        let view_mat = Mat4::look_at_rh(scene.camera.position, scene.camera.target, Vec3::Y);
+        let view_mat = match scene.camera.view {
+            scene::CameraView::Target(target) => {
+                Mat4::look_at_rh(scene.camera.position, target, Vec3::Y)
+            }
+            scene::CameraView::PitchYawRoll(pyr) => {
+                Mat4::from_rotation_z(pyr.z)
+                    * Mat4::from_rotation_x(pyr.x)
+                    * Mat4::from_rotation_y(pyr.y)
+                    * Mat4::from_translation(-scene.camera.position)
+            }
+        };
         let projection_mat = Mat4::perspective_rh(
             scene.camera.fov,
             self.internal_size.width as f32 / self.internal_size.height as f32,

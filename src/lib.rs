@@ -9,7 +9,7 @@ use include_dir::{include_dir, Dir};
 pub use player::Player;
 use rand::prelude::*;
 pub use renderer::Renderer;
-use scene::{Camera, Instance, Light, Model, Scene, VertexData};
+use scene::{Camera, CameraView, Instance, Light, Model, Scene, VertexData};
 use simdnoise::*;
 use std::time::Instant;
 pub use sync::DemoSync;
@@ -419,18 +419,28 @@ impl State {
         );
 
         // Update camera
+        let camera = sync.get("camera") as usize;
+        let camstr = format!("camera{camera}");
         self.scene.camera = Camera {
-            fov: sync.get("camera0:fov"),
+            fov: sync.get(&[&camstr, "fov"].join(":")),
             position: vec3(
-                sync.get("camera0:pos.x"),
-                sync.get("camera0:pos.y"),
-                sync.get("camera0:pos.z"),
+                sync.get(&[&camstr, "pos.x"].join(":")),
+                sync.get(&[&camstr, "pos.y"].join(":")),
+                sync.get(&[&camstr, "pos.z"].join(":")),
             ),
-            target: vec3(
-                sync.get("camera0:target.x"),
-                sync.get("camera0:target.y"),
-                sync.get("camera0:target.z"),
-            ),
+            view: if sync.get(&[&camstr, "view"].join(":")) < 1. {
+                CameraView::PitchYawRoll(vec3(
+                    sync.get(&[&camstr, "pitch"].join(":")),
+                    sync.get(&[&camstr, "yaw"].join(":")),
+                    sync.get(&[&camstr, "roll"].join(":")),
+                ))
+            } else {
+                CameraView::Target(vec3(
+                    sync.get(&[&camstr, "target.x"].join(":")),
+                    sync.get(&[&camstr, "target.y"].join(":")),
+                    sync.get(&[&camstr, "target.z"].join(":")),
+                ))
+            },
         };
 
         &self.scene

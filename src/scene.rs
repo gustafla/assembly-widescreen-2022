@@ -94,10 +94,15 @@ pub struct Light {
     pub color: Hsv,
 }
 
+pub enum CameraView {
+    Target(Vec3),
+    PitchYawRoll(Vec3),
+}
+
 pub struct Camera {
     pub fov: f32,
     pub position: Vec3,
-    pub target: Vec3,
+    pub view: CameraView,
 }
 
 impl Default for Camera {
@@ -105,7 +110,7 @@ impl Default for Camera {
         Self {
             fov: 1.,
             position: vec3(0., 10., 10.),
-            target: Vec3::ZERO,
+            view: CameraView::Target(Vec3::ZERO),
         }
     }
 }
