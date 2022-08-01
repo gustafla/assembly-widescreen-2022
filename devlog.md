@@ -87,3 +87,14 @@ and shadow map filtering, but neither of those turned out like I hoped.
 
 All in all, it's not all losses. I did get a leaf particle system thing to
 run on the CPU. It'll have to do for this release.
+
+## 2022-08-01
+
+I added more controls via rocket and changed my lighting model to the proven,
+good old Blinn-Phong. The "borrowed" Oren-Nayar code produces NaNs or infs
+which propagate through my lighting pass and I don't have time to debug it.
+
+Added fog as well, to hide distant artifacts.
+
+Tomorrow I will fill a rough timeline and then it needs tweaking and
+raymarched surfaces I want to have must be implemented too.
