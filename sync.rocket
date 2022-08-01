@@ -10,7 +10,7 @@
 			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:pos.y">
-			<key interpolation="0" value="14" row="0"/>
+			<key interpolation="0" value="14.000046" row="0"/>
 		</track>
 		<track name="camera0:pos.z">
 			<key interpolation="0" value="0" row="0"/>
@@ -19,7 +19,7 @@
 			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:pitch">
-			<key interpolation="0" value="1.4901161e-08" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:yaw">
 			<key interpolation="0" value="1.3411045e-07" row="0"/>
@@ -103,7 +103,7 @@
 			<key interpolation="0" value="0.9000001" row="0"/>
 		</track>
 		<track name="light1:value">
-			<key interpolation="0" value="0.49999991" row="0"/>
+			<key interpolation="0" value="1" row="0"/>
 		</track>
 		<track name="light2:coord.x">
 			<key interpolation="0" value="1.0000001" row="0"/>
@@ -124,7 +124,7 @@
 			<key interpolation="0" value="0.69999993" row="0"/>
 		</track>
 		<track name="light2:value">
-			<key interpolation="0" value="0.80000019" row="0"/>
+			<key interpolation="0" value="0.20000014" row="0"/>
 		</track>
 		<track name="light3:coord.x">
 			<key interpolation="0" value="0" row="0"/>
