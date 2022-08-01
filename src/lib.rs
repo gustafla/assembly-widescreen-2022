@@ -144,7 +144,10 @@ fn generate_tree(
 }
 
 fn load_bitmap(path: &str, width: usize) -> VertexData {
-    let image_data = std::fs::read(path).unwrap();
+    #[cfg(debug_assertions)]
+    let image_data = std::fs::read(std::path::PathBuf::from(RESOURCES_PATH).join(path)).unwrap();
+    #[cfg(not(debug_assertions))]
+    let image_data = RESOURCES_DIR.get_file(path).unwrap().contents();
 
     let mut positions = Vec::new();
     let mut colors = Vec::new();
@@ -308,6 +311,7 @@ pub struct State {
     heightmap: Heightmap,
     particles: ParticleSystem,
     scene: Scene,
+    greet_models_start: usize,
 }
 
 impl State {
@@ -328,9 +332,10 @@ impl State {
             });
         }
 
-        // Add "Mehu" bitmap model
+        // Add greets models from bitmaps
+        let greet_models_start = models.len();
         models.push(Model {
-            vertices: load_bitmap("resources/mehu.raw", 32),
+            vertices: load_bitmap("mehu.raw", 32),
         });
 
         log::trace!("Models initialized");
@@ -378,12 +383,10 @@ impl State {
             instances_by_model.push(instances);
         }
 
-        // Add "Mehu" to origin
-        instances_by_model.push(vec![Instance {
-            scale: Vec3::ONE * 0.1,
-            rotation: Quat::IDENTITY,
-            translation: Vec3::Y * 100.,
-        }]);
+        // Add empty vecs for greet models
+        for _ in instances_by_model.len()..models.len() {
+            instances_by_model.push(Vec::new());
+        }
 
         let scene = Scene {
             instances_by_model,
@@ -399,6 +402,7 @@ impl State {
                 heightmap,
                 particles,
                 scene,
+                greet_models_start,
             },
             models,
         )
@@ -442,6 +446,24 @@ impl State {
                 ))
             },
         };
+
+        // Update lights
+        for (i, light) in self.scene.lights.iter_mut().enumerate() {
+            let lightstr = format!("light{i}");
+            *light = Light {
+                coordinates: vec4(
+                    sync.get(&[&lightstr, "coord.x"].join(":")),
+                    sync.get(&[&lightstr, "coord.y"].join(":")),
+                    sync.get(&[&lightstr, "coord.z"].join(":")),
+                    sync.get(&[&lightstr, "coord.w"].join(":")),
+                ),
+                color: Hsv::new(
+                    sync.get(&[&lightstr, "hue"].join(":")) as f64,
+                    sync.get(&[&lightstr, "saturation"].join(":")) as f64,
+                    sync.get(&[&lightstr, "value"].join(":")) as f64,
+                ),
+            };
+        }
 
         &self.scene
     }

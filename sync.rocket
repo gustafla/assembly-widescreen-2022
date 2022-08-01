@@ -1,45 +1,61 @@
 <sync rows="2432">
 	<tracks>
-		<track name="rotation.y">
-			<key interpolation="1" value="0" row="0"/>
-			<key interpolation="0" value="20" row="376"/>
+		<track name="camera">
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:fov">
-			<key interpolation="1" value="0.40000001" row="0"/>
+			<key interpolation="0" value="0.40000001" row="0"/>
 		</track>
 		<track name="camera0:pos.x">
-			<key interpolation="0" value="14" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:pos.y">
-			<key interpolation="1" value="15" row="0"/>
-			<key interpolation="0" value="700" row="48"/>
+			<key interpolation="0" value="14" row="0"/>
 		</track>
 		<track name="camera0:pos.z">
-			<key interpolation="0" value="40" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:target.x">
-			<key interpolation="1" value="0" row="0"/>
-			<key interpolation="0" value="-40" row="48"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:target.y">
-			<key interpolation="0" value="12" row="0"/>
+			<key interpolation="0" value="14" row="0"/>
 		</track>
 		<track name="camera0:target.z">
 			<key interpolation="0" value="0" row="0"/>
 		</track>
-		<track name="light:point.x"/>
-		<track name="light:point.y">
-			<key interpolation="0" value="12" row="0"/>
+		<track name="camera0:view">
+			<key interpolation="0" value="0" row="0"/>
 		</track>
-		<track name="light:point.z">
-			<key interpolation="0" value="2" row="0"/>
+		<track name="camera0:pitch">
+			<key interpolation="0" value="0" row="0"/>
 		</track>
-		<track name="light:point.hue"/>
-		<track name="light:point.sat">
-			<key interpolation="0" value="12" row="0"/>
+		<track name="camera0:yaw">
+			<key interpolation="0" value="0" row="0"/>
 		</track>
-		<track name="light:point.val">
-			<key interpolation="0" value="3" row="0"/>
+		<track name="camera0:roll">
+			<key interpolation="0" value="1.4901161e-08" row="0"/>
+		</track>
+		<track name="light0:coord.x">
+			<key interpolation="0" value="0.44999999" row="0"/>
+		</track>
+		<track name="light0:coord.y">
+			<key interpolation="0" value="-1" row="0"/>
+		</track>
+		<track name="light0:coord.z">
+			<key interpolation="0" value="-0.5" row="0"/>
+		</track>
+		<track name="light0:coord.w">
+			<key interpolation="0" value="0" row="0"/>
+		</track>
+		<track name="light0:hue">
+			<key interpolation="0" value="260.10703" row="0"/>
+		</track>
+		<track name="light0:saturation">
+			<key interpolation="0" value="0.29999998" row="0"/>
+		</track>
+		<track name="light0:value">
+			<key interpolation="0" value="0.80000019" row="0"/>
 		</track>
 	</tracks>
 	<bookmarks/>
