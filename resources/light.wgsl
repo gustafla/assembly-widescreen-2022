@@ -100,6 +100,10 @@ fn volumetric_light(origin: vec3<f32>, direction: vec3<f32>, max_t: f32) -> f32 
     return sum;
 }
 
+fn fog(direction: vec3<f32>) -> vec3<f32> {
+    return mix(uniforms.lights[1].rgb_intensity, uniforms.lights[0].rgb_intensity, min(abs(direction.y) * 4., 1.));
+}
+
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     let frag_pos = ndc_to_world_pos(in);
@@ -121,7 +125,7 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         distance_cam = march_t;
     }
     
-    // Compute lighting
+    // Compute lighting (Blinn-Phong)
     var diff_sum: vec3<f32> = vec3<f32>(0.);
     var spec_sum: vec3<f32> = vec3<f32>(0.);
     var ambient: vec3<f32> = vec3<f32>(0.);
@@ -140,21 +144,8 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
             attenuation = 1. / (len * len);
         }
         
-        // Compute diffuse lighting based on this variant of Oren-Nayar glsl code
-        // https://github.com/glslify/glsl-diffuse-oren-nayar
-        let v = -direction;
-        let l_dot_v = dot(light_dir, v);
-        let l_dot_n = dot(light_dir, normal);
-        let n_dot_v = dot(normal, v);
-        let s = l_dot_v - l_dot_n * n_dot_v;
-        let t = mix(1., max(l_dot_n, n_dot_v), step(0., s));
-        let sigma2 = color_roughness.a * color_roughness.a;
-        let a = 1. + sigma2 * (1. / (sigma2 + 0.13) + 0.5 / (sigma2 + 0.33));
-        let b = 0.45 * sigma2 / (sigma2 + 0.09);
-        let diffuse = max(0., l_dot_n) * (a + b * s / t) / 3.14159265;
-        
-        // Lol add Blinn-Phong -style specular too, this is not correct either but I want it
-        let halfway = normalize(light_dir + v);
+        let diffuse = max(dot(normal, light_dir), 0.);
+        let halfway = normalize(light_dir - direction);
         let spec = pow(max(dot(normal, halfway), 0.), 32.);
         
         // Account for shadow map if first light
@@ -167,8 +158,9 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         spec_sum += light.rgb_intensity * spec * (1. - color_roughness.a) * attenuation * s;
         ambient += light.rgb_intensity;
     }
-    
-    spec_sum += volumetric_light(cam_pos, direction, distance_cam) * uniforms.lights[0].rgb_intensity;
 
-    return vec4<f32>(color_roughness.rgb * (diff_sum + ambient * 0.01) + spec_sum, 1.);
+    var total_light: vec3<f32> = color_roughness.rgb * (diff_sum + ambient * 0.01) + spec_sum;
+    total_light += volumetric_light(cam_pos, direction, distance_cam) * uniforms.lights[0].rgb_intensity;
+
+    return vec4<f32>(mix(total_light, fog(direction), distance_cam / 1000.), 1.);
 }

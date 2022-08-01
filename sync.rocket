@@ -1,7 +1,7 @@
 <sync rows="2432">
 	<tracks>
 		<track name="camera">
-			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="camera0:fov">
 			<key interpolation="0" value="0.40000001" row="0"/>
@@ -82,7 +82,7 @@
 			<key interpolation="0" value="0.29999998" row="0"/>
 		</track>
 		<track name="light0:value">
-			<key interpolation="0" value="1.937151e-07" row="0"/>
+			<key interpolation="0" value="0.9000001" row="0"/>
 		</track>
 		<track name="light1:coord.x">
 			<key interpolation="0" value="1" row="0"/>
@@ -130,13 +130,13 @@
 			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light3:coord.y">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="-1" row="0"/>
 		</track>
 		<track name="light3:coord.z">
 			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light3:coord.w">
-			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light3:hue"/>
 		<track name="light3:saturation"/>
