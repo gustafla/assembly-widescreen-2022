@@ -1,4 +1,4 @@
-<sync rows="1024">
+<sync rows="2432">
 	<tracks>
 		<track name="rotation.y">
 			<key interpolation="1" value="0" row="0"/>
