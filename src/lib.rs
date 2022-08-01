@@ -391,10 +391,7 @@ impl State {
         let scene = Scene {
             instances_by_model,
             camera: Camera::default(),
-            lights: vec![Light {
-                coordinates: vec4(0.45, -1., -0.5, 0.),
-                color: Hsv::new(0., 0., 0.8),
-            }],
+            lights: std::iter::repeat(Light::default()).take(4).collect(),
         };
         (
             Self {
@@ -422,28 +419,33 @@ impl State {
             &self.heightmap,
         );
 
+        // Clear all greets text instances
+        for instances in self.scene.instances_by_model[self.greet_models_start..].iter_mut() {
+            instances.clear();
+        }
+        // Add a single greet text for the configured index
+        self.scene.instances_by_model[self.greet_models_start + sync.get("greet:index") as usize]
+            .push(Instance {
+                scale: sync.get_vec3("greet:scale", None),
+                rotation: Quat::from_euler(
+                    EulerRot::XYZ,
+                    sync.get("greet:rotation.x"),
+                    sync.get("greet:rotation.y"),
+                    sync.get("greet:rotation.z"),
+                ),
+                translation: sync.get_vec3("greet:translation", None),
+            });
+
         // Update camera
         let camera = sync.get("camera") as usize;
         let camstr = format!("camera{camera}");
         self.scene.camera = Camera {
             fov: sync.get(&[&camstr, "fov"].join(":")),
-            position: vec3(
-                sync.get(&[&camstr, "pos.x"].join(":")),
-                sync.get(&[&camstr, "pos.y"].join(":")),
-                sync.get(&[&camstr, "pos.z"].join(":")),
-            ),
+            position: sync.get_vec3(&[&camstr, "pos"].join(":"), None),
             view: if sync.get(&[&camstr, "view"].join(":")) < 1. {
-                CameraView::PitchYawRoll(vec3(
-                    sync.get(&[&camstr, "pitch"].join(":")),
-                    sync.get(&[&camstr, "yaw"].join(":")),
-                    sync.get(&[&camstr, "roll"].join(":")),
-                ))
+                CameraView::PitchYawRoll(sync.get_vec3(&camstr, Some([":pitch", ":yaw", ":roll"])))
             } else {
-                CameraView::Target(vec3(
-                    sync.get(&[&camstr, "target.x"].join(":")),
-                    sync.get(&[&camstr, "target.y"].join(":")),
-                    sync.get(&[&camstr, "target.z"].join(":")),
-                ))
+                CameraView::Target(sync.get_vec3(&[&camstr, "target"].join(":"), None))
             },
         };
 
@@ -451,12 +453,7 @@ impl State {
         for (i, light) in self.scene.lights.iter_mut().enumerate() {
             let lightstr = format!("light{i}");
             *light = Light {
-                coordinates: vec4(
-                    sync.get(&[&lightstr, "coord.x"].join(":")),
-                    sync.get(&[&lightstr, "coord.y"].join(":")),
-                    sync.get(&[&lightstr, "coord.z"].join(":")),
-                    sync.get(&[&lightstr, "coord.w"].join(":")),
-                ),
+                coordinates: sync.get_vec4(&[&lightstr, "coord"].join(":"), None),
                 color: Hsv::new(
                     sync.get(&[&lightstr, "hue"].join(":")) as f64,
                     sync.get(&[&lightstr, "saturation"].join(":")) as f64,

@@ -2,6 +2,7 @@ mod frame_counter;
 
 use crate::Player;
 use frame_counter::FrameCounter;
+use glam::*;
 
 const TRACKS_FILE: &str = "tracks.bin";
 
@@ -72,6 +73,25 @@ impl DemoSync {
             .get_track(track)
             .unwrap_or_else(|| panic!("Sync track {} is not present. This is a bug, sorry.", track))
             .get_value(self.row as f32)
+    }
+
+    pub fn get_vec3(&mut self, track: &str, components: Option<[&str; 3]>) -> Vec3 {
+        let [x, y, z] = components.unwrap_or([".x", ".y", ".z"]);
+        vec3(
+            self.get(&format!("{track}{x}")),
+            self.get(&format!("{track}{y}")),
+            self.get(&format!("{track}{z}")),
+        )
+    }
+
+    pub fn get_vec4(&mut self, track: &str, components: Option<[&str; 4]>) -> Vec4 {
+        let [x, y, z, w] = components.unwrap_or([".x", ".y", ".z", ".w"]);
+        vec4(
+            self.get(&format!("{track}{x}")),
+            self.get(&format!("{track}{y}")),
+            self.get(&format!("{track}{z}")),
+            self.get(&format!("{track}{w}")),
+        )
     }
 
     pub fn get_beat(&self) -> f32 {

@@ -89,6 +89,7 @@ pub struct Instance {
     pub translation: Vec3,
 }
 
+#[derive(Clone, Default)]
 pub struct Light {
     pub coordinates: Vec4,
     pub color: Hsv,
