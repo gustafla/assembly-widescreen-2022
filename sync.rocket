@@ -6,14 +6,23 @@
 		<track name="ambient">
 			<key interpolation="0" value="0.029999999" row="0"/>
 		</track>
+		<track name="bloom_floor">
+			<key interpolation="1" value="2" row="0"/>
+			<key interpolation="0" value="0.69999999" row="128"/>
+			<key interpolation="1" value="2" row="129"/>
+			<key interpolation="1" value="0.69999999" row="360"/>
+			<key interpolation="0" value="0" row="512"/>
+			<key interpolation="0" value="1.4" row="513"/>
+		</track>
 		<track name="camera0:fov">
 			<key interpolation="0" value="0.40000001" row="0"/>
 		</track>
 		<track name="camera0:pos.x">
-			<key interpolation="1" value="10" row="0"/>
-			<key interpolation="0" value="30" row="128"/>
+			<key interpolation="1" value="30" row="0"/>
+			<key interpolation="0" value="33" row="128"/>
 			<key interpolation="2" value="22.800005" row="129"/>
 			<key interpolation="0" value="-10" row="512"/>
+			<key interpolation="0" value="10" row="513"/>
 		</track>
 		<track name="camera0:pos.y">
 			<key interpolation="0" value="1" row="0"/>
@@ -43,7 +52,8 @@
 			<key interpolation="0" value="0" row="129"/>
 		</track>
 		<track name="camera0:target.x">
-			<key interpolation="0" value="20" row="0"/>
+			<key interpolation="1" value="30" row="0"/>
+			<key interpolation="0" value="27" row="128"/>
 		</track>
 		<track name="camera0:target.y">
 			<key interpolation="0" value="30" row="0"/>

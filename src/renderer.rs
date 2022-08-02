@@ -898,7 +898,7 @@ impl Renderer {
             ),
             post_noise_size: vec2(POST_NOISE_SIZE as f32, POST_NOISE_SIZE as f32),
             bloom_offset: vec2(1., 0.),
-            bloom_sample_bias: 2.,
+            bloom_sample_bias: scene.bloom_floor,
             _pad: 0.,
         };
 
