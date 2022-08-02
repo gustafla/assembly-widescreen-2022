@@ -118,6 +118,7 @@ impl Default for Camera {
 
 pub struct Scene {
     pub instances_by_model: Vec<Vec<Instance>>,
+    pub ambient: f32,
     pub lights: Vec<Light>,
     pub camera: Camera,
 }

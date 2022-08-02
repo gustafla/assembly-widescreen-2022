@@ -391,6 +391,7 @@ impl State {
         let scene = Scene {
             instances_by_model,
             camera: Camera::default(),
+            ambient: 0.,
             lights: std::iter::repeat(Light::default()).take(4).collect(),
         };
         (
@@ -461,6 +462,7 @@ impl State {
                 ),
             };
         }
+        self.scene.ambient = sync.get("ambient");
 
         &self.scene
     }

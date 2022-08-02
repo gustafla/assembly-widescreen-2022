@@ -59,6 +59,8 @@ pub struct RenderUniforms {
     inverse_view_projection_mat: Mat4,
     shadow_view_projection_mat: Mat4,
     camera_position: Vec4,
+    ambient: f32,
+    _pad: Vec3,
     lights: [Light; MAX_LIGHTS],
 }
 
@@ -735,6 +737,8 @@ impl Renderer {
                 inverse_view_projection_mat: view_projection_mat.inverse(),
                 shadow_view_projection_mat,
                 camera_position,
+                ambient: scene.ambient,
+                _pad: Vec3::ZERO,
                 lights,
             }]),
         );

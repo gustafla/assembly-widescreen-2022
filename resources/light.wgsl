@@ -8,6 +8,7 @@ struct RenderUniforms {
     inverse_view_projection_mat: mat4x4<f32>,
     shadow_view_projection_mat: mat4x4<f32>,
     camera_position: vec4<f32>,
+    ambient: f32,
     lights: array<Light, 8>,
 };
 @group(0) @binding(0)
@@ -159,7 +160,7 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         ambient += light.rgb_intensity;
     }
 
-    var total_light: vec3<f32> = color_roughness.rgb * (diff_sum + ambient * 0.01) + spec_sum;
+    var total_light: vec3<f32> = color_roughness.rgb * (diff_sum + ambient * uniforms.ambient) + spec_sum;
     total_light += volumetric_light(cam_pos, direction, distance_cam) * uniforms.lights[0].rgb_intensity;
 
     return vec4<f32>(mix(total_light, fog(direction), distance_cam / 1000.), 1.);
