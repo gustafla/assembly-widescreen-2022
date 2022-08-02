@@ -98,3 +98,14 @@ Added fog as well, to hide distant artifacts.
 
 Tomorrow I will fill a rough timeline and then it needs tweaking and
 raymarched surfaces I want to have must be implemented too.
+
+# 2022-08-02
+
+I've implemented the raymarched surfaces I wanted, and have filled about
+half of the timeline so far. I wasted a bunch of time trying to get raymarched
+soft shadows to work, it was an unnecessary detour with no payoff. For the next
+release I will probably just have more shadow maps and a separate pass for
+raymarched surfaces which I will render for each light.
+
+Tomorrow I need to finish this thing and hope that it runs without problems.
+Then the day after that I can apply final polish and submit it to Assembly.
