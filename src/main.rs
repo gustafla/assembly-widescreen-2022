@@ -169,7 +169,12 @@ fn run(
                 let scene = state.update(&mut rng, &mut sync);
 
                 // Render the scene
-                match renderer.render(&mut rng, scene) {
+                match renderer.render(
+                    &mut rng,
+                    scene,
+                    player.time_secs(),
+                    sync.get_beat() * sync.get("beat_multiplier"),
+                ) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost) => renderer.configure_surface(),
                     Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,

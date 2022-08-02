@@ -61,7 +61,8 @@ pub struct RenderUniforms {
     camera_position: Vec4,
     ambient: f32,
     march_multiplier: f32,
-    _pad_thai: Vec2,
+    global_time: f32,
+    beat: f32,
     lights: [Light; MAX_LIGHTS],
 }
 
@@ -700,6 +701,8 @@ impl Renderer {
         &mut self,
         rng: &mut Xoshiro128Plus,
         scene: &scene::Scene,
+        global_time: f32,
+        beat: f32,
     ) -> Result<(), wgpu::SurfaceError> {
         // Get surface texture
         let surface_texture = self.surface.get_current_texture()?;
@@ -748,7 +751,8 @@ impl Renderer {
                 camera_position,
                 ambient: scene.ambient,
                 march_multiplier: scene.march_multiplier,
-                _pad_thai: Vec2::ZERO,
+                global_time,
+                beat,
                 lights,
             }]),
         );

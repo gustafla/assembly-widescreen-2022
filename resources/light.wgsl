@@ -10,6 +10,8 @@ struct RenderUniforms {
     camera_position: vec4<f32>,
     ambient: f32,
     march_multiplier: f32,
+    global_time: f32,
+    beat: f32,
     lights: array<Light, 4>,
 };
 @group(0) @binding(0)
@@ -67,10 +69,19 @@ fn tube(pos: vec3<f32>) -> f32 {
 }
 
 fn scene(pos: vec3<f32>) -> f32 {
-    let wave = sin(pos.x * 0.1) * 2. + sin(pos.x * 0.5) * 0.9 + sin(pos.x * 4.) * 0.1;
-    // Repeat space
-    let pos = vec3<f32>(pos.x, (pos.y + 1000. + wave) % 16., (pos.z + 1000.) % 16.);
-    let rotation = sin(pos.x * 0.15) * 3.13;
+    let t = uniforms.global_time * 0.5;
+    let b = uniforms.beat;
+    let wave =
+        sin(pos.x * 0.1 + t * 0.3) * 2.
+      + sin(pos.x * 0.5 - t * 3.) * 0.9 * sin(pos.z * 0.1)
+      + sin(pos.x + t * 0.12) * 0.1
+      + sin(pos.z * 3. + t) * 0.6
+      + sin(pos.z * 1. + t)
+      + sin(pos.x / (1. - b) + b) * b
+    ;
+    // Repeat space over z
+    let pos = vec3<f32>(pos.x, pos.y + wave - 8., (pos.z + 1000.) % 16.);
+    let rotation = sin(pos.x * 0.15 + t * 0.11 + b * 3.33) * 2.13;
     return tube(rotation_x(rotation) * pos);
 }
 
@@ -136,7 +147,7 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     var color_roughness: vec4<f32> = textureSample(t_color_roughness, s, in.v_uv);
     var distance_cam: f32 = rast_t;
     let march_t = march(cam_pos, direction, vec2<f32>(1., 999.));
-    if (march_t < rast_t) {
+    if (march_t < rast_t && uniforms.march_multiplier <= 1.) {
         pos = cam_pos + direction * march_t;
         normal = grad(pos);
         color_roughness = vec4<f32>(.1, 0.01, 0.2, 0.0);
