@@ -673,13 +673,20 @@ impl Renderer {
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
         instances_by_model: &[Vec<scene::Instance>],
+        vertices_multiplier: f32,
     ) {
         let mut instance_offset = 0;
         for (model_id, instances) in instances_by_model.iter().enumerate() {
             // Draw instances of current model
             render_pass.set_vertex_buffer(0, self.models[model_id].vertex_buffer.slice(..));
+            let verts = self.models[model_id].num_vertices;
+            let range = if vertices_multiplier > 0. && vertices_multiplier < 1. {
+                0..(verts as f32 * vertices_multiplier) as u32
+            } else {
+                0..verts as u32
+            };
             render_pass.draw(
-                0..self.models[model_id].num_vertices,
+                range,
                 instance_offset..(instance_offset + instances.len() as u32),
             );
             // Bump instance buffer slice offset for next model
@@ -807,7 +814,11 @@ impl Renderer {
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
 
-            self.draw_instances(&mut render_pass, &scene.instances_by_model);
+            self.draw_instances(
+                &mut render_pass,
+                &scene.instances_by_model,
+                scene.world_triangles,
+            );
         }
 
         self.queue.submit(Some(encoder.finish()));
@@ -871,7 +882,11 @@ impl Renderer {
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
 
-            self.draw_instances(&mut render_pass, &scene.instances_by_model);
+            self.draw_instances(
+                &mut render_pass,
+                &scene.instances_by_model,
+                scene.world_triangles,
+            );
         }
 
         self.queue.submit(Some(encoder.finish()));
