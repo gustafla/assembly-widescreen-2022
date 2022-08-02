@@ -81,5 +81,5 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     let noise = textureSample(t_noise, s, in.v_uv * noise_scale).rgb - 0.5;
     let bloom = textureSample(t_bloom, s, in.v_uv);
     let color = textureSample(t_lit, s, in.v_uv).rgb + bloom.rgb;
-    return vec4<f32>(aces_fitted(color) + noise * 0.04, 1.);
+    return vec4<f32>(aces_fitted(color) + noise * 0.01, 1.);
 }

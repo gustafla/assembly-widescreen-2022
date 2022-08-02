@@ -9,7 +9,7 @@ struct RenderUniforms {
     shadow_view_projection_mat: mat4x4<f32>,
     camera_position: vec4<f32>,
     ambient: f32,
-    lights: array<Light, 8>,
+    lights: array<Light, 4>,
 };
 @group(0) @binding(0)
 var<uniform> uniforms: RenderUniforms;
@@ -101,10 +101,6 @@ fn volumetric_light(origin: vec3<f32>, direction: vec3<f32>, max_t: f32) -> f32 
     return sum;
 }
 
-fn fog(direction: vec3<f32>) -> vec3<f32> {
-    return mix(uniforms.lights[1].rgb_intensity, uniforms.lights[0].rgb_intensity, min(abs(direction.y) * 4., 1.));
-}
-
 @fragment
 fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     let frag_pos = ndc_to_world_pos(in);
@@ -131,7 +127,7 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     var spec_sum: vec3<f32> = vec3<f32>(0.);
     var ambient: vec3<f32> = vec3<f32>(0.);
     let normal = normalize(normal);
-    for (var i: i32 = 0; i < 8; i+=1) {
+    for (var i: i32 = 0; i < 4; i+=1) {
         let light = uniforms.lights[i];
         var light_dir: vec3<f32> = -normalize(light.coordinates.xyz);
         var attenuation: f32 = 1.;
@@ -160,8 +156,10 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         ambient += light.rgb_intensity;
     }
 
+    // Add volumetric light
     var total_light: vec3<f32> = color_roughness.rgb * (diff_sum + ambient * uniforms.ambient) + spec_sum;
     total_light += volumetric_light(cam_pos, direction, distance_cam) * uniforms.lights[0].rgb_intensity;
 
-    return vec4<f32>(mix(total_light, fog(direction), distance_cam / 1000.), 1.);
+    // Output with distance fog lit by primary light
+    return vec4<f32>(mix(total_light, uniforms.lights[0].rgb_intensity, distance_cam / 1000.), 1.);
 }

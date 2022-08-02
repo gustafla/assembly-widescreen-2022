@@ -390,9 +390,9 @@ impl State {
 
         let scene = Scene {
             instances_by_model,
-            camera: Camera::default(),
             ambient: 0.,
             lights: std::iter::repeat(Light::default()).take(4).collect(),
+            camera: Camera::default(),
         };
         (
             Self {
@@ -455,11 +455,7 @@ impl State {
             let lightstr = format!("light{i}");
             *light = Light {
                 coordinates: sync.get_vec4(&[&lightstr, "coord"].join(":"), None),
-                color: Hsv::new(
-                    sync.get(&[&lightstr, "hue"].join(":")) as f64,
-                    sync.get(&[&lightstr, "saturation"].join(":")) as f64,
-                    sync.get(&[&lightstr, "value"].join(":")) as f64,
-                ),
+                color: sync.get_hsv(&lightstr, None),
             };
         }
         self.scene.ambient = sync.get("ambient");

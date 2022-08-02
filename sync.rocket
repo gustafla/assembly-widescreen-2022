@@ -10,34 +10,46 @@
 			<key interpolation="0" value="0.40000001" row="0"/>
 		</track>
 		<track name="camera0:pos.x">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="1" value="10" row="0"/>
+			<key interpolation="0" value="30" row="128"/>
+			<key interpolation="2" value="22.800005" row="129"/>
+			<key interpolation="0" value="-10" row="512"/>
 		</track>
 		<track name="camera0:pos.y">
-			<key interpolation="0" value="14.000046" row="0"/>
+			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="2" value="14" row="129"/>
+			<key interpolation="0" value="5" row="512"/>
 		</track>
 		<track name="camera0:pos.z">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="1" value="28" row="0"/>
+			<key interpolation="0" value="20" row="128"/>
+			<key interpolation="1" value="50" row="129"/>
+			<key interpolation="0" value="-10" row="512"/>
 		</track>
 		<track name="camera0:view">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="0" value="0" row="129"/>
 		</track>
 		<track name="camera0:pitch">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="2" value="1.4901161e-08" row="129"/>
+			<key interpolation="2" value="0.1" row="280"/>
+			<key interpolation="0" value="-0.5" row="512"/>
 		</track>
 		<track name="camera0:yaw">
-			<key interpolation="0" value="1.3411045e-07" row="0"/>
+			<key interpolation="1" value="7.4505806e-08" row="129"/>
+			<key interpolation="0" value="-3" row="512"/>
 		</track>
 		<track name="camera0:roll">
-			<key interpolation="0" value="1.4901161e-08" row="0"/>
+			<key interpolation="0" value="0" row="129"/>
 		</track>
 		<track name="camera0:target.x">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="20" row="0"/>
 		</track>
 		<track name="camera0:target.y">
-			<key interpolation="0" value="14" row="0"/>
+			<key interpolation="0" value="30" row="0"/>
 		</track>
 		<track name="camera0:target.z">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="-1" row="0"/>
 		</track>
 		<track name="camera1:fov">
 			<key interpolation="0" value="0.30000001" row="0"/>
@@ -67,7 +79,10 @@
 		<track name="camera1:target.y"/>
 		<track name="camera1:target.z"/>
 		<track name="light0:coord.x">
-			<key interpolation="0" value="0.45000005" row="0"/>
+			<key interpolation="2" value="8" row="0"/>
+			<key interpolation="2" value="4" row="64"/>
+			<key interpolation="1" value="3" row="128"/>
+			<key interpolation="0" value="0.40000001" row="512"/>
 		</track>
 		<track name="light0:coord.y">
 			<key interpolation="0" value="-1" row="0"/>
@@ -79,19 +94,30 @@
 			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light0:hue">
-			<key interpolation="0" value="260" row="0"/>
+			<key interpolation="1" value="0" row="0"/>
+			<key interpolation="1" value="10" row="128"/>
+			<key interpolation="1" value="10" row="344"/>
+			<key interpolation="0" value="200" row="512"/>
 		</track>
 		<track name="light0:saturation">
-			<key interpolation="0" value="0.29999998" row="0"/>
+			<key interpolation="2" value="0.90000004" row="0"/>
+			<key interpolation="1" value="0.5" row="128"/>
+			<key interpolation="1" value="0.40000001" row="344"/>
+			<key interpolation="1" value="0" row="392"/>
+			<key interpolation="1" value="0.039999999" row="440"/>
+			<key interpolation="0" value="0.1" row="512"/>
 		</track>
 		<track name="light0:value">
-			<key interpolation="0" value="0.9000001" row="0"/>
+			<key interpolation="2" value="0" row="0"/>
+			<key interpolation="2" value="0.89999998" row="64"/>
+			<key interpolation="1" value="1" row="128"/>
+			<key interpolation="0" value="1.3" row="512"/>
 		</track>
 		<track name="light1:coord.x">
-			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light1:coord.y">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="-1" row="0"/>
 		</track>
 		<track name="light1:coord.z">
 			<key interpolation="0" value="0" row="0"/>
@@ -103,31 +129,25 @@
 			<key interpolation="0" value="10.000002" row="0"/>
 		</track>
 		<track name="light1:saturation">
-			<key interpolation="0" value="0.9000001" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light1:value">
-			<key interpolation="0" value="1" row="0"/>
+			<key interpolation="1" value="0" row="0"/>
+			<key interpolation="0" value="0.30000001" row="128"/>
+			<key interpolation="0" value="0" row="129"/>
 		</track>
-		<track name="light2:coord.x">
-			<key interpolation="0" value="1.0000001" row="0"/>
-		</track>
-		<track name="light2:coord.y">
-			<key interpolation="0" value="-0.30000001" row="0"/>
-		</track>
+		<track name="light2:coord.x"/>
+		<track name="light2:coord.y"/>
 		<track name="light2:coord.z">
 			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light2:coord.w">
 			<key interpolation="0" value="0" row="0"/>
 		</track>
-		<track name="light2:hue">
-			<key interpolation="0" value="20.00004" row="0"/>
-		</track>
-		<track name="light2:saturation">
-			<key interpolation="0" value="0.69999993" row="0"/>
-		</track>
+		<track name="light2:hue"/>
+		<track name="light2:saturation"/>
 		<track name="light2:value">
-			<key interpolation="0" value="0.20000014" row="0"/>
+			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="light3:coord.x">
 			<key interpolation="0" value="0" row="0"/>
@@ -164,13 +184,13 @@
 		<track name="greet:rotation.y"/>
 		<track name="greet:rotation.z"/>
 		<track name="greet:translation.x">
-			<key interpolation="0" value="-15" row="0"/>
+			<key interpolation="0" value="10" row="0"/>
 		</track>
 		<track name="greet:translation.y">
-			<key interpolation="0" value="210" row="0"/>
+			<key interpolation="0" value="30" row="0"/>
 		</track>
 		<track name="greet:translation.z">
-			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="10" row="0"/>
 		</track>
 	</tracks>
 	<bookmarks/>

@@ -1,6 +1,7 @@
 mod frame_counter;
 
 use crate::Player;
+use color_space::Hsv;
 use frame_counter::FrameCounter;
 use glam::*;
 
@@ -73,6 +74,15 @@ impl DemoSync {
             .get_track(track)
             .unwrap_or_else(|| panic!("Sync track {} is not present. This is a bug, sorry.", track))
             .get_value(self.row as f32)
+    }
+
+    pub fn get_hsv(&mut self, track: &str, components: Option<[&str; 3]>) -> Hsv {
+        let [x, y, z] = components.unwrap_or([":hue", ":saturation", ":value"]);
+        Hsv::new(
+            self.get(&format!("{track}{x}")) as f64,
+            self.get(&format!("{track}{y}")) as f64,
+            self.get(&format!("{track}{z}")) as f64,
+        )
     }
 
     pub fn get_vec3(&mut self, track: &str, components: Option<[&str; 3]>) -> Vec3 {

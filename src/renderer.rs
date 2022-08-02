@@ -13,7 +13,7 @@ use screen_quad::ScreenQuad;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
 
-const MAX_LIGHTS: usize = 8;
+const MAX_LIGHTS: usize = 4;
 const POST_NOISE_SIZE: u32 = 128;
 const SHADOW_MAP_SIZE: u32 = 4096;
 const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -60,7 +60,7 @@ pub struct RenderUniforms {
     shadow_view_projection_mat: Mat4,
     camera_position: Vec4,
     ambient: f32,
-    _pad: Vec3,
+    _pad_thai: Vec3,
     lights: [Light; MAX_LIGHTS],
 }
 
@@ -738,7 +738,7 @@ impl Renderer {
                 shadow_view_projection_mat,
                 camera_position,
                 ambient: scene.ambient,
-                _pad: Vec3::ZERO,
+                _pad_thai: Vec3::ZERO,
                 lights,
             }]),
         );
