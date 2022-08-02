@@ -60,7 +60,8 @@ pub struct RenderUniforms {
     shadow_view_projection_mat: Mat4,
     camera_position: Vec4,
     ambient: f32,
-    _pad_thai: Vec3,
+    march_multiplier: f32,
+    _pad_thai: Vec2,
     lights: [Light; MAX_LIGHTS],
 }
 
@@ -71,7 +72,8 @@ pub struct PostUniforms {
     post_noise_size: Vec2,
     bloom_offset: Vec2,
     bloom_sample_bias: f32,
-    _pad: f32,
+    bloom_multiplier: f32,
+    _pad: Vec2,
 }
 
 #[repr(C)]
@@ -745,7 +747,8 @@ impl Renderer {
                 shadow_view_projection_mat,
                 camera_position,
                 ambient: scene.ambient,
-                _pad_thai: Vec3::ZERO,
+                march_multiplier: scene.march_multiplier,
+                _pad_thai: Vec2::ZERO,
                 lights,
             }]),
         );
@@ -914,7 +917,8 @@ impl Renderer {
             post_noise_size: vec2(POST_NOISE_SIZE as f32, POST_NOISE_SIZE as f32),
             bloom_offset: vec2(1., 0.),
             bloom_sample_bias: scene.bloom_floor,
-            _pad: 0.,
+            bloom_multiplier: scene.bloom_amount,
+            _pad: Vec2::ZERO,
         };
 
         self.queue.write_buffer(

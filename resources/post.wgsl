@@ -1,6 +1,9 @@
 struct PostUniforms {
     screen_size: vec2<f32>,
     post_noise_size: vec2<f32>,
+    bloom_offset: vec2<f32>,
+    bloom_sample_bias: f32,
+    bloom_multiplier: f32,
 };
 @group(0) @binding(0)
 var<uniform> uniforms: PostUniforms;
@@ -80,6 +83,6 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     let noise_scale = uniforms.screen_size / uniforms.post_noise_size;
     let noise = textureSample(t_noise, s, in.v_uv * noise_scale).rgb - 0.5;
     let bloom = textureSample(t_bloom, s, in.v_uv);
-    let color = textureSample(t_lit, s, in.v_uv).rgb + bloom.rgb;
+    let color = textureSample(t_lit, s, in.v_uv).rgb + bloom.rgb * uniforms.bloom_multiplier;
     return vec4<f32>(aces_fitted(color) + noise * 0.01, 1.);
 }

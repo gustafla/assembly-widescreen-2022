@@ -9,6 +9,7 @@ struct RenderUniforms {
     shadow_view_projection_mat: mat4x4<f32>,
     camera_position: vec4<f32>,
     ambient: f32,
+    march_multiplier: f32,
     lights: array<Light, 4>,
 };
 @group(0) @binding(0)
@@ -52,8 +53,25 @@ fn ndc_to_world_pos(in: VertOutput) -> vec3<f32> {
     return pos.xyz / pos.w;
 }
 
+fn rotation_x(a: f32) -> mat3x3<f32> {
+    return mat3x3<f32>(
+         1.0,  0.0,     0.0,
+         0.0,  cos(a), -sin(a),
+         0.0,  sin(a),  cos(a)
+    );
+}
+
+fn tube(pos: vec3<f32>) -> f32 {
+    let d = abs(pos.yz) - vec2<f32>(1.0);
+    return min(max(d.x,d.y), 0.0) + length(max(d, vec2<f32>(0.0)));
+}
+
 fn scene(pos: vec3<f32>) -> f32 {
-    return length(pos + vec3<f32>(0.5, 0.0, 0.0)) - 0.5;
+    let wave = sin(pos.x * 0.1) * 2. + sin(pos.x * 0.5) * 0.9 + sin(pos.x * 4.) * 0.1;
+    // Repeat space
+    let pos = vec3<f32>(pos.x, (pos.y + 1000. + wave) % 16., (pos.z + 1000.) % 16.);
+    let rotation = sin(pos.x * 0.15) * 3.13;
+    return tube(rotation_x(rotation) * pos);
 }
 
 fn grad(p: vec3<f32>) -> vec3<f32> {
@@ -61,14 +79,17 @@ fn grad(p: vec3<f32>) -> vec3<f32> {
     return (vec3<f32>(scene(p+e.xyy), scene(p+e.yxy), scene(p+e.yyx)) - scene(p)) / e.x;
 }
 
-fn march(origin: vec3<f32>, direction: vec3<f32>) -> f32 {
-    var t: f32 = 0.;
+fn march(origin: vec3<f32>, direction: vec3<f32>, trange: vec2<f32>) -> f32 {
+    var t: f32 = trange.x;
     var dist: f32;
-    for (var i: i32 = 0; i < 30; i += 1) {
-        dist = scene(origin + direction * t);
+    for (var i: i32 = 0; i < 100; i += 1) {
+        dist = scene(origin + direction * t) * uniforms.march_multiplier;
+        if (dist < 0.0001) {
+            return t;
+        }
         t += dist;
-        if (t > 999.) {
-            t = 999.;
+        if (t > trange.y) {
+            t = trange.y;
             break;
         }
     }
@@ -114,11 +135,11 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     var normal: vec3<f32> = textureSample(t_normal, s, in.v_uv).rgb;
     var color_roughness: vec4<f32> = textureSample(t_color_roughness, s, in.v_uv);
     var distance_cam: f32 = rast_t;
-    let march_t = march(cam_pos, direction);
+    let march_t = march(cam_pos, direction, vec2<f32>(1., 999.));
     if (march_t < rast_t) {
         pos = cam_pos + direction * march_t;
         normal = grad(pos);
-        color_roughness = vec4<f32>(1.0, 0.5, 0.1, 0.5);
+        color_roughness = vec4<f32>(.1, 0.01, 0.2, 0.0);
         distance_cam = march_t;
     }
     

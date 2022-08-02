@@ -392,6 +392,8 @@ impl State {
             instances_by_model,
             ambient: 0.,
             bloom_floor: 1.,
+            bloom_amount: 1.,
+            march_multiplier: 1.,
             world_triangles: 1.,
             lights: std::iter::repeat(Light::default()).take(4).collect(),
             camera: Camera::default(),
@@ -462,6 +464,8 @@ impl State {
         }
         self.scene.ambient = sync.get("ambient");
         self.scene.bloom_floor = sync.get("bloom_floor");
+        self.scene.bloom_amount = sync.get("bloom_amount");
+        self.scene.march_multiplier = sync.get("march_multiplier");
         self.scene.world_triangles = sync.get("triangles");
 
         &self.scene
