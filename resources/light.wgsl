@@ -80,7 +80,7 @@ fn scene(pos: vec3<f32>) -> f32 {
       + sin(pos.x / (1. - b) + b) * b
     ;
     // Repeat space over z
-    let pos = vec3<f32>(pos.x, pos.y + wave - 8., (pos.z + 1000.) % 16.);
+    let pos = vec3<f32>(pos.x, pos.y + wave - 8., (((pos.z - 1000.) % 16.) + 8.) % 16.);
     let rotation = sin(pos.x * 0.15 + t * 0.11 + b * 3.33) * 2.13;
     return tube(rotation_x(rotation) * pos);
 }
