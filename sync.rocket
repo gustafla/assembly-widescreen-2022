@@ -6,9 +6,11 @@
 			<key interpolation="0" value="1" row="640"/>
 			<key interpolation="0" value="0" row="768"/>
 			<key interpolation="0" value="1" row="896"/>
+			<key interpolation="0" value="0" row="1024"/>
 		</track>
 		<track name="ambient">
 			<key interpolation="0" value="0.029999999" row="0"/>
+			<key interpolation="0" value="0" row="1024"/>
 		</track>
 		<track name="bloom_floor">
 			<key interpolation="1" value="2" row="0"/>
@@ -17,12 +19,14 @@
 			<key interpolation="1" value="0.69999999" row="360"/>
 			<key interpolation="0" value="0" row="512"/>
 			<key interpolation="0" value="1.4" row="513"/>
+			<key interpolation="0" value="0.5" row="1025"/>
 		</track>
 		<track name="bloom_amount">
 			<key interpolation="0" value="1" row="0"/>
 			<key interpolation="1" value="1" row="288"/>
 			<key interpolation="0" value="6" row="512"/>
 			<key interpolation="0" value="1" row="513"/>
+			<key interpolation="0" value="3" row="1025"/>
 		</track>
 		<track name="triangles">
 			<key interpolation="0" value="1" row="0"/>
@@ -73,7 +77,7 @@
 		</track>
 		<track name="beat_multiplier">
 			<key interpolation="0" value="0" row="0"/>
-			<key interpolation="0" value="0.059999999" row="1024"/>
+			<key interpolation="0" value="0.0099999998" row="1024"/>
 		</track>
 		<track name="camera0:fov">
 			<key interpolation="0" value="0.40000001" row="0"/>
@@ -86,12 +90,16 @@
 			<key interpolation="0" value="10" row="513"/>
 			<key interpolation="1" value="46.000008" row="641"/>
 			<key interpolation="0" value="-30" row="1024"/>
+			<key interpolation="1" value="10" row="1025"/>
+			<key interpolation="0" value="6" row="1536"/>
 		</track>
 		<track name="camera0:pos.y">
 			<key interpolation="0" value="1" row="0"/>
 			<key interpolation="2" value="14" row="129"/>
 			<key interpolation="0" value="5" row="512"/>
 			<key interpolation="0" value="15" row="513"/>
+			<key interpolation="1" value="10" row="1025"/>
+			<key interpolation="0" value="12" row="1536"/>
 		</track>
 		<track name="camera0:pos.z">
 			<key interpolation="1" value="28" row="0"/>
@@ -102,10 +110,13 @@
 			<key interpolation="0" value="10" row="640"/>
 			<key interpolation="1" value="50" row="641"/>
 			<key interpolation="0" value="-10" row="1024"/>
+			<key interpolation="1" value="15.000046" row="1025"/>
+			<key interpolation="0" value="30" row="1536"/>
 		</track>
 		<track name="camera0:view">
 			<key interpolation="0" value="1" row="0"/>
 			<key interpolation="0" value="0" row="129"/>
+			<key interpolation="0" value="0" row="1025"/>
 		</track>
 		<track name="camera0:pitch">
 			<key interpolation="0" value="0" row="0"/>
@@ -114,6 +125,8 @@
 			<key interpolation="0" value="-0.5" row="512"/>
 			<key interpolation="1" value="0" row="513"/>
 			<key interpolation="0" value="0.1" row="640"/>
+			<key interpolation="1" value="-7.4505806e-08" row="1025"/>
+			<key interpolation="0" value="0.20000008" row="1536"/>
 		</track>
 		<track name="camera0:yaw">
 			<key interpolation="0" value="0" row="0"/>
@@ -122,20 +135,25 @@
 			<key interpolation="0" value="0" row="513"/>
 			<key interpolation="1" value="0.30000001" row="640"/>
 			<key interpolation="0" value="-1" row="1024"/>
+			<key interpolation="0" value="0" row="1025"/>
 		</track>
 		<track name="camera0:roll">
 			<key interpolation="0" value="0" row="0"/>
 			<key interpolation="0" value="0" row="129"/>
+			<key interpolation="0" value="0" row="1025"/>
 		</track>
 		<track name="camera0:target.x">
 			<key interpolation="1" value="30" row="0"/>
 			<key interpolation="0" value="27" row="128"/>
+			<key interpolation="0" value="0" row="1025"/>
 		</track>
 		<track name="camera0:target.y">
 			<key interpolation="0" value="30" row="0"/>
+			<key interpolation="0" value="0" row="1025"/>
 		</track>
 		<track name="camera0:target.z">
 			<key interpolation="0" value="-1" row="0"/>
+			<key interpolation="0" value="0" row="1025"/>
 		</track>
 		<track name="camera1:fov">
 			<key interpolation="0" value="0" row="0"/>
@@ -223,26 +241,40 @@
 		</track>
 		<track name="light1:coord.x">
 			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="1" value="10" row="1024"/>
+			<key interpolation="0" value="6" row="1536"/>
+			<key interpolation="0" value="0" row="1537"/>
 		</track>
 		<track name="light1:coord.y">
 			<key interpolation="0" value="-1" row="0"/>
+			<key interpolation="1" value="20" row="1024"/>
+			<key interpolation="0" value="20" row="1536"/>
+			<key interpolation="0" value="0" row="1537"/>
 		</track>
 		<track name="light1:coord.z">
 			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="1" value="15" row="1024"/>
+			<key interpolation="0" value="20" row="1536"/>
+			<key interpolation="0" value="0" row="1537"/>
 		</track>
 		<track name="light1:coord.w">
 			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="1" row="1024"/>
+			<key interpolation="0" value="1" row="1537"/>
 		</track>
 		<track name="light1:hue">
 			<key interpolation="0" value="10.000002" row="0"/>
 		</track>
 		<track name="light1:saturation">
 			<key interpolation="0" value="0" row="0"/>
+			<key interpolation="0" value="0" row="1024"/>
 		</track>
 		<track name="light1:value">
 			<key interpolation="1" value="0" row="0"/>
 			<key interpolation="0" value="0.30000001" row="128"/>
 			<key interpolation="0" value="0" row="129"/>
+			<key interpolation="0" value="200" row="1024"/>
+			<key interpolation="0" value="0" row="1537"/>
 		</track>
 		<track name="light2:coord.x">
 			<key interpolation="0" value="0" row="0"/>
