@@ -344,7 +344,7 @@ impl State {
             vertices: load_bitmap("epoch64.raw", 64),
         });
         models.push(Model {
-            vertices: load_bitmap("faemiyah64.raw", 64),
+            vertices: load_bitmap("faemiyah64.raw", 96),
         });
         models.push(Model {
             vertices: load_bitmap("ivory96.raw", 96),
@@ -357,6 +357,12 @@ impl State {
         });
         models.push(Model {
             vertices: load_bitmap("peisik64.raw", 64),
+        });
+        models.push(Model {
+            vertices: load_bitmap("darksecond96.raw", 96),
+        });
+        models.push(Model {
+            vertices: load_bitmap("assembly156.raw", 156),
         });
 
         log::trace!("Models initialized");
