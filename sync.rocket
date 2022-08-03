@@ -6,7 +6,11 @@
 			<key interpolation="0" value="1" row="640"/>
 			<key interpolation="0" value="0" row="768"/>
 			<key interpolation="0" value="1" row="896"/>
-			<key interpolation="0" value="1" row="1024"/>
+			<key interpolation="0" value="0" row="1024"/>
+			<key interpolation="0" value="1" row="1152"/>
+			<key interpolation="0" value="0" row="1280"/>
+			<key interpolation="0" value="1" row="1408"/>
+			<key interpolation="0" value="0" row="1536"/>
 		</track>
 		<track name="ambient">
 			<key interpolation="0" value="0.029999999" row="0"/>
@@ -92,15 +96,17 @@
 			<key interpolation="1" value="46.000008" row="641"/>
 			<key interpolation="0" value="-30" row="1024"/>
 			<key interpolation="1" value="4" row="1025"/>
-			<key interpolation="0" value="6" row="1536"/>
+			<key interpolation="1" value="9" row="1535"/>
+			<key interpolation="0" value="0" row="1536"/>
 		</track>
 		<track name="camera0:pos.y">
 			<key interpolation="0" value="1" row="0"/>
 			<key interpolation="2" value="14" row="129"/>
 			<key interpolation="0" value="5" row="512"/>
-			<key interpolation="0" value="15" row="513"/>
+			<key interpolation="0" value="13" row="513"/>
 			<key interpolation="1" value="11" row="1025"/>
-			<key interpolation="0" value="12" row="1536"/>
+			<key interpolation="1" value="11" row="1535"/>
+			<key interpolation="0" value="0" row="1536"/>
 		</track>
 		<track name="camera0:pos.z">
 			<key interpolation="1" value="28" row="0"/>
@@ -111,13 +117,15 @@
 			<key interpolation="0" value="10" row="640"/>
 			<key interpolation="1" value="50" row="641"/>
 			<key interpolation="0" value="-10" row="1024"/>
-			<key interpolation="1" value="15.000046" row="1025"/>
-			<key interpolation="0" value="30" row="1536"/>
+			<key interpolation="1" value="23.000046" row="1025"/>
+			<key interpolation="1" value="33.200047" row="1535"/>
+			<key interpolation="0" value="2.9999995" row="1536"/>
 		</track>
 		<track name="camera0:view">
 			<key interpolation="0" value="1" row="0"/>
 			<key interpolation="0" value="0" row="129"/>
 			<key interpolation="0" value="0" row="1025"/>
+			<key interpolation="0" value="1" row="1536"/>
 		</track>
 		<track name="camera0:pitch">
 			<key interpolation="0" value="0" row="0"/>
@@ -147,14 +155,17 @@
 			<key interpolation="1" value="30" row="0"/>
 			<key interpolation="0" value="27" row="128"/>
 			<key interpolation="0" value="0" row="1025"/>
+			<key interpolation="0" value="0" row="1536"/>
 		</track>
 		<track name="camera0:target.y">
 			<key interpolation="0" value="30" row="0"/>
 			<key interpolation="0" value="0" row="1025"/>
+			<key interpolation="0" value="40" row="1536"/>
 		</track>
 		<track name="camera0:target.z">
 			<key interpolation="0" value="-1" row="0"/>
 			<key interpolation="0" value="0" row="1025"/>
+			<key interpolation="0" value="-0.29999962" row="1536"/>
 		</track>
 		<track name="camera1:fov">
 			<key interpolation="0" value="0" row="0"/>
@@ -163,21 +174,20 @@
 		<track name="camera1:pos.x">
 			<key interpolation="0" value="0" row="0"/>
 			<key interpolation="1" value="128" row="640"/>
-			<key interpolation="0" value="10" row="1024"/>
-			<key interpolation="1" value="100" row="1025"/>
+			<key interpolation="1" value="2" row="1024"/>
 			<key interpolation="0" value="10" row="1536"/>
 		</track>
 		<track name="camera1:pos.y">
 			<key interpolation="0" value="0" row="0"/>
-			<key interpolation="0" value="20.499964" row="640"/>
-			<key interpolation="1" value="15" row="1025"/>
+			<key interpolation="1" value="20.499964" row="640"/>
+			<key interpolation="0" value="20" row="1023"/>
+			<key interpolation="0" value="10" row="1024"/>
 			<key interpolation="0" value="14" row="1536"/>
 		</track>
 		<track name="camera1:pos.z">
 			<key interpolation="0" value="0" row="0"/>
 			<key interpolation="1" value="117" row="640"/>
-			<key interpolation="0" value="10" row="1024"/>
-			<key interpolation="1" value="-100" row="1025"/>
+			<key interpolation="1" value="5" row="1024"/>
 			<key interpolation="0" value="10" row="1536"/>
 		</track>
 		<track name="camera1:view">
@@ -255,25 +265,25 @@
 		<track name="light1:coord.x">
 			<key interpolation="0" value="0" row="0"/>
 			<key interpolation="1" value="10" row="1024"/>
-			<key interpolation="0" value="6" row="1536"/>
-			<key interpolation="0" value="0" row="1537"/>
+			<key interpolation="0" value="6" row="1535"/>
+			<key interpolation="0" value="0" row="1536"/>
 		</track>
 		<track name="light1:coord.y">
 			<key interpolation="0" value="-1" row="0"/>
 			<key interpolation="1" value="20" row="1024"/>
-			<key interpolation="0" value="20" row="1536"/>
-			<key interpolation="0" value="0" row="1537"/>
+			<key interpolation="0" value="20" row="1535"/>
+			<key interpolation="0" value="0" row="1536"/>
 		</track>
 		<track name="light1:coord.z">
 			<key interpolation="0" value="0" row="0"/>
 			<key interpolation="1" value="15" row="1024"/>
-			<key interpolation="0" value="20" row="1536"/>
-			<key interpolation="0" value="0" row="1537"/>
+			<key interpolation="0" value="20" row="1535"/>
+			<key interpolation="0" value="0" row="1536"/>
 		</track>
 		<track name="light1:coord.w">
 			<key interpolation="0" value="0" row="0"/>
 			<key interpolation="0" value="1" row="1024"/>
-			<key interpolation="0" value="1" row="1537"/>
+			<key interpolation="0" value="1" row="1536"/>
 		</track>
 		<track name="light1:hue">
 			<key interpolation="0" value="10.000002" row="0"/>
@@ -287,7 +297,7 @@
 			<key interpolation="0" value="0.30000001" row="128"/>
 			<key interpolation="0" value="0" row="129"/>
 			<key interpolation="0" value="200" row="1024"/>
-			<key interpolation="0" value="0" row="1537"/>
+			<key interpolation="0" value="0" row="1536"/>
 		</track>
 		<track name="light2:coord.x">
 			<key interpolation="0" value="0" row="0"/>
@@ -354,12 +364,15 @@
 		</track>
 		<track name="greet:translation.x">
 			<key interpolation="0" value="10" row="0"/>
+			<key interpolation="0" value="-13" row="1536"/>
 		</track>
 		<track name="greet:translation.y">
 			<key interpolation="0" value="30" row="0"/>
+			<key interpolation="0" value="40" row="1536"/>
 		</track>
 		<track name="greet:translation.z">
 			<key interpolation="0" value="10" row="0"/>
+			<key interpolation="0" value="12" row="1536"/>
 		</track>
 	</tracks>
 	<bookmarks/>

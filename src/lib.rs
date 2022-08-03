@@ -156,7 +156,7 @@ fn load_bitmap(path: &str, width: usize) -> VertexData {
     for (i, element) in image_data.iter().step_by(2).enumerate() {
         let u = i % width;
         let v = i / width;
-        if *element > 0 {
+        if *element > 127 {
             let u0 = u as f32;
             let v0 = v as f32;
             let u1 = u as f32 + 1.;
@@ -337,6 +337,27 @@ impl State {
         models.push(Model {
             vertices: load_bitmap("mehu.raw", 32),
         });
+        models.push(Model {
+            vertices: load_bitmap("deliberate64.raw", 96),
+        });
+        models.push(Model {
+            vertices: load_bitmap("epoch64.raw", 64),
+        });
+        models.push(Model {
+            vertices: load_bitmap("faemiyah64.raw", 64),
+        });
+        models.push(Model {
+            vertices: load_bitmap("ivory96.raw", 96),
+        });
+        models.push(Model {
+            vertices: load_bitmap("jml96.raw", 96),
+        });
+        models.push(Model {
+            vertices: load_bitmap("mercury64.raw", 64),
+        });
+        models.push(Model {
+            vertices: load_bitmap("peisik64.raw", 64),
+        });
 
         log::trace!("Models initialized");
 
@@ -429,17 +450,19 @@ impl State {
             instances.clear();
         }
         // Add a single greet text for the configured index
-        self.scene.instances_by_model[self.greet_models_start + sync.get("greet:index") as usize]
-            .push(Instance {
-                scale: sync.get_vec3("greet:scale", None),
-                rotation: Quat::from_euler(
-                    EulerRot::XYZ,
-                    sync.get("greet:rotation.x"),
-                    sync.get("greet:rotation.y"),
-                    sync.get("greet:rotation.z"),
-                ),
-                translation: sync.get_vec3("greet:translation", None),
-            });
+        let max_i = self.scene.instances_by_model.len() - 1;
+        self.scene.instances_by_model
+            [(self.greet_models_start + sync.get("greet:index") as usize).min(max_i)]
+        .push(Instance {
+            scale: sync.get_vec3("greet:scale", None),
+            rotation: Quat::from_euler(
+                EulerRot::XYZ,
+                sync.get("greet:rotation.x"),
+                sync.get("greet:rotation.y"),
+                sync.get("greet:rotation.z"),
+            ),
+            translation: sync.get_vec3("greet:translation", None),
+        });
 
         // Update camera
         let camera = sync.get("camera") as usize;
