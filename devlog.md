@@ -109,3 +109,14 @@ raymarched surfaces which I will render for each light.
 
 Tomorrow I need to finish this thing and hope that it runs without problems.
 Then the day after that I can apply final polish and submit it to Assembly.
+
+# 2022-08-03
+
+Directing cameras, fixing an SDF bug and laying out greets took me
+an entire day of work, but I'm happy to say that the demo is now essentially
+ready to be shown in the widescreen compo.
+
+Tomorrow I'm planning to make final adjustments and submit the demo.
+Also capturing it on video could be useful for taking screenshots etc.
+
+I may even retry adding soft shadows because the SDF should be fixed now.
