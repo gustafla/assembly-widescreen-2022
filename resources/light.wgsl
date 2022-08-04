@@ -12,7 +12,7 @@ struct RenderUniforms {
     march_multiplier: f32,
     global_time: f32,
     beat: f32,
-    lights: array<Light, 4>,
+    lights: array<Light, 2>,
 };
 @group(0) @binding(0)
 var<uniform> uniforms: RenderUniforms;
@@ -76,13 +76,13 @@ fn scene(pos: vec3<f32>) -> f32 {
       + sin(pos.x * 0.5 - t * 3.) * 0.9 * sin(pos.z * 0.1)
       + sin(pos.x + t * 0.12) * 0.1
       + sin(pos.z * 3. + t) * 0.6
-      + sin(pos.z * 1. + t)
       + sin(pos.x / (1. - b) + b) * b
     ;
     // Repeat space over z
     let pos = vec3<f32>(pos.x, pos.y + wave - 8., (((pos.z - 1000.) % 16.) + 8.) % 16.);
     let rotation = sin(pos.x * 0.15 + t * 0.11 + b * 3.33) * 2.13;
-    return tube(rotation_x(rotation) * pos);
+    let pos = rotation_x(rotation) * pos;
+    return tube(pos);
 }
 
 fn grad(p: vec3<f32>) -> vec3<f32> {
@@ -90,7 +90,7 @@ fn grad(p: vec3<f32>) -> vec3<f32> {
     return (vec3<f32>(scene(p+e.xyy), scene(p+e.yxy), scene(p+e.yyx)) - scene(p)) / e.x;
 }
 
-fn march(origin: vec3<f32>, direction: vec3<f32>, trange: vec2<f32>) -> f32 {
+fn march(origin: vec3<f32>, direction: vec3<f32>, trange: vec2<f32>) -> f32{
     var t: f32 = trange.x;
     var dist: f32;
     for (var i: i32 = 0; i < 100; i += 1) {
@@ -159,7 +159,7 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     var spec_sum: vec3<f32> = vec3<f32>(0.);
     var ambient: vec3<f32> = vec3<f32>(0.);
     let normal = normalize(normal);
-    for (var i: i32 = 0; i < 4; i+=1) {
+    for (var i: i32 = 0; i < 2; i+=1) {
         let light = uniforms.lights[i];
         var light_dir: vec3<f32> = -normalize(light.coordinates.xyz);
         var attenuation: f32 = 1.;

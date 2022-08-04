@@ -23,7 +23,7 @@
 			<key interpolation="1" value="0.69999999" row="360"/>
 			<key interpolation="0" value="0" row="512"/>
 			<key interpolation="0" value="1.4" row="513"/>
-			<key interpolation="0" value="0.5" row="1025"/>
+			<key interpolation="0" value="0.69999999" row="1025"/>
 			<key interpolation="0" value="1" row="1536"/>
 			<key interpolation="1" value="1" row="2048"/>
 			<key interpolation="0" value="0" row="2431"/>
@@ -33,7 +33,7 @@
 			<key interpolation="1" value="1" row="288"/>
 			<key interpolation="0" value="6" row="512"/>
 			<key interpolation="0" value="1" row="513"/>
-			<key interpolation="0" value="3" row="1025"/>
+			<key interpolation="0" value="2" row="1025"/>
 			<key interpolation="0" value="1" row="1536"/>
 			<key interpolation="1" value="1" row="2048"/>
 			<key interpolation="0" value="-1" row="2431"/>
@@ -85,6 +85,8 @@
 			<key interpolation="0" value="2" row="0"/>
 			<key interpolation="0" value="0.5" row="512"/>
 			<key interpolation="0" value="0.5" row="1030"/>
+			<key interpolation="1" value="0.5" row="2400"/>
+			<key interpolation="0" value="0" row="2431"/>
 		</track>
 		<track name="beat_multiplier">
 			<key interpolation="0" value="0" row="0"/>
@@ -92,6 +94,8 @@
 		</track>
 		<track name="camera0:fov">
 			<key interpolation="0" value="0.40000001" row="0"/>
+			<key interpolation="1" value="0.40000001" row="2048"/>
+			<key interpolation="0" value="0.2" row="2431"/>
 		</track>
 		<track name="camera0:pos.x">
 			<key interpolation="1" value="30" row="0"/>
@@ -395,48 +399,6 @@
 			<key interpolation="0" value="0" row="129"/>
 			<key interpolation="0" value="200" row="1024"/>
 			<key interpolation="0" value="0" row="1536"/>
-		</track>
-		<track name="light2:coord.x">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light2:coord.y">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light2:coord.z">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light2:coord.w">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light2:hue">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light2:saturation">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light2:value">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light3:coord.x">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light3:coord.y">
-			<key interpolation="0" value="-1" row="0"/>
-		</track>
-		<track name="light3:coord.z">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light3:coord.w">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light3:hue">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light3:saturation">
-			<key interpolation="0" value="0" row="0"/>
-		</track>
-		<track name="light3:value">
-			<key interpolation="0" value="0" row="0"/>
 		</track>
 		<track name="greet:index">
 			<key interpolation="0" value="0" row="0"/>

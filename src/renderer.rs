@@ -13,9 +13,9 @@ use screen_quad::ScreenQuad;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
 
-const MAX_LIGHTS: usize = 4;
+const MAX_LIGHTS: usize = 2;
 const POST_NOISE_SIZE: u32 = 128;
-const SHADOW_MAP_SIZE: u32 = 4096;
+const SHADOW_MAP_SIZE: u32 = 4096 * 2;
 const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const PASS_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 const PASS_TEXTURES: usize = 3;

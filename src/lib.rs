@@ -422,7 +422,7 @@ impl State {
             bloom_amount: 1.,
             march_multiplier: 1.,
             world_triangles: 1.,
-            lights: std::iter::repeat(Light::default()).take(4).collect(),
+            lights: std::iter::repeat(Light::default()).take(2).collect(),
             camera: Camera::default(),
         };
         (
