@@ -120,3 +120,11 @@ Tomorrow I'm planning to make final adjustments and submit the demo.
 Also capturing it on video could be useful for taking screenshots etc.
 
 I may even retry adding soft shadows because the SDF should be fixed now.
+
+# 2022-08-04
+
+Apart from minor fixes and tweaks (and soft shadows for raymarch), my biggest
+hurdle by far was trying to get fullscreen to work on X11. It did finally work
+after an hour or so trying out everything I could think of.
+
+Now it's time to wrap this up and submit it to Assembly!
