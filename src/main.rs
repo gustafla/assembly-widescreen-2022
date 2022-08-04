@@ -49,10 +49,41 @@ fn list_monitors() {
                 mode.size().width,
                 mode.size().height,
                 mode.bit_depth(),
-                mode.refresh_rate_millihertz() as f64 / 1000.
+                //mode.refresh_rate_millihertz() as f64 / 1000.
+                mode.refresh_rate(),
             );
         }
     }
+}
+
+fn frame(
+    rng: &mut Xoshiro128Plus,
+    sync: &mut DemoSync,
+    player: &mut Player,
+    state: &mut demo::State,
+    renderer: &mut Renderer,
+) -> ControlFlow {
+    // Update sync, timing and audio related frame parameters
+    if sync.update(player) {
+        return ControlFlow::Exit;
+    }
+
+    // Create the frame scene
+    let scene = state.update(rng, sync);
+
+    // Render the scene
+    match renderer.render(
+        rng,
+        scene,
+        player.time_secs(),
+        sync.get_beat() * sync.get("beat_multiplier"),
+    ) {
+        Ok(_) => {}
+        Err(wgpu::SurfaceError::Lost) => renderer.configure_surface(),
+        Err(wgpu::SurfaceError::OutOfMemory) => return ControlFlow::Exit,
+        Err(e) => log::error!("{:?}", e),
+    }
+    return ControlFlow::Poll;
 }
 
 fn run(
@@ -97,18 +128,19 @@ fn run(
         None
     };
 
+    dbg!(fullscreen.clone());
+
     // Build a Window
     let window_builder = WindowBuilder::new()
         .with_title(disp.title)
-        .with_inner_size(size)
-        .with_fullscreen(fullscreen)
-        .with_decorations(false);
-
-    #[cfg(not(debug_assertions))]
-    let window_builder = window_builder.with_resizable(false);
+        //.with_inner_size(size)
+        .with_fullscreen(fullscreen.clone())
+        //.with_decorations(false);
+    ;
 
     #[cfg(target_family = "unix")]
-    let window_builder = window_builder.with_name("demo", "");
+    //let window_builder = window_builder.with_name("demo", "");
+    let window_builder = window_builder.with_app_id("demo".into());
 
     let window = window_builder
         .build(&event_loop)
@@ -125,6 +157,12 @@ fn run(
     );
     let mut renderer = pollster::block_on(Renderer::new(internal_size, &window, models))?;
 
+    // Render a frame to fully initialize everything
+    frame(&mut rng, &mut sync, &mut player, &mut state, &mut renderer);
+
+    // Re-set fullscreen to work around winit bugs?
+    window.set_fullscreen(fullscreen);
+
     // If release build, start the music and hide the cursor
     #[cfg(not(debug_assertions))]
     {
@@ -132,57 +170,34 @@ fn run(
         window.set_cursor_visible(false);
     }
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-
-        match event {
-            Event::WindowEvent { event, window_id } if window_id == window.id() => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            virtual_keycode, ..
-                        },
-                    ..
-                } => match virtual_keycode {
-                    Some(VirtualKeyCode::Q | VirtualKeyCode::Escape) => {
-                        *control_flow = ControlFlow::Exit
-                    }
-                    _ => {}
+    event_loop.run(move |event, _, control_flow| match event {
+        Event::WindowEvent { event, window_id } if window_id == window.id() => match event {
+            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+            WindowEvent::KeyboardInput {
+                input: KeyboardInput {
+                    virtual_keycode, ..
                 },
-                WindowEvent::Resized(physical_size) => {
-                    renderer.resize(physical_size);
-                }
-                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    renderer.resize(*new_inner_size);
-                }
-                _ => (),
-            },
-            Event::MainEventsCleared => {
-                // Update sync, timing and audio related frame parameters
-                if sync.update(&mut player) {
+                ..
+            } => match virtual_keycode {
+                Some(VirtualKeyCode::Q | VirtualKeyCode::Escape) => {
                     *control_flow = ControlFlow::Exit;
-                    return;
+                    #[cfg(not(debug_assertions))]
+                    panic!("Thank you for playing Wing Commander!");
                 }
-
-                // Create the frame scene
-                let scene = state.update(&mut rng, &mut sync);
-
-                // Render the scene
-                match renderer.render(
-                    &mut rng,
-                    scene,
-                    player.time_secs(),
-                    sync.get_beat() * sync.get("beat_multiplier"),
-                ) {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost) => renderer.configure_surface(),
-                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    Err(e) => log::error!("{:?}", e),
-                }
+                _ => {}
+            },
+            WindowEvent::Resized(physical_size) => {
+                renderer.resize(physical_size);
+            }
+            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                renderer.resize(*new_inner_size);
             }
             _ => (),
+        },
+        Event::MainEventsCleared => {
+            *control_flow = frame(&mut rng, &mut sync, &mut player, &mut state, &mut renderer);
         }
+        _ => (),
     })
 }
 
