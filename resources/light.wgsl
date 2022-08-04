@@ -90,21 +90,27 @@ fn grad(p: vec3<f32>) -> vec3<f32> {
     return (vec3<f32>(scene(p+e.xyy), scene(p+e.yxy), scene(p+e.yyx)) - scene(p)) / e.x;
 }
 
-fn march(origin: vec3<f32>, direction: vec3<f32>, trange: vec2<f32>) -> f32{
+fn march(origin: vec3<f32>, direction: vec3<f32>, trange: vec3<f32>) -> vec2<f32> {
     var t: f32 = trange.x;
     var dist: f32;
+    var l: f32 = 1.;
     for (var i: i32 = 0; i < 100; i += 1) {
-        dist = scene(origin + direction * t) * uniforms.march_multiplier;
+        dist = scene(origin + direction * t);
+        l = min(l, trange.z * dist / t);
         if (dist < 0.0001) {
-            return t;
+            return vec2<f32>(t, l);
         }
-        t += dist;
+        t += dist * uniforms.march_multiplier;
         if (t > trange.y) {
             t = trange.y;
             break;
         }
     }
-    return t;
+    return vec2<f32>(t, l);
+}
+
+fn soft_shadow(pos: vec3<f32>, light_dir: vec3<f32>, k: f32) -> f32 {
+    return clamp(march(pos, light_dir, vec3<f32>(0.1, 99., k)).y, 0., 1.);
 }
 
 fn shadow(pos: vec3<f32>, bias: f32) -> f32 {
@@ -146,11 +152,11 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
     var normal: vec3<f32> = textureSample(t_normal, s, in.v_uv).rgb;
     var color_roughness: vec4<f32> = textureSample(t_color_roughness, s, in.v_uv);
     var distance_cam: f32 = rast_t;
-    let march_t = march(cam_pos, direction, vec2<f32>(1., 999.));
+    let march_t = march(cam_pos, direction, vec3<f32>(1., 999., 1.)).x;
     if (march_t < rast_t && uniforms.march_multiplier <= 1.) {
         pos = cam_pos + direction * march_t;
         normal = grad(pos);
-        color_roughness = vec4<f32>(.1, 0.01, 0.2, 0.0);
+        color_roughness = vec4<f32>(.1, 0.1 + sin(pos.x * 0.5) * 0.05, 0.2, 0.0);
         distance_cam = march_t;
     }
     
@@ -182,6 +188,7 @@ fn fs_main(in: VertOutput) -> @location(0) vec4<f32> {
         if (i == 0) {
             s = shadow(pos, 0.0001);
         }
+        s *= soft_shadow(pos, light_dir, 50.);
 
         diff_sum += light.rgb_intensity * diffuse * attenuation * s;
         spec_sum += light.rgb_intensity * spec * (1. - color_roughness.a) * attenuation * s;
