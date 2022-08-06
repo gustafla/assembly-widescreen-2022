@@ -83,7 +83,7 @@ fn frame(
         Err(wgpu::SurfaceError::OutOfMemory) => return ControlFlow::Exit,
         Err(e) => log::error!("{:?}", e),
     }
-    return ControlFlow::Poll;
+    ControlFlow::Poll
 }
 
 fn run(
@@ -240,7 +240,7 @@ fn main() -> Result<()> {
     log::set_max_level(log::LevelFilter::max());
 
     // Load music
-    let player = Player::new("music.ogg");
+    let player = Player::new("music.ogg")?;
 
     // Initialize rocket
     let sync = DemoSync::new(120., 8., benchmark || cfg!(debug_assertions));

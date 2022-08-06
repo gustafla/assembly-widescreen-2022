@@ -1,7 +1,5 @@
-use alsa::{
-    pcm::{self, Frames, State},
-    PollDescriptors,
-};
+use anyhow::{Context, Result};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use lewton::inside_ogg::OggStreamReader;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{
@@ -16,7 +14,7 @@ use std::{
 };
 
 // Playback buffering/latency size in frames
-const BUF_SIZE: usize = 4096;
+//const BUF_SIZE: usize = 4096;
 // FFT size in samples per channel, eg fft from stereo track reads double this number of i16s
 const FFT_SIZE: usize = 1024;
 
@@ -29,7 +27,7 @@ pub struct Player {
     playback_position: Arc<AtomicUsize>,
     playing: Arc<AtomicBool>,
     error_sync_flag: Arc<AtomicBool>,
-    playback_thread: std::thread::JoinHandle<()>,
+    playback_stream: cpal::Stream,
     start_time: Instant,
     pause_time: Instant,
     time_offset: Duration,
@@ -66,111 +64,73 @@ impl Player {
         )
     }
 
-    fn start_alsa(
+    fn start(
         audio_data: Arc<Vec<i16>>,
         sample_rate: u32,
         channels: u8,
         playback_position: Arc<AtomicUsize>,
         playing: Arc<AtomicBool>,
         error_sync_flag: Arc<AtomicBool>,
-    ) -> std::thread::JoinHandle<()> {
-        std::thread::spawn(move || {
-            let pcm = alsa::PCM::new("default", alsa::Direction::Playback, false)
-                .map_err(|e| {
-                    log::error!("Failed to initialize ALSA PCM playback");
-                    e
-                })
-                .unwrap();
+    ) -> Result<cpal::Stream> {
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .context("Unable to find default audio output device")?;
+        let config = device
+            .supported_output_configs()
+            .context("Failed to query audio device parameters")?
+            .find(|conf| {
+                log::info!("Minimum sample rate: {}", conf.min_sample_rate().0);
+                log::info!("Maximum sample rate: {}", conf.max_sample_rate().0);
+                log::info!("Audio channels: {}", conf.channels());
+                log::info!("Sample format: {:?}", conf.sample_format());
+                conf.channels() == channels.into()
+                    && conf.min_sample_rate() <= cpal::SampleRate(sample_rate)
+                    && conf.max_sample_rate() >= cpal::SampleRate(sample_rate)
+                    && conf.sample_format() == cpal::SampleFormat::I16
+            })
+            .context("Audio device does not support required parameters")?
+            .with_sample_rate(cpal::SampleRate(sample_rate));
+        let config = config.into();
 
-            let hwp = pcm::HwParams::any(&pcm).unwrap();
-            hwp.set_channels(u32::from(channels)).unwrap();
-            hwp.set_rate(sample_rate, alsa::ValueOr::Nearest).unwrap();
-            hwp.set_format(pcm::Format::s16()).unwrap();
-            hwp.set_access(pcm::Access::RWInterleaved).unwrap();
-            let size = Frames::try_from(BUF_SIZE).unwrap();
-            hwp.set_buffer_size(size).unwrap();
-            hwp.set_period_size(size / 4, alsa::ValueOr::Nearest)
-                .unwrap();
-            pcm.hw_params(&hwp).unwrap();
+        let stream = device
+            .build_output_stream(
+                &config,
+                move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                    let avail = data.len();
+                    if avail > 0 {
+                        //let avail_samples = avail * usize::from(channels);
 
-            let hwp = pcm.hw_params_current().unwrap();
-            let swp = pcm.sw_params_current().unwrap();
-            let (bufsize, periodsize) = (
-                hwp.get_buffer_size().unwrap(),
-                hwp.get_period_size().unwrap(),
-            );
-            swp.set_start_threshold(bufsize - periodsize).unwrap();
-            swp.set_avail_min(periodsize).unwrap();
-            pcm.sw_params(&swp).unwrap();
+                        // Load position and advance to next audio slice
+                        // Might overflow in theory but not in realistic use
+                        let pos = playback_position.fetch_add(avail, Ordering::Relaxed);
 
-            let got = hwp.get_rate().unwrap();
-            if got != sample_rate {
-                log::error!(
-                    "Required sample rate {} is not supported. Got {}",
-                    sample_rate,
-                    got
-                );
-                panic!("Cannot play music on default ALSA PCM device");
-            }
+                        // How many i16s can actually still be read
+                        let remaining_samples = audio_data.len() - pos.min(audio_data.len());
+                        let can_write_samples = avail.min(remaining_samples);
 
-            let mut fds = pcm.get().unwrap();
-            let io = pcm.io_i16().unwrap();
-
-            loop {
-                let avail = usize::try_from(match pcm.avail_update() {
-                    Ok(n) => n,
-                    Err(e) => {
-                        log::error!("{}", e);
-                        let errno = e.errno();
-                        pcm.recover(errno as std::os::raw::c_int, true)
-                            .map_err(|e| {
-                                log::error!("Cannot recover");
-                                e
-                            })
-                            .unwrap();
-                        error_sync_flag.store(true, Ordering::Relaxed);
-                        pcm.avail_update().unwrap()
+                        if can_write_samples == 0 || !playing.load(Ordering::Relaxed) {
+                            // Output silence after end to avoid underruns
+                            for sample in data.iter_mut() {
+                                *sample = 0;
+                            }
+                        } else {
+                            let src = &audio_data[pos..][..can_write_samples];
+                            data[..src.len()].copy_from_slice(src);
+                        }
                     }
-                })
-                .unwrap();
+                },
+                move |err| {
+                    error_sync_flag.store(true, Ordering::Relaxed);
+                    log::error!("{}", err);
+                },
+            )
+            .context("Failed to build audio output stream")?;
 
-                if avail > 0 {
-                    let avail_samples = avail * usize::from(channels);
-
-                    // Load position and advance to next audio slice
-                    // Might overflow in theory but not in realistic use
-                    let pos = playback_position.fetch_add(avail_samples, Ordering::Relaxed);
-
-                    // How many i16s can actually still be read
-                    let remaining_samples = audio_data.len() - pos.min(audio_data.len());
-                    let can_write_samples = avail_samples.min(remaining_samples);
-
-                    if can_write_samples == 0 {
-                        // Output silence after end to avoid underruns
-                        io.writei(&[0; BUF_SIZE]).ok();
-                    } else {
-                        // Usually writes the right amount when no signal or underrun occurred,
-                        // don't bother checking the return value :)
-                        io.writei(&audio_data[pos..][..can_write_samples]).ok();
-                    }
-                }
-
-                match (pcm.state(), playing.load(Ordering::Relaxed)) {
-                    (State::Running, true) => {}
-                    (State::Running, false) => pcm.pause(true).unwrap(),
-                    (State::Prepared, true) => pcm.start().unwrap(),
-                    (State::Prepared, false) => std::thread::park(),
-                    (State::Paused, true) => pcm.pause(false).unwrap(),
-                    (State::Paused, false) => std::thread::park(),
-                    _ => continue, // Try to recover, skip polling
-                }
-
-                alsa::poll::poll(&mut fds, 100).unwrap();
-            }
-        })
+        Ok(stream)
     }
 
-    pub fn new(ogg_path: impl AsRef<Path>) -> Self {
+    pub fn new(ogg_path: impl AsRef<Path>) -> Result<Self> {
         log::info!("Loading {}", ogg_path.as_ref().display());
 
         // Read and decode ogg file
@@ -188,14 +148,14 @@ impl Player {
         let playing = Arc::new(AtomicBool::new(false));
         let error_sync_flag = Arc::new(AtomicBool::new(false));
 
-        let playback_thread = Self::start_alsa(
+        let playback_stream = Self::start(
             audio_data.clone(),
             sample_rate,
             channels,
             playback_position.clone(),
             playing.clone(),
             error_sync_flag.clone(),
-        );
+        )?;
 
         // Initialize FFT
         let mut fft_planner = FftPlanner::new();
@@ -204,7 +164,7 @@ impl Player {
 
         let time = Instant::now();
 
-        Self {
+        Ok(Self {
             audio_data,
             sample_rate,
             channels,
@@ -213,13 +173,13 @@ impl Player {
             playback_position,
             playing,
             error_sync_flag,
-            playback_thread,
+            playback_stream,
             start_time: time,
             pause_time: time,
             time_offset: Duration::new(0, 0),
             fft,
             fft_scratch,
-        }
+        })
     }
 
     pub fn len_secs(&self) -> f32 {
@@ -234,12 +194,17 @@ impl Player {
         self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::Relaxed));
         self.start_time = Instant::now();
         self.playing.store(true, Ordering::Relaxed);
-        self.playback_thread.thread().unpark();
+        self.playback_stream
+            .play()
+            .unwrap_or_else(|e| log::error!("Cannot play audio output stream: {}", e));
     }
 
     pub fn pause(&mut self) {
         self.pause_time = Instant::now();
         self.playing.store(false, Ordering::Relaxed);
+        self.playback_stream
+            .pause()
+            .unwrap_or_else(|e| log::error!("Cannot pause audio output stream: {}", e));
     }
 
     pub fn time_secs(&mut self) -> f32 {
@@ -274,11 +239,6 @@ impl Player {
         let time = Instant::now();
         self.start_time = time;
         self.pause_time = time;
-
-        // Unpark if needed
-        if self.is_playing() {
-            self.playback_thread.thread().unpark();
-        }
     }
 
     fn pos_to_duration(&self, pos: usize) -> Duration {

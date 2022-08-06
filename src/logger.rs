@@ -6,12 +6,16 @@ impl log::Log for Logger {
     }
 
     fn log(&self, record: &log::Record) {
-        eprintln!(
-            "{:<8} {:<32} {}",
-            record.level(),
-            record.target(),
-            record.args()
-        );
+        if (!record.target().starts_with("wgpu") && !record.target().starts_with("naga"))
+            || record.level() < log::LevelFilter::Info
+        {
+            eprintln!(
+                "{:<8} {:<32} {}",
+                record.level(),
+                record.target(),
+                record.args()
+            );
+        }
     }
 
     fn flush(&self) {}
