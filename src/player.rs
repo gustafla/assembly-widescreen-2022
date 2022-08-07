@@ -14,7 +14,7 @@ use std::{
 };
 
 // Playback buffering/latency size in frames
-//const BUF_SIZE: usize = 4096;
+const BUF_SIZE: u32 = 4096;
 // FFT size in samples per channel, eg fft from stereo track reads double this number of i16s
 const FFT_SIZE: usize = 1024;
 
@@ -64,19 +64,15 @@ impl Player {
         )
     }
 
-    fn start(
-        audio_data: Arc<Vec<i16>>,
+    fn init(
         sample_rate: u32,
         channels: u8,
-        playback_position: Arc<AtomicUsize>,
-        playing: Arc<AtomicBool>,
-        error_sync_flag: Arc<AtomicBool>,
-    ) -> Result<cpal::Stream> {
+    ) -> Result<(cpal::Device, cpal::StreamConfig, cpal::SampleFormat)> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
             .context("Unable to find default audio output device")?;
-        let config = device
+        let supported_config = device
             .supported_output_configs()
             .context("Failed to query audio device parameters")?
             .find(|conf| {
@@ -87,16 +83,35 @@ impl Player {
                 conf.channels() == channels.into()
                     && conf.min_sample_rate() <= cpal::SampleRate(sample_rate)
                     && conf.max_sample_rate() >= cpal::SampleRate(sample_rate)
-                    && conf.sample_format() == cpal::SampleFormat::I16
+                    && (conf.sample_format() == cpal::SampleFormat::I16
+                        || conf.sample_format() == cpal::SampleFormat::F32)
             })
             .context("Audio device does not support required parameters")?
             .with_sample_rate(cpal::SampleRate(sample_rate));
-        let config = config.into();
+        let format = supported_config.sample_format();
+        let buffer_size = supported_config.buffer_size().clone();
+        let mut config: cpal::StreamConfig = supported_config.into();
+        if let cpal::SupportedBufferSize::Range { min, max } = buffer_size {
+            if min <= BUF_SIZE && max >= BUF_SIZE {
+                config.buffer_size = cpal::BufferSize::Fixed(BUF_SIZE);
+            }
+        }
 
+        Ok((device, config, format))
+    }
+
+    fn start<T: cpal::Sample>(
+        device: cpal::Device,
+        config: cpal::StreamConfig,
+        audio_data: Arc<Vec<i16>>,
+        playback_position: Arc<AtomicUsize>,
+        playing: Arc<AtomicBool>,
+        error_sync_flag: Arc<AtomicBool>,
+    ) -> Result<cpal::Stream> {
         let stream = device
             .build_output_stream(
                 &config,
-                move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                     let avail = data.len();
                     if avail > 0 {
                         //let avail_samples = avail * usize::from(channels);
@@ -112,11 +127,14 @@ impl Player {
                         if can_write_samples == 0 || !playing.load(Ordering::Relaxed) {
                             // Output silence after end to avoid underruns
                             for sample in data.iter_mut() {
-                                *sample = 0;
+                                *sample = cpal::Sample::from(&0.);
                             }
                         } else {
-                            let src = &audio_data[pos..][..can_write_samples];
-                            data[..src.len()].copy_from_slice(src);
+                            //let src = &audio_data[pos..][..can_write_samples];
+                            //data[..src.len()].copy_from_slice(src);
+                            for (i, sample) in data.iter_mut().enumerate() {
+                                *sample = cpal::Sample::from(&audio_data[pos..][i]);
+                            }
                         }
                     }
                 },
@@ -144,18 +162,40 @@ impl Player {
         let sample_rate_channels = (sample_rate * u32::from(channels)) as f32;
         let len_secs = audio_data.len() as f32 / sample_rate_channels;
 
+        // Initialize audio device
+        let (device, config, format) = Self::init(sample_rate, channels)?;
+
         let playback_position = Arc::new(AtomicUsize::new(0));
         let playing = Arc::new(AtomicBool::new(false));
         let error_sync_flag = Arc::new(AtomicBool::new(false));
 
-        let playback_stream = Self::start(
-            audio_data.clone(),
-            sample_rate,
-            channels,
-            playback_position.clone(),
-            playing.clone(),
-            error_sync_flag.clone(),
-        )?;
+        // Start audio output stream
+        let playback_stream = match format {
+            cpal::SampleFormat::I16 => Self::start::<i16>(
+                device,
+                config,
+                audio_data.clone(),
+                playback_position.clone(),
+                playing.clone(),
+                error_sync_flag.clone(),
+            )?,
+            cpal::SampleFormat::U16 => Self::start::<u16>(
+                device,
+                config,
+                audio_data.clone(),
+                playback_position.clone(),
+                playing.clone(),
+                error_sync_flag.clone(),
+            )?,
+            cpal::SampleFormat::F32 => Self::start::<f32>(
+                device,
+                config,
+                audio_data.clone(),
+                playback_position.clone(),
+                playing.clone(),
+                error_sync_flag.clone(),
+            )?,
+        };
 
         // Initialize FFT
         let mut fft_planner = FftPlanner::new();
@@ -210,15 +250,14 @@ impl Player {
     pub fn time_secs(&mut self) -> f32 {
         let timer_secs = (if self.is_playing() {
             if self.error_sync_flag.fetch_and(false, Ordering::Relaxed) {
-                log::info!("ALSA PCM output errors, trying to sync");
+                log::info!("Audio output errors, trying to sync");
                 self.play();
             }
             self.start_time.elapsed()
         } else {
             self.pause_time.duration_since(self.start_time)
         } + self.time_offset)
-            .as_micros() as f32
-            / 1_000_000f32;
+            .as_secs_f32();
 
         timer_secs.min(self.len_secs)
     }

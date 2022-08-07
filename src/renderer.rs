@@ -225,7 +225,8 @@ impl Renderer {
             .await
             .context("Cannot find a graphics adapter")?;
 
-        let adapter_name = adapter.get_info().name;
+        let adapter_info = adapter.get_info();
+        let adapter_name = format!("{:?} adapter {}", adapter_info.backend, adapter_info.name);
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -237,16 +238,13 @@ impl Renderer {
             )
             .await
             .context(format!("Failed to initialize {}", adapter_name))?;
-        log::info!("Created device on adapter {}", adapter_name);
+        log::info!("Created device on {}", adapter_name);
 
         let surface_format = surface
             .get_supported_formats(&adapter)
             .into_iter()
             .next()
-            .context(format!(
-                "No surface format available for adapter {}",
-                adapter_name
-            ))?;
+            .context(format!("No surface format available for {}", adapter_name))?;
         if surface_format.describe().srgb {
             log::info!("Preferred surface is sRGB");
         } else {
