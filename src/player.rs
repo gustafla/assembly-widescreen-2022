@@ -91,9 +91,13 @@ impl Player {
         let format = supported_config.sample_format();
         let buffer_size = supported_config.buffer_size().clone();
         let mut config: cpal::StreamConfig = supported_config.into();
-        if let cpal::SupportedBufferSize::Range { min, max } = buffer_size {
-            if min <= BUF_SIZE && max >= BUF_SIZE {
+        match buffer_size {
+            cpal::SupportedBufferSize::Range { min, max } if min <= BUF_SIZE && max >= BUF_SIZE => {
                 config.buffer_size = cpal::BufferSize::Fixed(BUF_SIZE);
+                log::info!("Using audio output buffer size {}", BUF_SIZE);
+            }
+            _ => {
+                log::warn!("Unable to set audio output buffer size, demo might run out of sync");
             }
         }
 

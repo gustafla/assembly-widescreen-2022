@@ -128,8 +128,6 @@ fn run(
         None
     };
 
-    dbg!(fullscreen.clone());
-
     // Build a Window
     let window_builder = WindowBuilder::new()
         .with_title(disp.title)
