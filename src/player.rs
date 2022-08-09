@@ -64,33 +64,51 @@ impl Player {
         )
     }
 
+    fn conf_meets_specs(
+        conf: &cpal::SupportedStreamConfigRange,
+        sample_rate: u32,
+        channels: u8,
+    ) -> bool {
+        conf.channels() == channels.into()
+            && conf.min_sample_rate() <= cpal::SampleRate(sample_rate)
+            && conf.max_sample_rate() >= cpal::SampleRate(sample_rate)
+    }
+
     fn init(
         sample_rate: u32,
         channels: u8,
     ) -> Result<(cpal::Device, cpal::StreamConfig, cpal::SampleFormat)> {
         let host = cpal::default_host();
+
         let device = host
             .default_output_device()
             .context("Unable to find default audio output device")?;
-        let supported_config = device
+
+        // Find best configuration from device's supported configs
+        let supported_config = if let Some(supported_config) = device
             .supported_output_configs()
             .context("Failed to query audio device parameters")?
+            // Try to find suitable i16 output config
             .find(|conf| {
-                log::info!("Minimum sample rate: {}", conf.min_sample_rate().0);
-                log::info!("Maximum sample rate: {}", conf.max_sample_rate().0);
-                log::info!("Audio channels: {}", conf.channels());
-                log::info!("Sample format: {:?}", conf.sample_format());
-                conf.channels() == channels.into()
-                    && conf.min_sample_rate() <= cpal::SampleRate(sample_rate)
-                    && conf.max_sample_rate() >= cpal::SampleRate(sample_rate)
-                    && (conf.sample_format() == cpal::SampleFormat::I16
-                        || conf.sample_format() == cpal::SampleFormat::F32)
-            })
-            .context("Audio device does not support required parameters")?
-            .with_sample_rate(cpal::SampleRate(sample_rate));
+                Self::conf_meets_specs(conf, sample_rate, channels)
+                    && conf.sample_format() == cpal::SampleFormat::I16
+            }) {
+            supported_config
+        } else {
+            // If no i16 output format, try again for any suitable and use sample conversion
+            device
+                .supported_output_configs()
+                .context("Failed to query audio device parameters")?
+                .find(|conf| Self::conf_meets_specs(conf, sample_rate, channels))
+                .context("Audio device does not support required parameters")?
+        }
+        .with_sample_rate(cpal::SampleRate(sample_rate));
+
         let format = supported_config.sample_format();
         let buffer_size = supported_config.buffer_size().clone();
         let mut config: cpal::StreamConfig = supported_config.into();
+
+        // Try to set small buffer size for minimal latency
         match buffer_size {
             cpal::SupportedBufferSize::Range { min, max } if min <= BUF_SIZE && max >= BUF_SIZE => {
                 config.buffer_size = cpal::BufferSize::Fixed(BUF_SIZE);
@@ -189,7 +207,10 @@ impl Player {
             error_sync_flag.clone(),
             match format {
                 cpal::SampleFormat::I16 => Self::copy_audio,
-                _ => Self::convert_audio,
+                format => {
+                    log::warn!("Audio output format {:?} is unoptimal", format);
+                    Self::convert_audio
+                }
             },
         )?;
 
