@@ -107,6 +107,7 @@ impl Player {
             supported_config
         } else {
             // If no i16 output format, try again for any suitable and use sample conversion
+            log::warn!("Default audio output device does not support i16 sample format");
             device
                 .supported_output_configs()
                 .context("Failed to query audio device parameters")?
