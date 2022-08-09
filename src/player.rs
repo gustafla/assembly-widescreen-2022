@@ -104,6 +104,17 @@ impl Player {
         Ok((device, config, format))
     }
 
+    fn copy_audio(buf: &mut [i16], audio: &[i16], can_write_samples: usize) {
+        let src = &audio[..can_write_samples];
+        buf[..src.len()].copy_from_slice(src);
+    }
+
+    fn convert_audio<T: cpal::Sample>(buf: &mut [T], audio: &[i16], can_write_samples: usize) {
+        for (i, sample) in buf.iter_mut().enumerate().take(can_write_samples) {
+            *sample = cpal::Sample::from(&audio[i]);
+        }
+    }
+
     fn start<T: cpal::Sample>(
         device: cpal::Device,
         config: cpal::StreamConfig,
@@ -111,6 +122,7 @@ impl Player {
         playback_position: Arc<AtomicUsize>,
         playing: Arc<AtomicBool>,
         error_sync_flag: Arc<AtomicBool>,
+        write: impl Fn(&mut [T], &[i16], usize) + Send + 'static,
     ) -> Result<cpal::Stream> {
         let stream = device
             .build_output_stream(
@@ -118,8 +130,6 @@ impl Player {
                 move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                     let avail = data.len();
                     if avail > 0 {
-                        //let avail_samples = avail * usize::from(channels);
-
                         // Load position and advance to next audio slice
                         // Might overflow in theory but not in realistic use
                         let pos = playback_position.fetch_add(avail, Ordering::Relaxed);
@@ -134,11 +144,7 @@ impl Player {
                                 *sample = cpal::Sample::from(&0.);
                             }
                         } else {
-                            //let src = &audio_data[pos..][..can_write_samples];
-                            //data[..src.len()].copy_from_slice(src);
-                            for (i, sample) in data.iter_mut().enumerate() {
-                                *sample = cpal::Sample::from(&audio_data[pos..][i]);
-                            }
+                            write(data, &audio_data[pos..], can_write_samples);
                         }
                     }
                 },
@@ -174,32 +180,18 @@ impl Player {
         let error_sync_flag = Arc::new(AtomicBool::new(false));
 
         // Start audio output stream
-        let playback_stream = match format {
-            cpal::SampleFormat::I16 => Self::start::<i16>(
-                device,
-                config,
-                audio_data.clone(),
-                playback_position.clone(),
-                playing.clone(),
-                error_sync_flag.clone(),
-            )?,
-            cpal::SampleFormat::U16 => Self::start::<u16>(
-                device,
-                config,
-                audio_data.clone(),
-                playback_position.clone(),
-                playing.clone(),
-                error_sync_flag.clone(),
-            )?,
-            cpal::SampleFormat::F32 => Self::start::<f32>(
-                device,
-                config,
-                audio_data.clone(),
-                playback_position.clone(),
-                playing.clone(),
-                error_sync_flag.clone(),
-            )?,
-        };
+        let playback_stream = Self::start(
+            device,
+            config,
+            audio_data.clone(),
+            playback_position.clone(),
+            playing.clone(),
+            error_sync_flag.clone(),
+            match format {
+                cpal::SampleFormat::I16 => Self::copy_audio,
+                _ => Self::convert_audio,
+            },
+        )?;
 
         // Initialize FFT
         let mut fft_planner = FftPlanner::new();
