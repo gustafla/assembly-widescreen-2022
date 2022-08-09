@@ -18,15 +18,26 @@ const BUF_SIZE: u32 = 4096;
 // FFT size in samples per channel, eg fft from stereo track reads double this number of i16s
 const FFT_SIZE: usize = 1024;
 
-pub struct Player {
+#[derive(Clone, Default)]
+struct SharedParams {
     audio_data: Arc<Vec<i16>>,
+    playback_position: Arc<AtomicUsize>,
+    playing: Arc<AtomicBool>,
+    error_sync_flag: Arc<AtomicBool>,
+}
+
+struct StartParams {
+    device: cpal::Device,
+    config: cpal::StreamConfig,
+    shared: SharedParams,
+}
+
+pub struct Player {
+    shared: SharedParams,
     sample_rate: u32,
     channels: u8,
     sample_rate_channels: f32,
     len_secs: f32,
-    playback_position: Arc<AtomicUsize>,
-    playing: Arc<AtomicBool>,
-    error_sync_flag: Arc<AtomicBool>,
     playback_stream: cpal::Stream,
     start_time: Instant,
     pause_time: Instant,
@@ -122,52 +133,40 @@ impl Player {
         Ok((device, config, format))
     }
 
-    fn copy_audio(buf: &mut [i16], audio: &[i16], can_write_samples: usize) {
-        let src = &audio[..can_write_samples];
-        buf[..src.len()].copy_from_slice(src);
-    }
-
-    fn convert_audio<T: cpal::Sample>(buf: &mut [T], audio: &[i16], can_write_samples: usize) {
-        for (i, sample) in buf.iter_mut().enumerate().take(can_write_samples) {
-            *sample = cpal::Sample::from(&audio[i]);
-        }
-    }
-
-    fn start<T: cpal::Sample>(
-        device: cpal::Device,
-        config: cpal::StreamConfig,
-        audio_data: Arc<Vec<i16>>,
-        playback_position: Arc<AtomicUsize>,
-        playing: Arc<AtomicBool>,
-        error_sync_flag: Arc<AtomicBool>,
-        write: impl Fn(&mut [T], &[i16], usize) + Send + 'static,
-    ) -> Result<cpal::Stream> {
-        let stream = device
+    fn start<T: cpal::Sample>(p: StartParams) -> Result<cpal::Stream> {
+        let stream = p
+            .device
             .build_output_stream(
-                &config,
+                &p.config,
                 move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                     let avail = data.len();
                     if avail > 0 {
                         // Load position and advance to next audio slice
                         // Might overflow in theory but not in realistic use
-                        let pos = playback_position.fetch_add(avail, Ordering::Relaxed);
+                        let pos = p
+                            .shared
+                            .playback_position
+                            .fetch_add(avail, Ordering::Relaxed);
 
                         // How many i16s can actually still be read
-                        let remaining_samples = audio_data.len() - pos.min(audio_data.len());
+                        let remaining_samples =
+                            p.shared.audio_data.len() - pos.min(p.shared.audio_data.len());
                         let can_write_samples = avail.min(remaining_samples);
 
-                        if can_write_samples == 0 || !playing.load(Ordering::Relaxed) {
+                        if can_write_samples == 0 || !p.shared.playing.load(Ordering::Relaxed) {
                             // Output silence after end to avoid underruns
                             for sample in data.iter_mut() {
                                 *sample = cpal::Sample::from(&0.);
                             }
                         } else {
-                            write(data, &audio_data[pos..], can_write_samples);
+                            for (i, sample) in data.iter_mut().enumerate().take(can_write_samples) {
+                                *sample = cpal::Sample::from(&p.shared.audio_data[pos..][i]);
+                            }
                         }
                     }
                 },
                 move |err| {
-                    error_sync_flag.store(true, Ordering::Relaxed);
+                    p.shared.error_sync_flag.store(true, Ordering::Relaxed);
                     log::error!("{}", err);
                 },
             )
@@ -193,26 +192,26 @@ impl Player {
         // Initialize audio device
         let (device, config, format) = Self::init(sample_rate, channels)?;
 
-        let playback_position = Arc::new(AtomicUsize::new(0));
-        let playing = Arc::new(AtomicBool::new(false));
-        let error_sync_flag = Arc::new(AtomicBool::new(false));
-
         // Start audio output stream
-        let playback_stream = Self::start(
+        let shared = SharedParams {
+            audio_data,
+            ..Default::default()
+        };
+        let start_parm = StartParams {
             device,
             config,
-            audio_data.clone(),
-            playback_position.clone(),
-            playing.clone(),
-            error_sync_flag.clone(),
-            match format {
-                cpal::SampleFormat::I16 => Self::copy_audio,
-                format => {
-                    log::warn!("Audio output format {:?} is unoptimal", format);
-                    Self::convert_audio
-                }
-            },
-        )?;
+            shared: shared.clone(),
+        };
+        let playback_stream = match format {
+            cpal::SampleFormat::I16 => Self::start::<i16>(start_parm)?,
+            cpal::SampleFormat::U16 => Self::start::<u16>(start_parm)?,
+            cpal::SampleFormat::F32 => Self::start::<f32>(start_parm)?,
+        };
+
+        // Start paused
+        playback_stream
+            .pause()
+            .unwrap_or_else(|e| log::error!("Cannot pause audio output stream: {}", e));
 
         // Initialize FFT
         let mut fft_planner = FftPlanner::new();
@@ -222,14 +221,11 @@ impl Player {
         let time = Instant::now();
 
         Ok(Self {
-            audio_data,
+            shared,
             sample_rate,
             channels,
             sample_rate_channels,
             len_secs,
-            playback_position,
-            playing,
-            error_sync_flag,
             playback_stream,
             start_time: time,
             pause_time: time,
@@ -244,13 +240,14 @@ impl Player {
     }
 
     pub fn is_playing(&self) -> bool {
-        self.playing.load(Ordering::Relaxed)
+        self.shared.playing.load(Ordering::Relaxed)
     }
 
     pub fn play(&mut self) {
-        self.time_offset = self.pos_to_duration(self.playback_position.load(Ordering::Relaxed));
+        self.time_offset =
+            self.pos_to_duration(self.shared.playback_position.load(Ordering::Relaxed));
         self.start_time = Instant::now();
-        self.playing.store(true, Ordering::Relaxed);
+        self.shared.playing.store(true, Ordering::Relaxed);
         self.playback_stream
             .play()
             .unwrap_or_else(|e| log::error!("Cannot play audio output stream: {}", e));
@@ -258,7 +255,7 @@ impl Player {
 
     pub fn pause(&mut self) {
         self.pause_time = Instant::now();
-        self.playing.store(false, Ordering::Relaxed);
+        self.shared.playing.store(false, Ordering::Relaxed);
         self.playback_stream
             .pause()
             .unwrap_or_else(|e| log::error!("Cannot pause audio output stream: {}", e));
@@ -266,7 +263,11 @@ impl Player {
 
     pub fn time_secs(&mut self) -> f32 {
         let timer_secs = (if self.is_playing() {
-            if self.error_sync_flag.fetch_and(false, Ordering::Relaxed) {
+            if self
+                .shared
+                .error_sync_flag
+                .fetch_and(false, Ordering::Relaxed)
+            {
                 log::info!("Audio output errors, trying to sync");
                 self.play();
             }
@@ -287,10 +288,10 @@ impl Player {
         pos -= pos % usize::from(self.channels);
 
         // Limit position to avoid buffer over-read panic
-        pos = pos.min(self.audio_data.len());
+        pos = pos.min(self.shared.audio_data.len());
 
         // Set new position and update timing etc
-        self.playback_position.store(pos, Ordering::Relaxed);
+        self.shared.playback_position.store(pos, Ordering::Relaxed);
         self.time_offset = self.pos_to_duration(pos);
         let time = Instant::now();
         self.start_time = time;
@@ -314,7 +315,7 @@ impl Player {
 
         // Limit to audio data range
         pos = pos
-            .min(self.audio_data.len() - FFT_SIZE * usize::from(self.channels) - 1)
+            .min(self.shared.audio_data.len() - FFT_SIZE * usize::from(self.channels) - 1)
             .max(0);
 
         // Align to channel
@@ -322,7 +323,7 @@ impl Player {
 
         // Take the audio data slice and convert to windowed complex number Vec
         let fft_size_f32 = FFT_SIZE as f32;
-        let mut fft_buffer: Vec<_> = self.audio_data[pos..]
+        let mut fft_buffer: Vec<_> = self.shared.audio_data[pos..]
             [..FFT_SIZE * usize::from(self.channels)]
             .chunks(self.channels.into())
             .enumerate()
