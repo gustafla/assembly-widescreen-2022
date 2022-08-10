@@ -180,13 +180,28 @@ impl Player {
         log::info!("Loading {}", ogg_path.as_ref().display());
 
         // Read and decode ogg file
-        let ogg_reader = Cursor::new(
-            crate::RESOURCES_DIR
-                .get_file(ogg_path)
-                .expect("File not present in binary. This is a bug.")
-                .contents(),
-        );
-        let (audio_data, sample_rate, channels) = Self::decode_ogg(ogg_reader);
+        let (audio_data, sample_rate, channels) = {
+            #[cfg(debug_assertions)]
+            {
+                match std::fs::File::open(ogg_path) {
+                    Ok(file) => Self::decode_ogg(file),
+                    Err(e) => {
+                        log::warn!("Cannot load audio: {}", e);
+                        (Default::default(), 48000, 2)
+                    }
+                }
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                let ogg_reader = Cursor::new(
+                    crate::RESOURCES_DIR
+                        .get_file(ogg_path)
+                        .expect("File not present in binary. This is a bug.")
+                        .contents(),
+                );
+                Self::decode_ogg(ogg_reader)
+            }
+        };
         let sample_rate_channels = (sample_rate * u32::from(channels)) as f32;
         let len_secs = audio_data.len() as f32 / sample_rate_channels;
 
@@ -313,6 +328,10 @@ impl Player {
     pub fn bass_psd(&mut self, at_secs: f32) -> f32 {
         // Compute the position
         let mut pos = (at_secs * self.sample_rate_channels) as usize;
+
+        if pos >= self.shared.audio_data.len() {
+            return 0.;
+        }
 
         // Limit to audio data range
         pos = pos
