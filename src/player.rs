@@ -4,7 +4,7 @@ use lewton::inside_ogg::OggStreamReader;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{
     convert::TryFrom,
-    io::{Cursor, Read, Seek},
+    io::{Read, Seek},
     path::Path,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -141,28 +141,27 @@ impl Player {
                 &p.config,
                 move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                     let avail = data.len();
-                    if avail > 0 {
-                        // Load position and advance to next audio slice
-                        // Might overflow in theory but not in realistic use
-                        let pos = p
-                            .shared
-                            .playback_position
-                            .fetch_add(avail, Ordering::Relaxed);
 
-                        // How many i16s can actually still be read
-                        let remaining_samples =
-                            p.shared.audio_data.len() - pos.min(p.shared.audio_data.len());
-                        let can_write_samples = avail.min(remaining_samples);
+                    // Load position and advance to next audio slice
+                    // Might overflow in theory but not in realistic use
+                    let pos = p
+                        .shared
+                        .playback_position
+                        .fetch_add(avail, Ordering::Relaxed);
 
-                        if can_write_samples == 0 || !p.shared.playing.load(Ordering::Relaxed) {
-                            // Output silence after end to avoid underruns
-                            for sample in data.iter_mut() {
-                                *sample = cpal::Sample::from(&0.);
-                            }
-                        } else {
-                            for (i, sample) in data.iter_mut().enumerate().take(can_write_samples) {
-                                *sample = cpal::Sample::from(&p.shared.audio_data[pos..][i]);
-                            }
+                    // How many i16s can actually still be read
+                    let remaining_samples =
+                        p.shared.audio_data.len() - pos.min(p.shared.audio_data.len());
+                    let can_write_samples = avail.min(remaining_samples);
+
+                    if can_write_samples == 0 || !p.shared.playing.load(Ordering::Relaxed) {
+                        // Output silence after end to avoid underruns
+                        for sample in data.iter_mut() {
+                            *sample = cpal::Sample::from(&0.);
+                        }
+                    } else {
+                        for (i, sample) in data.iter_mut().enumerate().take(can_write_samples) {
+                            *sample = cpal::Sample::from(&p.shared.audio_data[pos..][i]);
                         }
                     }
                 },
@@ -183,8 +182,10 @@ impl Player {
         let (audio_data, sample_rate, channels) = {
             #[cfg(debug_assertions)]
             {
-                match std::fs::File::open(ogg_path) {
-                    Ok(file) => Self::decode_ogg(file),
+                match std::fs::File::open(
+                    std::path::PathBuf::from(crate::RESOURCES_PATH).join(ogg_path),
+                ) {
+                    Ok(file) => Self::decode_ogg(std::io::BufReader::new(file)),
                     Err(e) => {
                         log::warn!("Cannot load audio: {}", e);
                         (Default::default(), 48000, 2)
@@ -193,7 +194,7 @@ impl Player {
             }
             #[cfg(not(debug_assertions))]
             {
-                let ogg_reader = Cursor::new(
+                let ogg_reader = std::io::Cursor::new(
                     crate::RESOURCES_DIR
                         .get_file(ogg_path)
                         .expect("File not present in binary. This is a bug.")
@@ -293,6 +294,12 @@ impl Player {
         } + self.time_offset)
             .as_secs_f32();
 
+        // Hack to enable development without audio track
+        #[cfg(debug_assertions)]
+        if self.shared.audio_data.is_empty() {
+            return timer_secs;
+        }
+
         timer_secs.min(self.len_secs)
     }
 
@@ -302,9 +309,6 @@ impl Player {
 
         // Align to channel
         pos -= pos % usize::from(self.channels);
-
-        // Limit position to avoid buffer over-read panic
-        pos = pos.min(self.shared.audio_data.len());
 
         // Set new position and update timing etc
         self.shared.playback_position.store(pos, Ordering::Relaxed);
