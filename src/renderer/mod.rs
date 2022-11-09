@@ -256,6 +256,7 @@ impl Renderer {
             width: surface_size.width,
             height: surface_size.height,
             present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
         };
 
         // Common Resources -----------------------------------------------------------------------

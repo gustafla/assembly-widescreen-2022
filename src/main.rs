@@ -49,8 +49,7 @@ fn list_monitors() {
                 mode.size().width,
                 mode.size().height,
                 mode.bit_depth(),
-                //mode.refresh_rate_millihertz() as f64 / 1000.
-                mode.refresh_rate(),
+                mode.refresh_rate_millihertz() as f64 / 1000.
             );
         }
     }
@@ -137,8 +136,7 @@ fn run(
     ;
 
     #[cfg(target_family = "unix")]
-    //let window_builder = window_builder.with_name("demo", "");
-    let window_builder = window_builder.with_app_id("demo".into());
+    let window_builder = window_builder.with_name("demo", "");
 
     let window = window_builder
         .build(&event_loop)
